@@ -86,7 +86,7 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
 
   // Add word mutation
   const addWordMutation = useMutation({
-    mutationFn: async (wordData: WordFormData) => {
+    mutationFn: async (wordData: { text: string; weekId: string }) => {
       const response = await fetch("/api/words", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -100,8 +100,8 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
       setWordForm({ text: "", partOfSpeech: "", kidDefinition: "", teacherDefinition: "" });
       toast({
-        title: "Word Added",
-        description: "The word has been added to this week's list.",
+        title: "Word Added Successfully",
+        description: "AI has processed the word with definitions and example sentences.",
       });
     },
     onError: () => {
@@ -211,16 +211,20 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
   });
 
   const handleAddWord = () => {
-    if (!wordForm.text || !wordForm.partOfSpeech || !wordForm.kidDefinition) {
+    if (!wordForm.text.trim()) {
       toast({
-        title: "Missing Information",
-        description: "Please fill in word, part of speech, and definition.",
+        title: "Missing Word",
+        description: "Please enter a word to add.",
         variant: "destructive",
       });
       return;
     }
 
-    addWordMutation.mutate(wordForm);
+    // Send only the word text - let AI determine everything else
+    addWordMutation.mutate({
+      text: wordForm.text.trim(),
+      weekId: `week-${Math.ceil(Date.now() / (7 * 24 * 60 * 60 * 1000))}`,
+    });
   };
 
   const handleDeleteWord = (wordId: string) => {
@@ -383,64 +387,18 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
                         <Label htmlFor="word-text" className="text-dyslexia-base font-medium">
                           Word
                         </Label>
+                        <p className="text-sm text-muted-foreground mt-1 mb-3">
+                          Just enter the word - AI will determine part of speech and generate definitions.
+                        </p>
                         <Input
                           id="word-text"
                           value={wordForm.text}
                           onChange={(e) => setWordForm({ ...wordForm, text: e.target.value })}
-                          placeholder="Enter word"
+                          placeholder="Enter word (e.g. magnificent)"
                           className="input-dyslexia mt-2"
                           data-testid="input-word"
                         />
                       </div>
-                  
-                  <div>
-                    <Label htmlFor="part-of-speech" className="text-dyslexia-base font-medium">
-                      Part of Speech
-                    </Label>
-                    <Select
-                      value={wordForm.partOfSpeech}
-                      onValueChange={(value) => setWordForm({ ...wordForm, partOfSpeech: value })}
-                    >
-                      <SelectTrigger className="input-dyslexia mt-2" data-testid="select-pos">
-                        <SelectValue placeholder="Select part of speech" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PARTS_OF_SPEECH.map((pos) => (
-                          <SelectItem key={pos.value} value={pos.value}>
-                            {pos.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="kid-definition" className="text-dyslexia-base font-medium">
-                      Kid-Friendly Definition
-                    </Label>
-                    <Textarea
-                      id="kid-definition"
-                      value={wordForm.kidDefinition}
-                      onChange={(e) => setWordForm({ ...wordForm, kidDefinition: e.target.value })}
-                      placeholder="Enter simple definition for child"
-                      className="input-dyslexia mt-2 min-h-20 resize-none"
-                      data-testid="textarea-definition"
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="teacher-definition" className="text-dyslexia-base font-medium">
-                      Teacher Definition (Optional)
-                    </Label>
-                    <Textarea
-                      id="teacher-definition"
-                      value={wordForm.teacherDefinition}
-                      onChange={(e) => setWordForm({ ...wordForm, teacherDefinition: e.target.value })}
-                      placeholder="Enter original teacher definition"
-                      className="input-dyslexia mt-2 min-h-20 resize-none"
-                      data-testid="textarea-teacher-definition"
-                    />
-                  </div>
                       
                       <DyslexiaButton
                         onClick={handleAddWord}
@@ -449,8 +407,16 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
                         data-testid="button-add-word"
                       >
                         <Plus className="w-5 h-5 mr-2" />
-                        Add Word
+                        {addWordMutation.isPending ? "Processing Word..." : "Add Word with AI"}
                       </DyslexiaButton>
+                      
+                      {addWordMutation.isPending && (
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">
+                            AI is analyzing the word and generating definitions...
+                          </p>
+                        </div>
+                      )}
                     </>
                   )}
                   
