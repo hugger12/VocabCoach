@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, RotateCcw, Settings } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { DyslexiaButton } from "@/components/ui/dyslexia-button";
 import { AudioPlayer } from "./AudioPlayer";
+import { SynchronizedAudioPlayer } from "./SynchronizedAudioPlayer";
 import { DyslexicReader } from "./DyslexicReader";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
@@ -28,12 +29,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
-  const [isSentencePlaying, setIsSentencePlaying] = useState(false);
-  
-  // Debug effect to track sentence playing state
-  useEffect(() => {
-    console.log('Sentence playing state changed:', isSentencePlaying);
-  }, [isSentencePlaying]);
+  const [currentHighlightedWord, setCurrentHighlightedWord] = useState(-1);
 
   // Fetch study session
   const { data: session, isLoading, error } = useQuery<StudySession>({
@@ -143,7 +139,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setSelectedChoice(null);
       setShowFeedback(false);
       setCurrentSentenceIndex(0); // Reset to first sentence for new word
-      setIsSentencePlaying(false); // Stop any sentence playback
+      setCurrentHighlightedWord(-1); // Stop any sentence playback
     } else {
       // Session complete
       toast({
@@ -154,7 +150,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setSessionStarted(false);
       setCurrentIndex(0);
       setCurrentSentenceIndex(0);
-      setIsSentencePlaying(false);
+      setCurrentHighlightedWord(-1);
     }
   };
 
@@ -163,8 +159,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setCurrentIndex(currentIndex - 1);
       setSelectedChoice(null);
       setShowFeedback(false);
-      setCurrentSentenceIndex(0); // Reset to first sentence for new word
-      setIsSentencePlaying(false); // Stop any sentence playback
+      setCurrentSentenceIndex(0); // Reset to first sentence for new word  
+      setCurrentHighlightedWord(-1); // Stop any highlighting
     }
   };
 
@@ -182,8 +178,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setCurrentSentenceIndex((prev) => 
         (prev + 1) % (currentWord.sentences?.length || 1)
       );
-      // Stop any current sentence playback when switching sentences
-      setIsSentencePlaying(false);
+      // Stop any current highlighting when switching sentences
+      setCurrentHighlightedWord(-1);
     }
   };
 
@@ -359,28 +355,20 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 </AudioPlayer>
                 
                 <div className="relative">
-                  <AudioPlayer
+                  <SynchronizedAudioPlayer
                     text={getCurrentSentence()}
                     type="sentence"
                     variant="secondary"
                     className="w-full h-16"
                     wordId={currentWord?.id}
                     data-testid="play-sentence"
-                    onPlay={() => {
-                      console.log('Setting isSentencePlaying to true');
-                      setIsSentencePlaying(true);
-                    }}
-                    onEnded={() => {
-                      console.log('Setting isSentencePlaying to false (ended)');
-                      setIsSentencePlaying(false);
-                    }}
-                    onError={() => {
-                      console.log('Setting isSentencePlaying to false (error)');
-                      setIsSentencePlaying(false);
+                    enableHighlighting={true}
+                    onWordHighlight={(wordIndex) => {
+                      setCurrentHighlightedWord(wordIndex);
                     }}
                   >
                     Play Sentence {currentWord?.sentences && currentWord.sentences.length > 1 ? `(${currentSentenceIndex + 1}/${currentWord.sentences.length})` : ''}
-                  </AudioPlayer>
+                  </SynchronizedAudioPlayer>
                   {currentWord?.sentences && currentWord.sentences.length > 1 && (
                     <DyslexiaButton
                       variant="ghost"
@@ -411,17 +399,13 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 <p className="text-dyslexia-lg text-foreground text-center leading-relaxed mb-4">
                   Listen to learn how <strong className="text-primary font-semibold">{currentWord?.text}</strong> is used.
                 </p>
-                {/* Debug indicator */}
-                <div className="text-center mb-2 text-xs text-muted-foreground">
-                  Status: {isSentencePlaying ? '🔊 Playing' : '⏸️ Stopped'}
-                </div>
                 {currentWord?.sentences && currentWord.sentences.length > 0 && (
                   <div className="text-center">
                     <DyslexicReader
                       text={getCurrentSentence()}
-                      isPlaying={isSentencePlaying}
+                      currentWordIndex={currentHighlightedWord}
                       className="text-dyslexia-base text-foreground"
-                      highlightColor="bg-primary/30 dark:bg-primary/40 border border-primary/50"
+                      highlightColor="bg-primary/40 dark:bg-primary/50 border-2 border-primary/60"
                     />
                   </div>
                 )}

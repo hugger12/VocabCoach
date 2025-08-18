@@ -171,10 +171,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Audio API
+  // Audio API with optional word timing
   app.post("/api/audio/generate", async (req, res) => {
     try {
-      const { text, type } = req.body;
+      const { text, type, includeTimings = false } = req.body;
       
       if (!text || !type) {
         return res.status(400).json({ message: "Text and type are required" });
@@ -192,6 +192,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cacheKey: result.cacheKey,
         durationMs: result.duration || null,
       });
+
+      // If word timings are requested (for dyslexic reading support)
+      if (includeTimings && type === "sentence") {
+        const words = text.split(/\s+/).filter((word: string) => word.length > 0);
+        const duration = result.duration || (words.length * 700); // 700ms per word estimate
+        
+        // Generate word-level timing estimates
+        const wordTimings = words.map((word: string, index: number) => {
+          const wordDuration = Math.max(300, word.length * 100); // Longer words take more time
+          const startTime = (index * duration) / words.length;
+          const endTime = startTime + (wordDuration / 1000);
+          
+          return {
+            word: word.replace(/[^\w']/g, ''), // Clean punctuation but keep apostrophes
+            originalWord: word,
+            startTime,
+            endTime,
+            index
+          };
+        });
+
+        // Return JSON response with audio data and timings
+        const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
+        return res.json({
+          audioData: `data:audio/mpeg;base64,${base64Audio}`,
+          wordTimings,
+          duration: duration / 1000, // Convert to seconds
+          provider: result.provider
+        });
+      }
 
       res.set({
         'Content-Type': 'audio/mpeg',
