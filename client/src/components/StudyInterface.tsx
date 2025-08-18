@@ -26,6 +26,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
 
   // Fetch study session
   const { data: session, isLoading, error } = useQuery<StudySession>({
@@ -134,6 +135,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setCurrentIndex(currentIndex + 1);
       setSelectedChoice(null);
       setShowFeedback(false);
+      setCurrentSentenceIndex(0); // Reset to first sentence for new word
     } else {
       // Session complete
       toast({
@@ -143,6 +145,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       });
       setSessionStarted(false);
       setCurrentIndex(0);
+      setCurrentSentenceIndex(0);
     }
   };
 
@@ -151,6 +154,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setCurrentIndex(currentIndex - 1);
       setSelectedChoice(null);
       setShowFeedback(false);
+      setCurrentSentenceIndex(0); // Reset to first sentence for new word
     }
   };
 
@@ -159,6 +163,24 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     setCurrentIndex(0);
     setSelectedChoice(null);
     setShowFeedback(false);
+    setCurrentSentenceIndex(0);
+  };
+
+  // Cycle through sentences for current word
+  const handleNextSentence = () => {
+    if (currentWord?.sentences && currentWord.sentences.length > 1) {
+      setCurrentSentenceIndex((prev) => 
+        (prev + 1) % (currentWord.sentences?.length || 1)
+      );
+    }
+  };
+
+  // Get current sentence text
+  const getCurrentSentence = () => {
+    if (!currentWord?.sentences || currentWord.sentences.length === 0) {
+      return `Here is an example: The ${currentWord?.partOfSpeech} "${currentWord?.text}" means ${currentWord?.kidDefinition}.`;
+    }
+    return currentWord.sentences[currentSentenceIndex]?.text || "";
   };
 
   // Auto-play word and sentence when word changes
@@ -324,15 +346,39 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                   Play Word
                 </AudioPlayer>
                 
+                <div className="relative">
+                  <AudioPlayer
+                    text={getCurrentSentence()}
+                    type="sentence"
+                    variant="secondary"
+                    className="w-full h-16"
+                    wordId={currentWord?.id}
+                    data-testid="play-sentence"
+                  >
+                    Play Sentence {currentWord?.sentences && currentWord.sentences.length > 1 ? `(${currentSentenceIndex + 1}/${currentWord.sentences.length})` : ''}
+                  </AudioPlayer>
+                  {currentWord?.sentences && currentWord.sentences.length > 1 && (
+                    <DyslexiaButton
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-2 top-2 h-12 px-2 text-xs"
+                      onClick={handleNextSentence}
+                      data-testid="cycle-sentence"
+                    >
+                      Next
+                    </DyslexiaButton>
+                  )}
+                </div>
+
                 <AudioPlayer
                   text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
                   type="sentence"
-                  variant="secondary"
+                  variant="outline"
                   className="w-full h-16"
                   wordId={currentWord?.id}
-                  data-testid="play-sentence"
+                  data-testid="play-definition"
                 >
-                  Play Sentence
+                  Play Definition
                 </AudioPlayer>
               </div>
 
@@ -341,6 +387,11 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 <p className="text-dyslexia-lg text-foreground text-center leading-relaxed">
                   Listen to learn how <strong className="text-primary font-semibold">{currentWord?.text}</strong> is used.
                 </p>
+                {currentWord?.sentences && currentWord.sentences.length > 0 && (
+                  <p className="text-dyslexia-base text-muted-foreground text-center mt-3 italic">
+                    "{getCurrentSentence()}"
+                  </p>
+                )}
               </div>
 
               {/* Practice Mode: Hear & Choose */}
@@ -395,7 +446,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               </AudioPlayer>
               
               <AudioPlayer
-                text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
+                text={getCurrentSentence()}
                 type="sentence"
                 variant="outline"
                 className="h-16 px-6"
