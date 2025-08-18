@@ -235,7 +235,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/study/session", async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
-      const schedules = await storage.getAllSchedules();
+      const currentWeek = await storage.getCurrentWeek();
+      
+      // Only get schedules for words from the current week
+      const allSchedules = await storage.getAllSchedules();
+      const currentWeekWords = await storage.getWords(currentWeek);
+      const currentWeekWordIds = new Set(currentWeekWords.map(w => w.id));
+      const schedules = allSchedules.filter(s => currentWeekWordIds.has(s.wordId));
+      
       const dueSchedules = schedulerService.getWordsForToday(schedules, limit);
       
       if (dueSchedules.length === 0) {
@@ -247,7 +254,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const words = await storage.getWordsWithProgress();
+      // Only get words with progress from the current week
+      const words = await storage.getWordsWithProgress(currentWeek);
       const session = schedulerService.createStudySession(dueSchedules, words);
       
       res.json(session);
