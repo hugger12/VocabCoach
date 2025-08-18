@@ -1,0 +1,254 @@
+# Dyslexia‑Friendly Vocabulary Coach (Replit) — Software Requirements Document (SRD)
+
+## 1) Executive summary
+
+Build an ultra‑simple web app that helps Cosi (age 9, 2e profile) learn 12 new vocabulary words each week using audio‑first, low‑visual‑load practice with smart review. The design leverages her high verbal comprehension and creativity while reducing load on weaker skills: processing speed, letter naming, visual tracking, motor coordination, math/decoding fluency. Requirements align with evidence‑based accommodations (extended time, audio access, visual tracker, reduced workload, modified testing) already recommended for Cosi and advocacy best practices to keep the UI focused and progress measurable.
+
+---
+
+## 2) Product goals
+
+* **Primary**: Improve recall (meaning ⇄ word form) and accurate pronunciation/spelling of weekly vocabulary with **less anxiety and cognitive load** than paper lists.
+* **Secondary**: Build morphological awareness (prefixes/suffixes), syllable chunking, and orthographic mapping—without speed pressure.
+* **Success metrics**
+
+  * ≥ 90% correct on meaning & pronunciation after 4 short sessions.
+  * Spelling accuracy improves to ≥ 80% for studied words in low‑stakes mode.
+  * Daily study time ≤ 10 minutes while maintaining gains.
+  * Cosi self‑report: “easy to use” & “less stressful.”
+
+---
+
+## 3) Target user & constraints (from evaluations)
+
+* **Strengths to leverage**: high verbal comprehension & reading comp; exceptional associational fluency; strong phonological processing.
+* **Challenges to accommodate**: low letter‑naming speed, reduced processing speed, visual tracking & fine‑motor weaknesses; decoding/fluency weaknesses; math/fluency timing sensitivity; test anxiety around spelling heavy tasks.
+* **Implications for design**
+
+  * Audio‑first; minimal text per screen.
+  * No timers/leaderboards; generous pacing & replay.
+  * Large fonts, high contrast, ample spacing, line‑focus; optional on‑screen tracker.
+  * Tap/choice/voice input preferred over typing; if typing, offer letter tiles + chunking.
+  * Small, spaced chunks; short sessions.
+
+---
+
+## 4) Non‑goals
+
+* No social features, badges, or speed competitions.
+* No complex classroom management or multi‑student rosters (single learner + parent).
+* No heavy gamification beyond gentle feedback animations.
+
+---
+
+## 5) System overview (Replit)
+
+* **Frontend**: Minimal HTML/CSS/JS (single page + modal dialogs). No bulky UI libraries.
+* **Backend**: Lightweight Python (FastAPI) or Node (Express) to call:
+
+  * **ElevenLabs TTS** (primary) for high‑quality audio.
+  * **ChatGPT (OpenAI)** for sentence generation & gentle hints.
+  * Local JSON storage (or SQLite) for words, attempts, and spaced‑review scheduling.
+* **Offline tolerance**: cache audio and prompts in IndexedDB where possible.
+* **Privacy**: local data only; no external analytics; parent can export/delete.
+
+---
+
+## 6) Functional requirements
+
+### 6.1 Weekly list intake
+
+* **FR‑1**: Parent can add 12 words + definitions manually (form) or paste from school PDF/photo.
+* **FR‑2**: Optional OCR helper (client‑side if feasible) to parse a photo like the handout.
+* **FR‑3**: Each entry stores: word, part of speech, kid‑friendly definition, teacher definition (optional), example sentences (AI & user‑added), syllable breaks, morphemes (if known), pronunciation IPA (optional).
+
+### 6.2 Audio‑first presentation (critical)
+
+* **FR‑4 (Step A)**: For each study item, **automatically play audio twice**:
+
+  1. **Word alone** (ElevenLabs).
+  2. **Word used in a sentence** (AI‑generated; different each session).
+3. **FR‑5**: “Replay word” and “Replay sentence” buttons; keyboard shortcuts.
+4. **FR‑6**: **Variability rule** — Each session requests **new, age‑appropriate, curriculum‑safe** sentences that naturally convey meaning; avoid rare proper nouns, slang, or celebrity names.
+5. **FR‑7**: If ElevenLabs fails, **fallback** to ChatGPT TTS seamlessly, and log the event.
+
+### 6.3 Practice modes (choose 2–3 per session; each 30–90 sec)
+
+All modes must be **audio‑led** and avoid visual clutter.
+
+1. **Hear & Choose (Meaning Match)**
+
+   * Plays the sentence; shows 3–4 large buttons with candidate words (single line each).
+   * Distractors are same part of speech and similar morphology.
+   * **Accessibility**: tap targets ≥ 48px; progress dots only.
+
+2. **Build‑It (Spelling with Tiles)**
+
+   * Audio says the word; optional slow pronunciation.
+   * Cosi drags **syllable tiles** (or letter chunks) into order; then reveals full spelling.
+   * **Accommodations**: toggle to tap instead of drag; haptic “snap”; no timers; errorless mode (only correct tiles are selectable).
+
+3. **Morpho‑Match**
+
+   * Match prefixes/suffixes to base (e.g., *de‑ + monstrate* → demonstrate); brief audio coaching.
+   * Keeps visual load low with 2–3 choices at a time.
+
+4. **Picture Prompt (optional)**
+
+   * Simple stock icon + audio clue; choose matching word. Only if visual does not distract.
+
+5. **Record & Compare (Pronunciation)**
+
+   * Cosi records the word; waveform appears; she A/B compares with model audio.
+   * No grading on speed; offer “slow‑mo” model.
+
+6. **Sentence Builder (Oral)**
+
+   * App plays the word; prompts Cosi to **say** her own sentence aloud; parent can tap “✔ said one.”
+   * Optional dictation later.
+
+> Each mode ends with a calm green check and a single line of feedback (“You used **context** to choose ‘celebrity.’”)—no confetti or fail states.
+
+### 6.4 Spaced review scheduler
+
+* **FR‑8**: Implement a **Leitner** or **SM‑2‑lite** schedule tuned for 1‑week cycles (e.g., new → +1h → +1d → +3d).
+* **FR‑9**: Easy toggle to **“Reduce set”** (e.g., 6 words today) per Cosi’s energy. This aligns with reduced workload recommendations.
+
+### 6.5 Progress & parent view
+
+* **FR‑10**: Simple dashboard: per‑word status (New / Learning / Almost / Mastered), last practiced, error notes (morphology vs. spelling).
+* **FR‑11**: Export CSV/PDF summary for school meetings—clear, unemotional data per Wrightslaw documentation best practices.
+
+### 6.6 Accessibility & accommodations (hard requirements)
+
+* **Large, dyslexia‑friendly type** (≥18px base; 1.6 line height; generous spacing).
+* **Focus mode**: one task, one sentence, one decision.
+* **Optional on‑screen line tracker** to support visual tracking issues.
+* **No timers**; **extended time** implicit; gentle pacing.
+* **Audio controls**: slow, normal, and **chunked** (syllable) playback.
+* **Low fine‑motor demand**: big tap targets; tile alternatives; keyboard optional.
+* **Dark/light high‑contrast themes**; never rely on color alone.
+* **Offline cache** of this week’s audio.
+
+---
+
+## 7) Content generation requirements (AI)
+
+* **CR‑1**: **Sentence generator prompt** must:
+
+  * Use **CEFR B1‑B2** kid‑friendly vocabulary; 8–14 words; natural prosody.
+  * Include the **target word once**, correct part of speech, with enough context to infer meaning.
+  * Avoid: violence, politics, celebrity names, slang, sarcasm.
+  * Produce **3 alternatives**; system picks one not recently used for that word.
+* **CR‑2**: **Definition simplifier**: If teacher definition is long, AI creates a **kid‑friendly synopsis** (≤ 15 words) while preserving key nuance.
+* **CR‑3**: **Morphology helper**: AI suggests likely syllable breaks & morpheme chunks for tiles (human‑editable).
+* **CR‑4**: **Hallucination guardrails**: Validate part of speech; run a profanity/PII filter; reject sentences with dates/proper nouns unless approved.
+
+---
+
+## 8) UI/UX principles (strict — to avoid bloated Replit UIs)
+
+1. **Single‑screen study flow**: header (word index), central card (activity), footer (Back, Replay, Next).
+2. **Only four primary controls** in session: Back, Replay Word, Replay Sentence, Next.
+3. **No sidebars, no tabs, no carousels, no nested menus**.
+4. **Parent/Admin** lives behind a single “Parent” button (PIN‑gated) with three pages only: Words, Schedule, Progress.
+5. **Zero configuration** needed to start: adding words auto‑creates a week and schedule.
+6. **Latency budget**: first audio under 300 ms from tap; prefetch next item’s audio.
+7. **Empty states** are guided (“Add this week’s 12 words to begin.”).
+8. **Accessibility first QA**: keyboard nav, screen reader labels, ARIA roles.
+
+---
+
+## 9) Data model (simplified)
+
+* **Word**: id, text, pos, teacher\_def, kid\_def, syllables[], morphemes[], ipa, created\_at.
+* **Sentence**: id, word\_id, text, created\_at, source (“ai”|“user”), toxicity\_ok(bool).
+* **Audio**: id, word\_id, type (“word”|“sentence”), provider (“elevenlabs”|“gpt-tts”), url/cache\_key, duration\_ms.
+* **Attempt**: id, word\_id, mode, success(bool|null), error\_type (“meaning|spelling|morph|pron”), timestamp.
+* **Schedule**: word\_id, box (0..4), next\_due\_at.
+
+---
+
+## 10) API integrations
+
+* **ElevenLabs TTS**
+
+  * **Inputs**: text, voice\_id (child‑friendly), stability/clarity defaulted, format mp3.
+  * **Caching**: hash(text+voice) → cache key; store in CDN/IndexedDB.
+  * **Error handling**: retry x2; fallback to ChatGPT TTS.
+* **ChatGPT (OpenAI)**
+
+  * Endpoints: text‑generation for sentences, definition simplification, morphology hints; TTS fallback.
+  * **Prompt templates** checked into repo; temperature 0.7; max tokens capped.
+  * **Safety pass**: local regex + list for disallowed content before storing.
+
+---
+
+## 11) Scheduling algorithm (Leitner‑lite)
+
+* New → Box1; correct → next box; incorrect → down one (min Box1).
+* Intervals (suggested): Box1: +1h, Box2: +1d, Box3: +3d, Box4: +7d, Box5: archive;
+* Daily queue capped at 6–10 items (parent toggle). This honors reduced workload & extended time recommendations.
+
+---
+
+## 12) Error states & resilience
+
+* **TTS down**: switch provider, banner “Using backup audio today.”
+* **Network**: serve cached items; queue results to sync later.
+* **OCR fail**: degrade gracefully to manual entry.
+* **Sentence filter fail**: regenerate up to 2x; else use parent‑approved stock sentence.
+
+---
+
+## 13) Security & privacy
+
+* Single‑user, local or minimal backend storage; parent can export/delete data.
+* No third‑party tracking. API keys stored server‑side on Replit secrets.
+* COPPA‑aware: no account creation for the child.
+
+---
+
+## 14) Testing & QA
+
+* **Unit**: scheduler, sentence validator, audio cache.
+* **Accessibility**: screen reader labels, contrast, keyboard tab order.
+* **Usability with Cosi**: 3 pilot sessions; measure taps to complete, replay usage, observed fatigue.
+* **Content**: 50 random AI sentences manually reviewed to verify age‑appropriateness.
+
+---
+
+## 15) Launch plan (MVP → V1)
+
+* **MVP** (2 weeks): word intake, Step‑A audio flow, Hear & Choose, scheduler, progress mini‑view, ElevenLabs + fallback.
+* **V1**: Build‑It tiles, Morpho‑Match, parent exports, offline cache, OCR helper.
+
+---
+
+## 16) Rationale & alignment with evaluations
+
+* **Audio‑first + extended time** directly support her processing‑speed and tracking weaknesses and reduce spelling anxiety.
+* **Reduced workload controls** mirror recommendations to shorten/modify assignments and de‑emphasize speed.
+* **Line tracker, large targets, tile input** accommodate visual tracking and motor coordination weaknesses.
+* **Clear progress reports** support Wrightslaw‑style documentation for school meetings and avoid emotional debates with data.
+
+---
+
+## 17) Acceptance criteria (selected)
+
+* On pressing **Study**, the app **immediately** plays “word only,” then **automatically** plays a **fresh AI sentence** containing that word.
+* In 10 consecutive sessions, **no duplicate AI sentence** appears for the same word.
+* Entire study flow is navigable with **four** buttons only; no additional visible UI elements.
+* Parent adds 12 words, and scheduler auto‑creates 4 study days with balanced sets.
+* Export generates a one‑page PDF/CSV with per‑word accuracy and next‑due date.
+
+---
+
+## 18) Future extensions (deferred)
+
+* Gentle dictation mode with error‑tolerant scoring.
+* Visual scene cards generated from sentences (only if they don’t distract).
+* Teacher share link for weekly list import.
+
+---
+
