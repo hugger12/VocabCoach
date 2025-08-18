@@ -338,6 +338,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Schedule API
+  app.get("/api/schedule", async (req, res) => {
+    try {
+      const schedules = await storage.getAllSchedules();
+      res.json(schedules);
+    } catch (error) {
+      console.error("Error fetching schedules:", error);
+      res.status(500).json({ message: "Failed to fetch schedules" });
+    }
+  });
+
+  app.patch("/api/schedule/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const schedule = await storage.updateSchedule(id, updates);
+      res.json(schedule);
+    } catch (error) {
+      console.error("Error updating schedule:", error);
+      res.status(500).json({ message: "Failed to update schedule" });
+    }
+  });
+
   // Health check
   app.get("/api/health", async (req, res) => {
     res.json({ 

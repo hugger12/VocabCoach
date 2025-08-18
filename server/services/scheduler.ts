@@ -25,8 +25,8 @@ export class SchedulerService {
    * Create initial schedule entry for a new word
    */
   createInitialSchedule(wordId: string): InsertSchedule {
+    // Make new words available immediately for demo/development purposes
     const nextDueAt = new Date();
-    nextDueAt.setHours(nextDueAt.getHours() + this.config.intervals.box1);
 
     return {
       wordId,
