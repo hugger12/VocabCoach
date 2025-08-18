@@ -12,7 +12,7 @@ export interface SchedulerConfig {
 
 export class SchedulerService {
   private config: SchedulerConfig = {
-    dailyLimit: 8,
+    dailyLimit: 20, // Allow more words per day for comprehensive practice
     intervals: {
       box1: 1,     // 1 hour
       box2: 24,    // 1 day
