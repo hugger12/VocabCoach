@@ -56,9 +56,11 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
   const [bulkWords, setBulkWords] = useState<string>("");
   const [showBulkEntry, setShowBulkEntry] = useState(false);
 
-  // Fetch words
+  // Fetch words with cache busting
   const { data: words = [], isLoading: wordsLoading } = useQuery<WordWithProgress[]>({
     queryKey: ["/api/words"],
+    staleTime: 0, // Always refetch
+    gcTime: 0, // Don't cache
   });
 
   // Fetch progress
@@ -96,8 +98,11 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
       return response.json();
     },
     onSuccess: () => {
+      // Force hard refresh of queries
       queryClient.invalidateQueries({ queryKey: ["/api/words"] });
       queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+      queryClient.refetchQueries({ queryKey: ["/api/words"] });
+      queryClient.refetchQueries({ queryKey: ["/api/progress"] });
       setWordForm({ text: "", partOfSpeech: "", kidDefinition: "", teacherDefinition: "" });
       toast({
         title: "Word Added Successfully",
