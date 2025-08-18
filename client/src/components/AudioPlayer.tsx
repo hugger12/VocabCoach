@@ -95,11 +95,14 @@ export function AudioPlayer({
       audioRef.current = audio;
 
       audio.onplay = () => {
+        console.log('Audio started playing:', type, text.substring(0, 50));
         setIsPlaying(true);
         setIsLoading(false);
+        onPlay?.();
       };
 
       audio.onended = () => {
+        console.log('Audio ended:', type, text.substring(0, 50));
         setIsPlaying(false);
         onEnded?.();
       };

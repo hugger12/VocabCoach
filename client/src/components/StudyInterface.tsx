@@ -29,6 +29,11 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [sessionStarted, setSessionStarted] = useState(false);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [isSentencePlaying, setIsSentencePlaying] = useState(false);
+  
+  // Debug effect to track sentence playing state
+  useEffect(() => {
+    console.log('Sentence playing state changed:', isSentencePlaying);
+  }, [isSentencePlaying]);
 
   // Fetch study session
   const { data: session, isLoading, error } = useQuery<StudySession>({
@@ -361,9 +366,18 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                     className="w-full h-16"
                     wordId={currentWord?.id}
                     data-testid="play-sentence"
-                    onPlay={() => setIsSentencePlaying(true)}
-                    onEnded={() => setIsSentencePlaying(false)}
-                    onError={() => setIsSentencePlaying(false)}
+                    onPlay={() => {
+                      console.log('Setting isSentencePlaying to true');
+                      setIsSentencePlaying(true);
+                    }}
+                    onEnded={() => {
+                      console.log('Setting isSentencePlaying to false (ended)');
+                      setIsSentencePlaying(false);
+                    }}
+                    onError={() => {
+                      console.log('Setting isSentencePlaying to false (error)');
+                      setIsSentencePlaying(false);
+                    }}
                   >
                     Play Sentence {currentWord?.sentences && currentWord.sentences.length > 1 ? `(${currentSentenceIndex + 1}/${currentWord.sentences.length})` : ''}
                   </AudioPlayer>
@@ -397,14 +411,17 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 <p className="text-dyslexia-lg text-foreground text-center leading-relaxed mb-4">
                   Listen to learn how <strong className="text-primary font-semibold">{currentWord?.text}</strong> is used.
                 </p>
+                {/* Debug indicator */}
+                <div className="text-center mb-2 text-xs text-muted-foreground">
+                  Status: {isSentencePlaying ? '🔊 Playing' : '⏸️ Stopped'}
+                </div>
                 {currentWord?.sentences && currentWord.sentences.length > 0 && (
                   <div className="text-center">
                     <DyslexicReader
                       text={getCurrentSentence()}
                       isPlaying={isSentencePlaying}
-                      className="text-dyslexia-base text-foreground inline-block"
-                      highlightColor="bg-primary/20 dark:bg-primary/30"
-                      speed={120} // Slower reading speed for comprehension
+                      className="text-dyslexia-base text-foreground"
+                      highlightColor="bg-primary/30 dark:bg-primary/40 border border-primary/50"
                     />
                   </div>
                 )}
