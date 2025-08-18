@@ -1,6 +1,6 @@
 import { createContext, useState, useEffect, useContext } from "react";
 
-export type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "high-contrast";
 
 interface ThemeContextType {
   theme: Theme;
@@ -18,7 +18,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("theme");
-      if (saved === "light" || saved === "dark") {
+      if (saved === "light" || saved === "dark" || saved === "high-contrast") {
         return saved;
       }
       return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -28,13 +28,13 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove("light", "dark");
+    root.classList.remove("light", "dark", "high-contrast");
     root.classList.add(theme);
     localStorage.setItem("theme", theme);
   }, [theme]);
 
   const toggleTheme = () => {
-    setTheme(theme === "light" ? "dark" : "light");
+    setTheme(theme === "light" ? "dark" : theme === "dark" ? "high-contrast" : "light");
   };
 
   return (

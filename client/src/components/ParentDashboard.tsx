@@ -23,6 +23,10 @@ interface WordFormData {
   teacherDefinition?: string;
 }
 
+interface BulkWordEntry {
+  text: string;
+}
+
 const PARTS_OF_SPEECH = [
   { value: "noun", label: "Noun" },
   { value: "verb", label: "Verb" },
@@ -48,6 +52,9 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
     kidDefinition: "",
     teacherDefinition: "",
   });
+  
+  const [bulkWords, setBulkWords] = useState<string>("");
+  const [showBulkEntry, setShowBulkEntry] = useState(false);
 
   // Fetch words
   const { data: words = [], isLoading: wordsLoading } = useQuery<WordWithProgress[]>({
@@ -165,6 +172,44 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
     },
   });
 
+  // Bulk add words mutation
+  const bulkAddWordsMutation = useMutation({
+    mutationFn: async (wordTexts: string[]) => {
+      const results = [];
+      for (const wordText of wordTexts) {
+        const response = await fetch("/api/words", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: wordText.trim(),
+            weekId: `week-${Math.ceil(Date.now() / (7 * 24 * 60 * 60 * 1000))}`,
+          }),
+        });
+        if (!response.ok) throw new Error(`Failed to add word: ${wordText}`);
+        const result = await response.json();
+        results.push(result);
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/words"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+      setBulkWords("");
+      setShowBulkEntry(false);
+      toast({
+        title: "Words Added Successfully",
+        description: `${results.length} words have been processed with AI-generated definitions and sentences.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error Adding Words",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleAddWord = () => {
     if (!wordForm.text || !wordForm.partOfSpeech || !wordForm.kidDefinition) {
       toast({
@@ -182,6 +227,43 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
     if (confirm("Are you sure you want to delete this word?")) {
       deleteWordMutation.mutate(wordId);
     }
+  };
+
+  const handleBulkAddWords = () => {
+    if (!bulkWords.trim()) {
+      toast({
+        title: "No Words Entered",
+        description: "Please enter words separated by commas or new lines.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Parse words from text input (comma or line separated)
+    const wordList = bulkWords
+      .split(/[,\n]/)
+      .map(word => word.trim())
+      .filter(word => word.length > 0);
+
+    if (wordList.length === 0) {
+      toast({
+        title: "No Valid Words",
+        description: "Please enter at least one valid word.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (wordList.length > 12) {
+      toast({
+        title: "Too Many Words",
+        description: "Please enter no more than 12 words at a time.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    bulkAddWordsMutation.mutate(wordList);
   };
 
   const currentWeekWords = words.filter(word => word.weekId === words[0]?.weekId);
@@ -232,25 +314,84 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
               {/* Add Words Form */}
               <Card className="card-dyslexia">
                 <CardHeader>
-                  <CardTitle className="text-dyslexia-lg flex items-center">
-                    <Plus className="w-6 h-6 text-primary mr-2" />
-                    Add This Week's Words
+                  <CardTitle className="text-dyslexia-lg flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Plus className="w-6 h-6 text-primary mr-2" />
+                      Add This Week's Words
+                    </div>
+                    <div className="flex space-x-2">
+                      <DyslexiaButton
+                        variant={showBulkEntry ? "outline" : "default"}
+                        size="sm"
+                        onClick={() => setShowBulkEntry(false)}
+                        data-testid="single-word-mode"
+                      >
+                        Single Word
+                      </DyslexiaButton>
+                      <DyslexiaButton
+                        variant={showBulkEntry ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setShowBulkEntry(true)}
+                        data-testid="bulk-word-mode"
+                      >
+                        Bulk Entry
+                      </DyslexiaButton>
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="word-text" className="text-dyslexia-base font-medium">
-                      Word
-                    </Label>
-                    <Input
-                      id="word-text"
-                      value={wordForm.text}
-                      onChange={(e) => setWordForm({ ...wordForm, text: e.target.value })}
-                      placeholder="Enter word"
-                      className="input-dyslexia mt-2"
-                      data-testid="input-word"
-                    />
-                  </div>
+                  {showBulkEntry ? (
+                    // Bulk Word Entry
+                    <>
+                      <div>
+                        <Label htmlFor="bulk-words" className="text-dyslexia-base font-medium">
+                          Enter 12 Words for This Week
+                        </Label>
+                        <p className="text-sm text-muted-foreground mt-1 mb-3">
+                          Enter words separated by commas or new lines. AI will generate definitions and sentences.
+                        </p>
+                        <Textarea
+                          id="bulk-words"
+                          value={bulkWords}
+                          onChange={(e) => setBulkWords(e.target.value)}
+                          placeholder="magnificent, adventure, curious, explore, brilliant, discover, incredible, journey, wonderful, mystery, treasure, amazing"
+                          className="input-dyslexia mt-2 min-h-32 resize-none"
+                          data-testid="textarea-bulk-words"
+                        />
+                      </div>
+                      <DyslexiaButton
+                        onClick={handleBulkAddWords}
+                        disabled={bulkAddWordsMutation.isPending}
+                        className="w-full"
+                        data-testid="button-bulk-add"
+                      >
+                        <Plus className="w-5 h-5 mr-2" />
+                        {bulkAddWordsMutation.isPending ? "Processing Words..." : "Add Words with AI"}
+                      </DyslexiaButton>
+                      {bulkAddWordsMutation.isPending && (
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">
+                            AI is generating definitions and sentences for each word...
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    // Single Word Entry
+                    <>
+                      <div>
+                        <Label htmlFor="word-text" className="text-dyslexia-base font-medium">
+                          Word
+                        </Label>
+                        <Input
+                          id="word-text"
+                          value={wordForm.text}
+                          onChange={(e) => setWordForm({ ...wordForm, text: e.target.value })}
+                          placeholder="Enter word"
+                          className="input-dyslexia mt-2"
+                          data-testid="input-word"
+                        />
+                      </div>
                   
                   <div>
                     <Label htmlFor="part-of-speech" className="text-dyslexia-base font-medium">
@@ -300,16 +441,18 @@ export function ParentDashboard({ onClose }: ParentDashboardProps) {
                       data-testid="textarea-teacher-definition"
                     />
                   </div>
-                  
-                  <DyslexiaButton
-                    onClick={handleAddWord}
-                    disabled={addWordMutation.isPending}
-                    className="w-full"
-                    data-testid="button-add-word"
-                  >
-                    <Plus className="w-5 h-5 mr-2" />
-                    Add Word
-                  </DyslexiaButton>
+                      
+                      <DyslexiaButton
+                        onClick={handleAddWord}
+                        disabled={addWordMutation.isPending}
+                        className="w-full"
+                        data-testid="button-add-word"
+                      >
+                        <Plus className="w-5 h-5 mr-2" />
+                        Add Word
+                      </DyslexiaButton>
+                    </>
+                  )}
                   
                   {/* OCR Helper */}
                   <div className="pt-6 border-t border-border">
