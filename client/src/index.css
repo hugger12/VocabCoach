@@ -1,0 +1,301 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(240 10% 3.9%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(240 10% 3.9%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(240 10% 3.9%);
+  --primary: hsl(214 88% 53%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(142 86% 28%);
+  --secondary-foreground: hsl(0 0% 100%);
+  --muted: hsl(240 4.8% 95.9%);
+  --muted-foreground: hsl(240 3.8% 46.1%);
+  --accent: hsl(240 4.8% 95.9%);
+  --accent-foreground: hsl(240 5.9% 10%);
+  --destructive: hsl(0 84% 60%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --border: hsl(240 5.9% 90%);
+  --input: hsl(240 5.9% 90%);
+  --ring: hsl(214 88% 53%);
+  --radius: 1rem;
+  
+  /* Dyslexia-friendly variables */
+  --font-dyslexia: 'Inter', sans-serif;
+  --text-dyslexia-base: 18px;
+  --text-dyslexia-lg: 22px;
+  --text-dyslexia-xl: 26px;
+  --text-dyslexia-2xl: 32px;
+  --line-height-dyslexia: 1.6;
+  --spacing-generous: 1.5rem;
+  --target-size-min: 48px;
+}
+
+.dark {
+  --background: hsl(240 10% 3.9%);
+  --foreground: hsl(0 0% 98%);
+  --card: hsl(240 10% 3.9%);
+  --card-foreground: hsl(0 0% 98%);
+  --popover: hsl(240 10% 3.9%);
+  --popover-foreground: hsl(0 0% 98%);
+  --primary: hsl(214 88% 53%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(142 86% 28%);
+  --secondary-foreground: hsl(0 0% 100%);
+  --muted: hsl(240 3.7% 15.9%);
+  --muted-foreground: hsl(240 5% 64.9%);
+  --accent: hsl(240 3.7% 15.9%);
+  --accent-foreground: hsl(0 0% 98%);
+  --destructive: hsl(0 62.8% 30.6%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(240 3.7% 15.9%);
+  --input: hsl(240 3.7% 15.9%);
+  --ring: hsl(214 88% 53%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: var(--font-dyslexia);
+    font-size: var(--text-dyslexia-base);
+    line-height: var(--line-height-dyslexia);
+  }
+
+  /* Dyslexia-friendly typography */
+  .dyslexia-text-base {
+    font-size: var(--text-dyslexia-base);
+    line-height: var(--line-height-dyslexia);
+  }
+
+  .dyslexia-text-lg {
+    font-size: var(--text-dyslexia-lg);
+    line-height: var(--line-height-dyslexia);
+  }
+
+  .dyslexia-text-xl {
+    font-size: var(--text-dyslexia-xl);
+    line-height: var(--line-height-dyslexia);
+  }
+
+  .dyslexia-text-2xl {
+    font-size: var(--text-dyslexia-2xl);
+    line-height: var(--line-height-dyslexia);
+  }
+
+  /* High contrast mode */
+  .high-contrast {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(0 0% 0%);
+    --primary: hsl(240 100% 25%);
+    --secondary: hsl(120 100% 25%);
+    --border: hsl(0 0% 0%);
+  }
+
+  .high-contrast.dark {
+    --background: hsl(0 0% 0%);
+    --foreground: hsl(0 0% 100%);
+    --primary: hsl(240 100% 75%);
+    --secondary: hsl(120 100% 75%);
+    --border: hsl(0 0% 100%);
+  }
+
+  /* Focus styles for accessibility */
+  .focus-visible {
+    @apply outline-none ring-4 ring-primary ring-opacity-30 ring-offset-2;
+  }
+
+  /* Large tap targets */
+  .tap-target {
+    min-width: var(--target-size-min);
+    min-height: var(--target-size-min);
+  }
+
+  /* Generous spacing */
+  .generous-spacing {
+    padding: var(--spacing-generous);
+  }
+
+  .generous-margin {
+    margin: var(--spacing-generous);
+  }
+
+  /* Line tracker for visual tracking support */
+  .line-tracker {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: hsl(var(--primary) / 0.5);
+    pointer-events: none;
+    z-index: 50;
+    transition: top 0.1s ease-out;
+  }
+
+  /* Reduced motion for sensitive users */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Print styles for reports */
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    
+    body {
+      font-size: 12pt;
+      line-height: 1.4;
+      color: black !important;
+      background: white !important;
+    }
+  }
+}
+
+@layer components {
+  .btn-dyslexia {
+    @apply tap-target dyslexia-text-base font-semibold rounded-xl transition-all duration-200 focus-visible;
+    @apply bg-primary text-primary-foreground hover:bg-primary hover:opacity-90;
+    @apply shadow-sm hover:shadow-md;
+  }
+
+  .btn-dyslexia-secondary {
+    @apply btn-dyslexia bg-secondary text-secondary-foreground hover:bg-secondary hover:opacity-90;
+  }
+
+  .btn-dyslexia-outline {
+    @apply btn-dyslexia bg-transparent border-2 border-current text-foreground hover:bg-accent;
+  }
+
+  .card-dyslexia {
+    @apply bg-card text-card-foreground rounded-2xl shadow-lg border border-border generous-spacing;
+  }
+
+  .input-dyslexia {
+    @apply tap-target dyslexia-text-base px-4 border border-input rounded-lg;
+    @apply bg-background text-foreground focus-visible;
+  }
+
+  .progress-indicator {
+    @apply bg-muted rounded-full overflow-hidden;
+  }
+
+  .progress-bar {
+    @apply bg-primary h-full rounded-full transition-all duration-500;
+  }
+
+  /* Audio control specific styles */
+  .audio-control {
+    @apply btn-dyslexia flex items-center justify-center space-x-3;
+    @apply hover:scale-105 active:scale-95;
+  }
+
+  .audio-control-primary {
+    @apply audio-control bg-primary hover:bg-primary hover:opacity-90;
+  }
+
+  .audio-control-secondary {
+    @apply audio-control bg-secondary hover:bg-secondary hover:opacity-90;
+  }
+
+  /* Choice button styles */
+  .choice-button {
+    @apply btn-dyslexia-outline w-full justify-start text-left px-6;
+    @apply hover:bg-muted hover:opacity-90;
+    @apply border-border;
+  }
+
+  .choice-button-correct {
+    @apply border-secondary bg-secondary bg-opacity-10 text-secondary;
+  }
+
+  .choice-button-incorrect {
+    @apply border-destructive bg-destructive bg-opacity-10 text-destructive;
+  }
+
+  /* Dashboard tab styles */
+  .dashboard-tab {
+    @apply tap-target dyslexia-text-base font-semibold py-3 px-4 rounded-lg transition-all duration-200;
+    @apply text-muted-foreground hover:text-foreground;
+  }
+
+  .dashboard-tab.active {
+    @apply bg-primary text-primary-foreground;
+  }
+
+  /* Word status badges */
+  .status-badge {
+    @apply px-2 py-1 rounded text-xs font-medium;
+  }
+
+  .status-new {
+    @apply status-badge bg-primary bg-opacity-10 text-primary;
+  }
+
+  .status-learning {
+    @apply status-badge bg-secondary bg-opacity-10 text-secondary;
+  }
+
+  .status-almost {
+    @apply status-badge bg-yellow-500 bg-opacity-10 text-yellow-700 dark:text-yellow-300;
+  }
+
+  .status-mastered {
+    @apply status-badge bg-purple-500 bg-opacity-10 text-purple-700 dark:text-purple-300;
+  }
+}
+
+@layer utilities {
+  .text-dyslexia-base {
+    font-size: var(--text-dyslexia-base);
+    line-height: var(--line-height-dyslexia);
+  }
+
+  .text-dyslexia-lg {
+    font-size: var(--text-dyslexia-lg);
+    line-height: var(--line-height-dyslexia);
+  }
+
+  .text-dyslexia-xl {
+    font-size: var(--text-dyslexia-xl);
+    line-height: var(--line-height-dyslexia);
+  }
+
+  .text-dyslexia-2xl {
+    font-size: var(--text-dyslexia-2xl);
+    line-height: var(--line-height-dyslexia);
+  }
+
+  .tap-target {
+    min-width: var(--target-size-min);
+    min-height: var(--target-size-min);
+  }
+
+  .screen-reader-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
