@@ -1,15 +1,12 @@
 import { useState } from "react";
 import { StudyInterface } from "@/components/StudyInterface";
 import { ParentDashboard } from "@/components/ParentDashboard";
-import { useTheme } from "@/components/ThemeProvider";
 import { DyslexiaButton } from "@/components/ui/dyslexia-button";
-import { Moon, Sun, Contrast } from "lucide-react";
 
 export default function Home() {
   const [showParentDashboard, setShowParentDashboard] = useState(false);
   const [showPINModal, setShowPINModal] = useState(false);
   const [pin, setPIN] = useState("");
-  const { theme, toggleTheme } = useTheme();
 
   const PARENT_PIN = "1234"; // In a real app, this would be configurable
 
@@ -32,37 +29,12 @@ export default function Home() {
     setShowParentDashboard(false);
   };
 
-  const getThemeIcon = () => {
-    switch (theme) {
-      case "dark":
-        return <Sun className="w-5 h-5" />;
-      case "high-contrast":
-        return <Moon className="w-5 h-5" />;
-      default:
-        return <Contrast className="w-5 h-5" />;
-    }
-  };
-
   if (showParentDashboard) {
     return <ParentDashboard onClose={handleCloseDashboard} />;
   }
 
   return (
     <div className="relative min-h-screen">
-      {/* Theme Toggle */}
-      <div className="fixed top-4 right-4 z-50 no-print">
-        <DyslexiaButton
-          variant="outline"
-          size="icon"
-          onClick={toggleTheme}
-          className="w-12 h-12 rounded-full shadow-lg"
-          aria-label={`Switch to ${theme === "light" ? "dark" : theme === "dark" ? "high contrast" : "light"} theme`}
-          data-testid="theme-toggle"
-        >
-          {getThemeIcon()}
-        </DyslexiaButton>
-      </div>
-
       {/* Main Study Interface */}
       <StudyInterface onOpenParentDashboard={handleParentAccess} />
 
