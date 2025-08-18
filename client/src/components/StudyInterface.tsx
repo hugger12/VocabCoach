@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, RotateCcw, Settings } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { DyslexiaButton } from "@/components/ui/dyslexia-button";
 import { AudioPlayer } from "./AudioPlayer";
+import { DyslexicReader } from "./DyslexicReader";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
+  const [isSentencePlaying, setIsSentencePlaying] = useState(false);
 
   // Fetch study session
   const { data: session, isLoading, error } = useQuery<StudySession>({
@@ -136,6 +138,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setSelectedChoice(null);
       setShowFeedback(false);
       setCurrentSentenceIndex(0); // Reset to first sentence for new word
+      setIsSentencePlaying(false); // Stop any sentence playback
     } else {
       // Session complete
       toast({
@@ -146,6 +149,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setSessionStarted(false);
       setCurrentIndex(0);
       setCurrentSentenceIndex(0);
+      setIsSentencePlaying(false);
     }
   };
 
@@ -155,6 +159,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setSelectedChoice(null);
       setShowFeedback(false);
       setCurrentSentenceIndex(0); // Reset to first sentence for new word
+      setIsSentencePlaying(false); // Stop any sentence playback
     }
   };
 
@@ -172,6 +177,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setCurrentSentenceIndex((prev) => 
         (prev + 1) % (currentWord.sentences?.length || 1)
       );
+      // Stop any current sentence playback when switching sentences
+      setIsSentencePlaying(false);
     }
   };
 
@@ -354,6 +361,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                     className="w-full h-16"
                     wordId={currentWord?.id}
                     data-testid="play-sentence"
+                    onPlay={() => setIsSentencePlaying(true)}
+                    onEnded={() => setIsSentencePlaying(false)}
+                    onError={() => setIsSentencePlaying(false)}
                   >
                     Play Sentence {currentWord?.sentences && currentWord.sentences.length > 1 ? `(${currentSentenceIndex + 1}/${currentWord.sentences.length})` : ''}
                   </AudioPlayer>
@@ -382,15 +392,21 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 </AudioPlayer>
               </div>
 
-              {/* Current Sentence Display */}
+              {/* Current Sentence Display with Dyslexic Reading */}
               <div className="bg-muted rounded-xl p-6 mb-6">
-                <p className="text-dyslexia-lg text-foreground text-center leading-relaxed">
+                <p className="text-dyslexia-lg text-foreground text-center leading-relaxed mb-4">
                   Listen to learn how <strong className="text-primary font-semibold">{currentWord?.text}</strong> is used.
                 </p>
                 {currentWord?.sentences && currentWord.sentences.length > 0 && (
-                  <p className="text-dyslexia-base text-muted-foreground text-center mt-3 italic">
-                    "{getCurrentSentence()}"
-                  </p>
+                  <div className="text-center">
+                    <DyslexicReader
+                      text={getCurrentSentence()}
+                      isPlaying={isSentencePlaying}
+                      className="text-dyslexia-base text-foreground inline-block"
+                      highlightColor="bg-primary/20 dark:bg-primary/30"
+                      speed={120} // Slower reading speed for comprehension
+                    />
+                  </div>
                 )}
               </div>
 
