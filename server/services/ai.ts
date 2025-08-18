@@ -21,6 +21,12 @@ export interface MorphologyAnalysis {
   recommended: boolean;
 }
 
+export interface WordAnalysis {
+  partOfSpeech: string;
+  kidDefinition: string;
+  teacherDefinition?: string;
+}
+
 export class AIService {
   // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
   private model = "gpt-4o";
@@ -111,6 +117,58 @@ Respond with JSON:
     } catch (error) {
       console.error("Error simplifying definition:", error);
       throw new Error("Failed to simplify definition");
+    }
+  }
+
+  async analyzeWord(word: string): Promise<WordAnalysis> {
+    try {
+      const prompt = `Analyze the word "${word}" for a 9-year-old child with dyslexia.
+
+Requirements:
+- Determine the most common part of speech
+- Create a kid-friendly definition (simple, 8-12 words, grade 3-4 reading level)  
+- Create a teacher definition (more formal/complete, optional)
+- Use clear, concrete language
+- Avoid abstract concepts when possible
+
+Respond with JSON in this format:
+{
+  "partOfSpeech": "noun|verb|adjective|adverb|preposition|etc",
+  "kidDefinition": "simple definition for child",
+  "teacherDefinition": "formal definition (optional)"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: "system", 
+            content: "You are an expert in creating educational content for children with dyslexia. Focus on clear, simple definitions that support learning."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        max_tokens: 200,
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || "{}");
+      return {
+        partOfSpeech: result.partOfSpeech || "noun",
+        kidDefinition: result.kidDefinition || `a word meaning ${word}`,
+        teacherDefinition: result.teacherDefinition,
+      };
+    } catch (error) {
+      console.error("Error analyzing word:", error);
+      // Fallback for when AI fails
+      return {
+        partOfSpeech: "noun", 
+        kidDefinition: `a word meaning ${word}`,
+        teacherDefinition: undefined,
+      };
     }
   }
 

@@ -46,6 +46,8 @@ Preferred communication style: Simple, everyday language.
 - **Spaced Repetition**: Implements Leitner box system for intelligent review scheduling
 - **Progressive Enhancement**: Works without JavaScript for core functionality
 - **Performance**: Aggressive caching strategies for audio content and API responses
+- **Minimal Parent Data Entry**: Parents only enter word text - AI automatically generates part of speech, definitions, morphological analysis, and example sentences
+- **Bulk Processing**: Supports both single word entry and bulk word processing with comma-separated input
 
 # External Dependencies
 

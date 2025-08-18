@@ -4,7 +4,7 @@ import { storage } from "./storage.js";
 import { aiService } from "./services/ai.js";
 import { ttsService } from "./services/tts.js";
 import { schedulerService } from "./services/scheduler.js";
-import { insertWordSchema, insertAttemptSchema } from "@shared/schema.js";
+import { insertWordSchema, insertAttemptSchema, simpleWordInputSchema } from "@shared/schema.js";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -22,27 +22,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/words", async (req, res) => {
     try {
-      const wordData = insertWordSchema.parse(req.body);
+      // Try simple word input first (text only), fallback to full schema
+      let wordData: any;
+      let isSimpleInput = false;
       
-      // If no weekId provided, use current week
-      if (!wordData.weekId) {
-        wordData.weekId = await storage.getCurrentWeek();
-      }
+      try {
+        const simpleInput = simpleWordInputSchema.parse(req.body);
+        isSimpleInput = true;
+        
+        // Use AI to generate all missing fields
+        console.log(`Processing word with AI: ${simpleInput.text}`);
+        
+        // Generate part of speech and definitions
+        const analysis = await aiService.analyzeWord(simpleInput.text);
+        
+        // Generate morphology
+        const morphology = await aiService.analyzeMorphology(simpleInput.text);
+        
+        wordData = {
+          text: simpleInput.text,
+          partOfSpeech: analysis.partOfSpeech,
+          kidDefinition: analysis.kidDefinition,
+          teacherDefinition: analysis.teacherDefinition || null,
+          weekId: simpleInput.weekId || await storage.getCurrentWeek(),
+          syllables: morphology.syllables,
+          morphemes: morphology.morphemes,
+          ipa: null, // Optional field
+        };
+        
+      } catch (simpleParseError) {
+        // Fallback to full schema validation
+        wordData = insertWordSchema.parse(req.body);
+        
+        // If no weekId provided, use current week
+        if (!wordData.weekId) {
+          wordData.weekId = await storage.getCurrentWeek();
+        }
 
-      // Simplify definition if teacher definition is provided
-      if (wordData.teacherDefinition && !wordData.kidDefinition) {
-        const simplified = await aiService.simplifyDefinition(wordData.teacherDefinition);
-        wordData.kidDefinition = simplified.definition;
-      }
+        // Simplify definition if teacher definition is provided
+        if (wordData.teacherDefinition && !wordData.kidDefinition) {
+          const simplified = await aiService.simplifyDefinition(wordData.teacherDefinition);
+          wordData.kidDefinition = simplified.definition;
+        }
 
-      // Analyze morphology
-      if (!wordData.syllables || !wordData.morphemes) {
-        try {
-          const morphology = await aiService.analyzeMorphology(wordData.text);
-          wordData.syllables = morphology.syllables;
-          wordData.morphemes = morphology.morphemes;
-        } catch (error) {
-          console.warn("Morphology analysis failed:", error);
+        // Analyze morphology
+        if (!wordData.syllables || !wordData.morphemes) {
+          try {
+            const morphology = await aiService.analyzeMorphology(wordData.text);
+            wordData.syllables = morphology.syllables;
+            wordData.morphemes = morphology.morphemes;
+          } catch (error) {
+            console.warn("Morphology analysis failed:", error);
+          }
         }
       }
 

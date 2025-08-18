@@ -70,6 +70,12 @@ export const insertWordSchema = createInsertSchema(words).omit({
   createdAt: true,
 });
 
+// Simplified word input schema for AI processing
+export const simpleWordInputSchema = z.object({
+  text: z.string().min(1).trim(),
+  weekId: z.string().optional(),
+});
+
 export const insertSentenceSchema = createInsertSchema(sentences).omit({
   id: true,
   createdAt: true,
