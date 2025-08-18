@@ -432,32 +432,6 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               <ArrowLeft className="w-5 h-5" />
             </DyslexiaButton>
             
-            <div className="flex space-x-4">
-              <AudioPlayer
-                text={currentWord?.text || ""}
-                type="word"
-                variant="outline"
-                className="h-16 px-6"
-                wordId={currentWord?.id}
-                data-testid="replay-word-btn"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Word
-              </AudioPlayer>
-              
-              <AudioPlayer
-                text={getCurrentSentence()}
-                type="sentence"
-                variant="outline"
-                className="h-16 px-6"
-                wordId={currentWord?.id}
-                data-testid="replay-sentence-btn"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Sentence
-              </AudioPlayer>
-            </div>
-            
             <DyslexiaButton
               onClick={handleNext}
               disabled={selectedChoice === null || !meaningChoices[selectedChoice]?.isCorrect}
