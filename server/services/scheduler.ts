@@ -84,13 +84,22 @@ export class SchedulerService {
   getWordsForToday(schedules: Schedule[], limit?: number): Schedule[] {
     const now = new Date();
     const dueWords = schedules
-      .filter(schedule => schedule.nextDueAt <= now)
+      .filter(schedule => {
+        // Ensure nextDueAt is a proper Date object
+        const dueDate = schedule.nextDueAt instanceof Date 
+          ? schedule.nextDueAt 
+          : new Date(schedule.nextDueAt);
+        
+        return dueDate <= now;
+      })
       .sort((a, b) => {
         // Prioritize by box (lower boxes first) then by due time
         if (a.box !== b.box) {
           return a.box - b.box;
         }
-        return a.nextDueAt.getTime() - b.nextDueAt.getTime();
+        const dateA = a.nextDueAt instanceof Date ? a.nextDueAt : new Date(a.nextDueAt);
+        const dateB = b.nextDueAt instanceof Date ? b.nextDueAt : new Date(b.nextDueAt);
+        return dateA.getTime() - dateB.getTime();
       });
 
     const dailyLimit = limit ?? this.config.dailyLimit;

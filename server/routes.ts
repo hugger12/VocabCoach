@@ -237,13 +237,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
       const currentWeek = await storage.getCurrentWeek();
       
-      // Only get schedules for words from the current week
+      // Get all word schedules for study session
       const allSchedules = await storage.getAllSchedules();
-      const currentWeekWords = await storage.getWords(currentWeek);
-      const currentWeekWordIds = new Set(currentWeekWords.map(w => w.id));
-      const schedules = allSchedules.filter(s => currentWeekWordIds.has(s.wordId));
-      
-      const dueSchedules = schedulerService.getWordsForToday(schedules, limit);
+      const dueSchedules = schedulerService.getWordsForToday(allSchedules, limit);
       
       if (dueSchedules.length === 0) {
         return res.json({ 
@@ -254,8 +250,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Only get words with progress from the current week
-      const words = await storage.getWordsWithProgress(currentWeek);
+      // Get all words with progress (simplified approach)
+      const words = await storage.getWordsWithProgress();
       const session = schedulerService.createStudySession(dueSchedules, words);
       
       res.json(session);
