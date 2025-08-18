@@ -86,33 +86,39 @@ export class DatabaseStorage implements IStorage {
 
   // Words
   async getWord(id: string): Promise<Word | undefined> {
-    const [word] = await db.select().from(words).where(eq(words.id, id));
-    return word;
+    return this.words.get(id);
   }
 
   async getWords(weekId?: string): Promise<Word[]> {
+    const allWords = Array.from(this.words.values());
+    
+    // If no specific week requested, return all words
     if (!weekId) {
-      return await db.select().from(words).orderBy(desc(words.createdAt));
+      return allWords;
     }
-    return await db.select().from(words).where(eq(words.weekId, weekId)).orderBy(desc(words.createdAt));
+    
+    // Filter by specific week
+    return allWords.filter(word => word.weekId === weekId);
   }
 
   async getWordsWithProgress(weekId?: string): Promise<WordWithProgress[]> {
-    const wordsList = await this.getWords(weekId);
+    const words = await this.getWords(weekId);
     const wordsWithProgress: WordWithProgress[] = [];
 
-    for (const word of wordsList) {
-      const scheduleData = await this.getSchedule(word.id);
-      const attemptsData = await this.getAttempts(word.id);
-      const sentencesData = await this.getSentences(word.id);
-      const audioCacheData = await db.select().from(audioCacheTable).where(eq(audioCacheTable.wordId, word.id));
+    for (const word of words) {
+      const schedule = await this.getSchedule(word.id);
+      const attempts = await this.getAttempts(word.id);
+      const sentences = await this.getSentences(word.id);
+      const audioCache = Array.from(this.audioCache.values()).filter(
+        cache => cache.wordId === word.id
+      );
 
       wordsWithProgress.push({
         ...word,
-        schedule: scheduleData,
-        attempts: attemptsData,
-        sentences: sentencesData,
-        audioCache: audioCacheData,
+        schedule,
+        attempts,
+        sentences,
+        audioCache,
       });
     }
 
@@ -120,154 +126,181 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWord(insertWord: InsertWord): Promise<Word> {
-    const [word] = await db
-      .insert(words)
-      .values({
-        ...insertWord,
-        teacherDefinition: insertWord.teacherDefinition || null,
-        syllables: insertWord.syllables || null,
-        morphemes: insertWord.morphemes || null,
-        ipa: insertWord.ipa || null,
-      })
-      .returning();
+    const id = randomUUID();
+    const word: Word = {
+      ...insertWord,
+      id,
+      createdAt: new Date(),
+      teacherDefinition: insertWord.teacherDefinition || null,
+      syllables: insertWord.syllables || null,
+      morphemes: insertWord.morphemes || null,
+      ipa: insertWord.ipa || null,
+    };
+    this.words.set(id, word);
     return word;
   }
 
   async updateWord(id: string, updates: Partial<Word>): Promise<Word> {
-    const [word] = await db
-      .update(words)
-      .set(updates)
-      .where(eq(words.id, id))
-      .returning();
+    const existing = this.words.get(id);
+    if (!existing) throw new Error("Word not found");
     
-    if (!word) {
-      throw new Error(`Word with id ${id} not found`);
-    }
-    return word;
+    const updated = { ...existing, ...updates };
+    this.words.set(id, updated);
+    return updated;
   }
 
   async deleteWord(id: string): Promise<void> {
-    await db.delete(words).where(eq(words.id, id));
+    this.words.delete(id);
+    // Clean up related data
+    Array.from(this.sentences.entries())
+      .filter(([_, sentence]) => sentence.wordId === id)
+      .forEach(([sentenceId]) => this.sentences.delete(sentenceId));
+    
+    Array.from(this.attempts.entries())
+      .filter(([_, attempt]) => attempt.wordId === id)
+      .forEach(([attemptId]) => this.attempts.delete(attemptId));
+
+    Array.from(this.schedules.entries())
+      .filter(([_, schedule]) => schedule.wordId === id)
+      .forEach(([scheduleId]) => this.schedules.delete(scheduleId));
   }
 
   // Sentences
   async getSentences(wordId: string): Promise<Sentence[]> {
-    return await db.select().from(sentences).where(eq(sentences.wordId, wordId));
+    return Array.from(this.sentences.values()).filter(sentence => sentence.wordId === wordId);
   }
 
   async createSentence(insertSentence: InsertSentence): Promise<Sentence> {
-    const [sentence] = await db
-      .insert(sentences)
-      .values(insertSentence)
-      .returning();
+    const id = randomUUID();
+    const sentence: Sentence = {
+      ...insertSentence,
+      id,
+      createdAt: new Date(),
+      source: insertSentence.source || "ai",
+      toxicityOk: insertSentence.toxicityOk ?? true,
+    };
+    this.sentences.set(id, sentence);
     return sentence;
   }
 
   async deleteSentence(id: string): Promise<void> {
-    await db.delete(sentences).where(eq(sentences.id, id));
+    this.sentences.delete(id);
   }
 
   // Audio Cache
   async getAudioCache(cacheKey: string): Promise<AudioCache | undefined> {
-    const [audio] = await db.select().from(audioCacheTable).where(eq(audioCacheTable.cacheKey, cacheKey));
-    return audio;
+    return Array.from(this.audioCache.values()).find(cache => cache.cacheKey === cacheKey);
   }
 
   async createAudioCache(audio: Omit<AudioCache, 'id' | 'createdAt'>): Promise<AudioCache> {
-    const [created] = await db
-      .insert(audioCacheTable)
-      .values(audio)
-      .returning();
-    return created;
+    const id = randomUUID();
+    const audioRecord: AudioCache = {
+      ...audio,
+      id,
+      createdAt: new Date(),
+    };
+    this.audioCache.set(id, audioRecord);
+    return audioRecord;
   }
 
   async deleteAudioCache(id: string): Promise<void> {
-    await db.delete(audioCacheTable).where(eq(audioCacheTable.id, id));
+    this.audioCache.delete(id);
   }
 
   // Attempts
   async getAttempts(wordId: string): Promise<Attempt[]> {
-    return await db.select().from(attempts).where(eq(attempts.wordId, wordId));
+    return Array.from(this.attempts.values()).filter(attempt => attempt.wordId === wordId);
   }
 
   async createAttempt(insertAttempt: InsertAttempt): Promise<Attempt> {
-    const [attempt] = await db
-      .insert(attempts)
-      .values(insertAttempt)
-      .returning();
+    const id = randomUUID();
+    const attempt: Attempt = {
+      ...insertAttempt,
+      id,
+      timestamp: new Date(),
+      success: insertAttempt.success ?? null,
+      errorType: insertAttempt.errorType || null,
+      responseData: insertAttempt.responseData || null,
+    };
+    this.attempts.set(id, attempt);
     return attempt;
   }
 
   async getAttemptStats(wordId: string): Promise<{ successRate: number; totalAttempts: number }> {
-    const wordAttempts = await this.getAttempts(wordId);
-    const totalAttempts = wordAttempts.length;
-    const successfulAttempts = wordAttempts.filter(attempt => attempt.success).length;
-    const successRate = totalAttempts > 0 ? successfulAttempts / totalAttempts : 0;
+    const attempts = await this.getAttempts(wordId);
+    const totalAttempts = attempts.length;
+    const successfulAttempts = attempts.filter(attempt => attempt.success === true).length;
+    const successRate = totalAttempts > 0 ? (successfulAttempts / totalAttempts) * 100 : 0;
+    
     return { successRate, totalAttempts };
   }
 
   // Schedule
   async getSchedule(wordId: string): Promise<Schedule | undefined> {
-    const [scheduleData] = await db.select().from(schedule).where(eq(schedule.wordId, wordId));
-    return scheduleData;
+    return Array.from(this.schedules.values()).find(schedule => schedule.wordId === wordId);
   }
 
   async getAllSchedules(): Promise<Schedule[]> {
-    return await db.select().from(schedule);
+    return Array.from(this.schedules.values());
   }
 
   async createSchedule(insertSchedule: InsertSchedule): Promise<Schedule> {
-    const [scheduleData] = await db
-      .insert(schedule)
-      .values(insertSchedule)
-      .returning();
-    return scheduleData;
+    const id = randomUUID();
+    const schedule: Schedule = {
+      ...insertSchedule,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      box: insertSchedule.box || 1,
+      reviewCount: insertSchedule.reviewCount || 0,
+    };
+    this.schedules.set(id, schedule);
+    return schedule;
   }
 
   async updateSchedule(id: string, updates: Partial<Schedule>): Promise<Schedule> {
-    const [scheduleData] = await db
-      .update(schedule)
-      .set(updates)
-      .where(eq(schedule.id, id))
-      .returning();
+    const existing = this.schedules.get(id);
+    if (!existing) throw new Error("Schedule not found");
     
-    if (!scheduleData) {
-      throw new Error(`Schedule with id ${id} not found`);
-    }
-    return scheduleData;
+    const updated = { 
+      ...existing, 
+      ...updates, 
+      updatedAt: new Date() 
+    };
+    this.schedules.set(id, updated);
+    return updated;
   }
 
   async deleteSchedule(id: string): Promise<void> {
-    await db.delete(schedule).where(eq(schedule.id, id));
+    this.schedules.delete(id);
   }
 
   // Settings
   async getSetting(key: string): Promise<Settings | undefined> {
-    const [setting] = await db.select().from(settings).where(eq(settings.key, key));
-    return setting;
+    return this.settings.get(key);
   }
 
   async setSetting(key: string, value: string): Promise<Settings> {
-    const existing = await this.getSetting(key);
-    
+    const existing = this.settings.get(key);
     if (existing) {
-      const [setting] = await db
-        .update(settings)
-        .set({ value, updatedAt: new Date() })
-        .where(eq(settings.key, key))
-        .returning();
-      return setting;
+      const updated = { ...existing, value, updatedAt: new Date() };
+      this.settings.set(key, updated);
+      return updated;
     } else {
-      const [setting] = await db
-        .insert(settings)
-        .values({ key, value })
-        .returning();
+      const id = randomUUID();
+      const setting: Settings = {
+        id,
+        key,
+        value,
+        updatedAt: new Date(),
+      };
+      this.settings.set(key, setting);
       return setting;
     }
   }
 
   async getSettings(): Promise<Settings[]> {
-    return await db.select().from(settings);
+    return Array.from(this.settings.values());
   }
 
   // Utility
@@ -276,10 +309,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWeek(): Promise<string> {
-    const newWeekId = this.generateWeekId();
-    this.currentWeekId = newWeekId;
-    return newWeekId;
+    this.currentWeekId = this.generateWeekId();
+    return this.currentWeekId;
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = new MemStorage();
