@@ -88,8 +88,15 @@ export class MemStorage implements IStorage {
   }
 
   async getWords(weekId?: string): Promise<Word[]> {
-    const targetWeek = weekId || this.currentWeekId;
-    return Array.from(this.words.values()).filter(word => word.weekId === targetWeek);
+    const allWords = Array.from(this.words.values());
+    
+    // If no specific week requested, return all words
+    if (!weekId) {
+      return allWords;
+    }
+    
+    // Filter by specific week
+    return allWords.filter(word => word.weekId === weekId);
   }
 
   async getWordsWithProgress(weekId?: string): Promise<WordWithProgress[]> {

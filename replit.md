@@ -24,11 +24,11 @@ Preferred communication style: Simple, everyday language.
 - **Development**: Hot module replacement via Vite middleware integration
 
 ## Data Storage Solutions
-- **ORM**: Drizzle ORM with PostgreSQL dialect
-- **Database**: PostgreSQL (Neon Database serverless)
+- **Current**: In-memory storage (development only - resets on server restart)
+- **Target**: PostgreSQL (Neon Database serverless) with Drizzle ORM
 - **Schema Management**: Type-safe schema definitions with Zod validation
-- **Migrations**: Drizzle Kit for database migrations and schema changes
 - **Data Models**: Words, sentences, audio cache, attempts, schedule, and settings tables
+- **Known Issue**: Words are lost on server restart due to in-memory storage - needs PostgreSQL migration
 
 ## Authentication and Authorization
 - **Session Management**: Express sessions with PostgreSQL session store

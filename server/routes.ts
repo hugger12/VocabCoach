@@ -13,9 +13,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/words", async (req, res) => {
     try {
       const weekId = req.query.week as string;
-      const words = await storage.getWordsWithProgress(weekId);
+      
+      // For parent dashboard, don't filter by week - show all words
+      // The frontend can filter if needed
+      const words = await storage.getWordsWithProgress();
       res.json(words);
     } catch (error) {
+      console.error("Error fetching words:", error);
       res.status(500).json({ message: "Failed to fetch words" });
     }
   });
