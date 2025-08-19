@@ -32,16 +32,23 @@ export function DyslexicReader({
         <span
           key={`${text}-${index}`} // Better key for re-renders
           className={cn(
-            "inline-block mx-1 px-3 py-1 rounded",
+            "relative inline-block mx-1 px-3 py-1",
             currentWordIndex === index ? 
-              "font-medium" :
+              "font-medium z-10" :
               ""
           )}
           style={{
-            backgroundColor: currentWordIndex === index ? 'var(--highlight-yellow)' : 'transparent',
             color: currentWordIndex === index ? 'var(--highlight-text)' : 'inherit',
           }}
         >
+          {currentWordIndex === index && (
+            <span 
+              className="absolute inset-0 rounded -z-10"
+              style={{
+                backgroundColor: 'var(--highlight-yellow)',
+              }}
+            />
+          )}
           {word}
         </span>
       ))}

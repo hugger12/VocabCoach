@@ -399,7 +399,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                   Listen to learn how <strong className="text-primary font-semibold">{currentWord?.text}</strong> is used.
                 </p>
                 {currentWord?.sentences && currentWord.sentences.length > 0 && (
-                  <div className="text-center min-h-[80px] flex items-center justify-center">
+                  <div className="text-center">
                     <DyslexicReader
                       text={getCurrentSentence()}
                       currentWordIndex={currentHighlightedWord}
