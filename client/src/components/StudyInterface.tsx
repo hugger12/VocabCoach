@@ -393,13 +393,21 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 </AudioPlayer>
               </div>
 
-              {/* Current Sentence Display with Dyslexic Reading */}
-              <div className="bg-muted rounded-xl p-6 mb-6" style={{ minHeight: '140px' }}>
+              {/* Current Sentence Display with Dyslexic Reading - ISOLATED */}
+              <div 
+                className="bg-muted rounded-xl p-6 mb-6" 
+                style={{ 
+                  height: '160px', 
+                  overflow: 'hidden',
+                  position: 'relative',
+                  isolation: 'isolate'
+                }}
+              >
                 <p className="text-dyslexia-lg text-foreground text-center leading-relaxed mb-4">
                   Listen to learn how <strong className="text-primary font-semibold">{currentWord?.text}</strong> is used.
                 </p>
                 {currentWord?.sentences && currentWord.sentences.length > 0 && (
-                  <div className="text-center">
+                  <div className="text-center absolute inset-x-6 bottom-6">
                     <DyslexicReader
                       text={getCurrentSentence()}
                       currentWordIndex={currentHighlightedWord}
@@ -410,13 +418,27 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 )}
               </div>
 
-              {/* Practice Mode: Hear & Choose */}
-              <div className="space-y-4 mt-8">
-                <h3 className="text-dyslexia-lg font-semibold text-foreground text-center mb-6">
+              {/* Practice Mode: Hear & Choose - COMPLETELY ISOLATED */}
+              <div 
+                className="space-y-4" 
+                style={{
+                  position: 'relative',
+                  isolation: 'isolate',
+                  transform: 'translateZ(0)', // Force new stacking context
+                }}
+              >
+                <h3 
+                  className="text-dyslexia-lg font-semibold text-foreground text-center mb-6"
+                  style={{ 
+                    position: 'static',
+                    display: 'block',
+                    height: '2rem'
+                  }}
+                >
                   Choose the meaning:
                 </h3>
                 
-                <div className="space-y-4">
+                <div className="space-y-4" style={{ position: 'static' }}>
                   {meaningChoices.map((choice, index) => (
                     <DyslexiaButton
                       key={`choice-${index}-${choice.text}`}
@@ -429,6 +451,12 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                       onClick={() => handleChoiceSelect(index)}
                       disabled={selectedChoice !== null}
                       data-testid={`choice-${index}`}
+                      style={{
+                        position: 'static',
+                        transform: 'none',
+                        transition: 'none',
+                        willChange: 'auto'
+                      }}
                     >
                       {choice.text}
                     </DyslexiaButton>
