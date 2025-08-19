@@ -202,19 +202,18 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         {/* Header */}
-        <header className="bg-card border-b border-border p-6 shadow-sm">
+        <header className="p-6">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <h1 className="text-dyslexia-xl font-semibold text-foreground">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
               Vocabulary Coach
             </h1>
-            <DyslexiaButton
-              variant="outline"
+            <button
               onClick={onOpenParentDashboard}
+              className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-2xl px-6 py-3 text-lg font-medium transition-all"
               data-testid="parent-access"
             >
-              <Settings className="w-5 h-5" />
-              Parent
-            </DyslexiaButton>
+              ⚙ Parent
+            </button>
           </div>
         </header>
 
@@ -255,22 +254,21 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   if (error || !session || session.words.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Card className="card-dyslexia max-w-md text-center">
-          <CardContent>
-            <h2 className="text-dyslexia-xl font-semibold mb-4">
-              No Words to Practice
-            </h2>
-            <p className="text-dyslexia-base text-muted-foreground mb-6">
-              {error ? "There was an error loading your words." : "You've completed all your words for today! Great job!"}
-            </p>
-            <DyslexiaButton
-              onClick={() => setSessionStarted(false)}
-              data-testid="back-to-start"
-            >
-              Back to Start
-            </DyslexiaButton>
-          </CardContent>
-        </Card>
+        <div className="max-w-md text-center">
+          <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+            No Words to Practice
+          </h2>
+          <p className="text-lg text-gray-600 dark:text-gray-400 mb-6">
+            {error ? "There was an error loading your words." : "You've completed all your words for today! Great job!"}
+          </p>
+          <button
+            onClick={() => setSessionStarted(false)}
+            className="bg-blue-500 hover:bg-blue-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+            data-testid="back-to-start"
+          >
+            Back to Start
+          </button>
+        </div>
       </div>
     );
   }
