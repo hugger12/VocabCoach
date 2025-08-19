@@ -198,26 +198,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const words = text.split(/\s+/).filter((word: string) => word.length > 0);
         const duration = result.duration || (words.length * 700); // 700ms per word estimate
         
-        // Generate word-level timing estimates
+        // Generate more realistic word-level timing estimates
         // Duration from TTS is in milliseconds, convert to seconds for calculations
         const durationSeconds = duration / 1000;
         console.log('Audio duration:', duration, 'ms =', durationSeconds, 'seconds');
         
-        // Simple evenly-spaced timing with slight variations based on word length
-        let currentTimeSeconds = 0;
+        // Estimate more realistic speech patterns with pauses and word emphasis
+        const totalWordLength = words.reduce((sum: number, word: string) => sum + word.length, 0);
+        const avgWordsPerSecond = 2.5; // Slower child-friendly speech
+        const estimatedSpeakingTime = durationSeconds * 0.85; // 85% speaking, 15% pauses
+        
+        // Calibrate timing based on actual audio duration
+        // Adjust timing to fit the actual generated audio length
+        const totalEstimatedTime = words.reduce((sum: number, word: string) => {
+          const charCount = word.replace(/[^\w]/g, '').length;
+          const syllables = Math.max(1, Math.floor(charCount / 2.5));
+          const wordTime = syllables * 0.25;
+          const pauseTime = /[,.!?;:]/.test(word) ? 0.15 : 0.05;
+          return sum + wordTime + pauseTime;
+        }, 0.1);
+        
+        // Scale timing to match actual audio duration  
+        const scaleFactor = (durationSeconds - 0.2) / totalEstimatedTime;
+        
+        let currentTimeSeconds = 0.1; // Small startup delay
         const wordTimings = words.map((word: string, index: number) => {
-          const baseWordDuration = durationSeconds / words.length;
-          // Adjust by word length (shorter words get less time, longer get more)
-          const wordLengthFactor = Math.max(0.7, Math.min(1.3, word.length / 6));
-          const wordDurationSeconds = baseWordDuration * wordLengthFactor;
+          // Calculate word duration based on character count and complexity
+          const charCount = word.replace(/[^\w]/g, '').length;
+          const syllableEstimate = Math.max(1, Math.floor(charCount / 2.5));
+          
+          // Base timing on syllables with scaling to match actual audio
+          let wordDuration = (syllableEstimate * 0.25) * scaleFactor;
+          wordDuration = Math.max(0.1, Math.min(0.8, wordDuration));
+          
+          // Add pause for punctuation, also scaled
+          const hasPunctuation = /[,.!?;:]/.test(word);
+          const pauseDuration = (hasPunctuation ? 0.15 : 0.05) * scaleFactor;
           
           const startTime = currentTimeSeconds;
-          const endTime = currentTimeSeconds + wordDurationSeconds;
+          const endTime = startTime + wordDuration;
           
-          currentTimeSeconds += wordDurationSeconds;
+          currentTimeSeconds = endTime + pauseDuration;
           
           return {
-            word: word.replace(/[^\w']/g, ''), // Clean punctuation but keep apostrophes
+            word: word.replace(/[^\w']/g, ''),
             originalWord: word,
             startTime,
             endTime,

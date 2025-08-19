@@ -137,29 +137,21 @@ export function SynchronizedAudioPlayer({
           timeUpdateIntervalRef.current = setInterval(() => {
             const currentTime = audio.currentTime;
             
-            // Find which word should be highlighted
+            // Find the word that should be highlighted at current time
             const activeWordIndex = wordTimingsRef.current.findIndex(timing => 
-              currentTime >= timing.startTime && currentTime < timing.endTime
+              currentTime >= timing.startTime && currentTime <= timing.endTime
             );
             
-            // If no exact match, find the closest word that should be active
-            let finalWordIndex = activeWordIndex;
-            if (activeWordIndex === -1) {
-              // Find the last word that should have started
-              for (let i = wordTimingsRef.current.length - 1; i >= 0; i--) {
-                if (currentTime >= wordTimingsRef.current[i].startTime) {
-                  finalWordIndex = i;
-                  break;
-                }
-              }
+            if (activeWordIndex !== -1 && activeWordIndex !== currentHighlightIndex) {
+              setCurrentHighlightIndex(activeWordIndex);
+              onWordHighlight?.(activeWordIndex);
+              console.log('Highlighting word:', activeWordIndex, wordTimingsRef.current[activeWordIndex]?.word, 'at time:', currentTime.toFixed(2));
+            } else if (activeWordIndex === -1 && currentHighlightIndex !== -1) {
+              // Clear highlighting if no word should be highlighted
+              setCurrentHighlightIndex(-1);
+              onWordHighlight?.(-1);
             }
-            
-            if (finalWordIndex !== -1 && finalWordIndex !== currentHighlightIndex) {
-              setCurrentHighlightIndex(finalWordIndex);
-              onWordHighlight?.(finalWordIndex);
-              console.log('Highlighting word:', finalWordIndex, wordTimingsRef.current[finalWordIndex]?.word, 'at time:', currentTime.toFixed(2));
-            }
-          }, 100); // Update every 100ms for smooth highlighting
+          }, 50); // Update every 50ms for precise highlighting
         }
         
         onPlay?.();
