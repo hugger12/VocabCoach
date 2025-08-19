@@ -227,8 +227,9 @@
   /* Choice button styles */
   .choice-button {
     @apply btn-dyslexia-outline w-full justify-start text-left px-6;
-    @apply hover:bg-muted hover:opacity-90;
     @apply border-border;
+    transition: none !important; /* Disable all transitions */
+    transform: none !important; /* Disable transforms */
   }
 
   .choice-button-correct {

@@ -394,7 +394,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               </div>
 
               {/* Current Sentence Display with Dyslexic Reading */}
-              <div className="bg-muted rounded-xl p-6 mb-6">
+              <div className="bg-muted rounded-xl p-6 mb-6" style={{ minHeight: '140px' }}>
                 <p className="text-dyslexia-lg text-foreground text-center leading-relaxed mb-4">
                   Listen to learn how <strong className="text-primary font-semibold">{currentWord?.text}</strong> is used.
                 </p>
