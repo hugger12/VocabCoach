@@ -199,10 +199,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const duration = result.duration || (words.length * 700); // 700ms per word estimate
         
         // Generate word-level timing estimates
+        // Duration from TTS is in milliseconds, convert to seconds for calculations
+        const durationSeconds = duration / 1000;
+        console.log('Audio duration:', duration, 'ms =', durationSeconds, 'seconds');
+        
+        // Simple evenly-spaced timing with slight variations based on word length
+        let currentTimeSeconds = 0;
         const wordTimings = words.map((word: string, index: number) => {
-          const wordDuration = Math.max(300, word.length * 100); // Longer words take more time
-          const startTime = (index * duration) / words.length;
-          const endTime = startTime + (wordDuration / 1000);
+          const baseWordDuration = durationSeconds / words.length;
+          // Adjust by word length (shorter words get less time, longer get more)
+          const wordLengthFactor = Math.max(0.7, Math.min(1.3, word.length / 6));
+          const wordDurationSeconds = baseWordDuration * wordLengthFactor;
+          
+          const startTime = currentTimeSeconds;
+          const endTime = currentTimeSeconds + wordDurationSeconds;
+          
+          currentTimeSeconds += wordDurationSeconds;
           
           return {
             word: word.replace(/[^\w']/g, ''), // Clean punctuation but keep apostrophes
@@ -212,6 +224,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             index
           };
         });
+        
+        console.log('Generated word timings for duration:', durationSeconds, 'seconds:', wordTimings.map((w: any) => `${w.word}:${w.startTime.toFixed(1)}-${w.endTime.toFixed(1)}`));
 
         // Return JSON response with audio data and timings
         const base64Audio = Buffer.from(result.audioBuffer).toString('base64');

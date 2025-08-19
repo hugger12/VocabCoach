@@ -135,21 +135,31 @@ export function SynchronizedAudioPlayer({
         if (enableHighlighting && type === "sentence" && wordTimingsRef.current.length > 0) {
           console.log('Starting synchronized highlighting with timings');
           timeUpdateIntervalRef.current = setInterval(() => {
-            if (audio.currentTime) {
-              const currentTime = audio.currentTime;
-              
-              // Find which word should be highlighted
-              const activeWordIndex = wordTimingsRef.current.findIndex(timing => 
-                currentTime >= timing.startTime && currentTime <= timing.endTime
-              );
-              
-              if (activeWordIndex !== -1 && activeWordIndex !== currentHighlightIndex) {
-                setCurrentHighlightIndex(activeWordIndex);
-                onWordHighlight?.(activeWordIndex);
-                console.log('Highlighting word:', activeWordIndex, wordTimingsRef.current[activeWordIndex]?.word);
+            const currentTime = audio.currentTime;
+            
+            // Find which word should be highlighted
+            const activeWordIndex = wordTimingsRef.current.findIndex(timing => 
+              currentTime >= timing.startTime && currentTime < timing.endTime
+            );
+            
+            // If no exact match, find the closest word that should be active
+            let finalWordIndex = activeWordIndex;
+            if (activeWordIndex === -1) {
+              // Find the last word that should have started
+              for (let i = wordTimingsRef.current.length - 1; i >= 0; i--) {
+                if (currentTime >= wordTimingsRef.current[i].startTime) {
+                  finalWordIndex = i;
+                  break;
+                }
               }
             }
-          }, 50); // Update every 50ms for smooth highlighting
+            
+            if (finalWordIndex !== -1 && finalWordIndex !== currentHighlightIndex) {
+              setCurrentHighlightIndex(finalWordIndex);
+              onWordHighlight?.(finalWordIndex);
+              console.log('Highlighting word:', finalWordIndex, wordTimingsRef.current[finalWordIndex]?.word, 'at time:', currentTime.toFixed(2));
+            }
+          }, 100); // Update every 100ms for smooth highlighting
         }
         
         onPlay?.();
