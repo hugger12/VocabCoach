@@ -332,7 +332,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                     wordId={currentWord?.id}
                     data-testid="play-word"
                   >
-                    <Volume2 className="w-6 h-6" />
+                    ▶
                   </AudioPlayer>
                 </div>
                 
@@ -349,12 +349,11 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                   <AudioPlayer
                     text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
                     type="sentence"
-                    className="bg-amber-100 hover:bg-amber-200 dark:bg-amber-800 dark:hover:bg-amber-700 text-amber-800 dark:text-amber-200 rounded-xl px-6 py-3 text-sm font-medium transition-all border-0 inline-flex items-center"
+                    className="bg-amber-100 hover:bg-amber-200 dark:bg-amber-800 dark:hover:bg-amber-700 text-amber-800 dark:text-amber-200 rounded-xl px-6 py-3 text-sm font-medium transition-all border-0 inline-flex items-center gap-2"
                     wordId={currentWord?.id}
                     data-testid="play-definition"
                   >
-                    <Volume2 className="w-4 h-4 mr-2" />
-                    Hear Definition
+                    ▶ Hear Definition
                   </AudioPlayer>
                 </div>
               </div>
@@ -366,26 +365,24 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                     Listen & Learn
                   </h3>
                   <div className="flex gap-3">
-                    {currentWord?.sentences && currentWord.sentences.length > 1 && (
-                      <button
-                        onClick={handleNextSentence}
-                        className="bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl px-4 py-2 text-sm font-medium transition-all shadow-sm border border-gray-200 dark:border-gray-600"
-                        data-testid="next-sentence"
-                      >
-                        <ArrowRight className="w-4 h-4 mr-1 inline" />
-                        Next Example ({currentSentenceIndex + 1}/{currentWord.sentences.length})
-                      </button>
-                    )}
                     <SpeechSynthesisPlayer
                       text={getCurrentSentence()}
                       onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
                       enableHighlighting={true}
-                      className="bg-green-500 hover:bg-green-600 text-white rounded-xl px-6 py-2 font-medium transition-all shadow-sm border-0 inline-flex items-center"
+                      className="bg-green-500 hover:bg-green-600 text-white rounded-xl px-6 py-2 font-medium transition-all shadow-sm border-0 inline-flex items-center gap-2"
                       data-testid="play-sentence"
                     >
-                      <Volume2 className="w-4 h-4 mr-2" />
-                      Play Sentence
+                      ▶ Play Sentence
                     </SpeechSynthesisPlayer>
+                    {currentWord?.sentences && currentWord.sentences.length > 1 && (
+                      <button
+                        onClick={handleNextSentence}
+                        className="bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl px-4 py-2 text-sm font-medium transition-all shadow-sm border border-gray-200 dark:border-gray-600 inline-flex items-center gap-1"
+                        data-testid="next-sentence"
+                      >
+                        → Next Example ({currentSentenceIndex + 1}/{currentWord.sentences.length})
+                      </button>
+                    )}
                   </div>
                 </div>
                 
@@ -494,8 +491,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               )}
               data-testid="back-btn"
             >
-              <ArrowLeft className="w-5 h-5" />
-              Previous
+              ← Previous
             </button>
             
             <button
@@ -509,8 +505,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               )}
               data-testid="next-btn"
             >
-              Next Word
-              <ArrowRight className="w-5 h-5" />
+              Next Word →
             </button>
           </div>
         </div>
