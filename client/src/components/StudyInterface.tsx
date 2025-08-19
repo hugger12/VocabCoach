@@ -220,24 +220,22 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
         {/* Start Session */}
         <main className="flex-1 flex items-center justify-center p-6">
-          <Card className="card-dyslexia max-w-2xl w-full text-center">
-            <CardContent>
-              <h2 className="text-dyslexia-2xl font-bold mb-6">
-                Ready to Practice?
-              </h2>
-              <p className="text-dyslexia-lg text-muted-foreground mb-8">
-                Let's work on today's vocabulary words together. 
-                You'll hear each word and use it in a sentence.
-              </p>
-              <DyslexiaButton
-                size="lg"
-                onClick={handleStartSession}
-                data-testid="start-session"
-              >
-                Start Today's Practice
-              </DyslexiaButton>
-            </CardContent>
-          </Card>
+          <div className="max-w-2xl w-full text-center">
+            <h2 className="text-4xl font-bold mb-6 text-gray-900 dark:text-white">
+              Ready to Practice?
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
+              Let's work on today's vocabulary words together. 
+              You'll hear each word and use it in a sentence.
+            </p>
+            <button
+              onClick={handleStartSession}
+              className="bg-blue-500 hover:bg-blue-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+              data-testid="start-session"
+            >
+              Start Today's Practice
+            </button>
+          </div>
         </main>
       </div>
     );
@@ -280,31 +278,35 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header with Progress */}
-      <header className="bg-card border-b border-border p-6 shadow-sm">
+      <header className="p-6">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-dyslexia-xl font-semibold text-foreground">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
               Vocabulary Coach
             </h1>
-            <DyslexiaButton
-              variant="outline"
+            <button
               onClick={onOpenParentDashboard}
+              className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-2xl px-6 py-3 text-lg font-medium transition-all"
               data-testid="parent-access"
             >
-              <Settings className="w-5 h-5" />
-              Parent
-            </DyslexiaButton>
+              ⚙ Parent
+            </button>
           </div>
           
           {/* Progress Indicator */}
           <div className="flex items-center space-x-4">
-            <span className="text-dyslexia-base text-muted-foreground">
+            <span className="text-lg text-gray-600 dark:text-gray-400">
               Word {currentIndex + 1} of {totalWords}
             </span>
             <div className="flex-1">
-              <Progress value={progressPercentage} className="h-3" />
+              <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                <div 
+                  className="bg-blue-500 h-3 rounded-full transition-all duration-300"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
             </div>
-            <span className="text-dyslexia-base font-medium text-primary">
+            <span className="text-lg font-medium text-blue-500">
               {Math.round(progressPercentage)}%
             </span>
           </div>
@@ -347,11 +349,11 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               <AudioPlayer
                 text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
                 type="sentence"
-                className="bg-amber-500 hover:bg-amber-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all inline-flex items-center gap-3"
+                className="bg-amber-500 hover:bg-amber-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
                 wordId={currentWord?.id}
                 data-testid="play-definition"
               >
-                ▶ Hear Definition
+                Hear Definition
               </AudioPlayer>
             </div>
           </div>
@@ -367,18 +369,18 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                   text={getCurrentSentence()}
                   onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
                   enableHighlighting={true}
-                  className="bg-green-500 hover:bg-green-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all inline-flex items-center gap-3"
+                  className="bg-green-500 hover:bg-green-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
                   data-testid="play-sentence"
                 >
-                  ▶ Play Sentence
+                  Play Sentence
                 </SpeechSynthesisPlayer>
                 {currentWord?.sentences && currentWord.sentences.length > 1 && (
                   <button
                     onClick={handleNextSentence}
-                    className="bg-gray-500 hover:bg-gray-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all inline-flex items-center gap-3"
+                    className="bg-gray-500 hover:bg-gray-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
                     data-testid="next-sentence"
                   >
-                    → Next Example ({currentSentenceIndex + 1}/{currentWord.sentences.length})
+                    Next Example ({currentSentenceIndex + 1}/{currentWord.sentences.length})
                   </button>
                 )}
               </div>
@@ -475,7 +477,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               )}
               data-testid="back-btn"
             >
-              ← Previous
+              Previous
             </button>
             
             <button
@@ -489,7 +491,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               )}
               data-testid="next-btn"
             >
-              Next Word →
+              Next Word
             </button>
           </div>
         </div>
