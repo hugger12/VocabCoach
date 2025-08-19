@@ -221,19 +221,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Scale timing to match actual audio duration  
         const scaleFactor = (durationSeconds - 0.2) / totalEstimatedTime;
         
-        let currentTimeSeconds = 0.1; // Small startup delay
+        let currentTimeSeconds = 0.05; // Minimal startup delay to match TTS faster
         const wordTimings = words.map((word: string, index: number) => {
           // Calculate word duration based on character count and complexity
           const charCount = word.replace(/[^\w]/g, '').length;
           const syllableEstimate = Math.max(1, Math.floor(charCount / 2.5));
           
-          // Base timing on syllables with scaling to match actual audio
-          let wordDuration = (syllableEstimate * 0.25) * scaleFactor;
-          wordDuration = Math.max(0.1, Math.min(0.8, wordDuration));
+          // Base timing on syllables with scaling, front-loaded for TTS patterns
+          let wordDuration = (syllableEstimate * 0.2) * scaleFactor; // Slightly shorter duration
+          wordDuration = Math.max(0.08, Math.min(0.6, wordDuration));
           
-          // Add pause for punctuation, also scaled
+          // Reduced pauses to match faster TTS speech patterns
           const hasPunctuation = /[,.!?;:]/.test(word);
-          const pauseDuration = (hasPunctuation ? 0.15 : 0.05) * scaleFactor;
+          const pauseDuration = (hasPunctuation ? 0.1 : 0.03) * scaleFactor;
           
           const startTime = currentTimeSeconds;
           const endTime = startTime + wordDuration;
