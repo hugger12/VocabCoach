@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DyslexiaButton } from "@/components/ui/dyslexia-button";
 import { AudioPlayer } from "./AudioPlayer";
 import { SynchronizedAudioPlayer } from "./SynchronizedAudioPlayer";
+import { SpeechSynthesisPlayer } from "./SpeechSynthesisPlayer";
 import { DyslexicReader } from "./DyslexicReader";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
@@ -355,12 +356,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 </AudioPlayer>
                 
                 <div className="relative">
-                  <SynchronizedAudioPlayer
+                  <SpeechSynthesisPlayer
                     text={getCurrentSentence()}
-                    type="sentence"
                     variant="secondary"
                     className="w-full h-16"
-                    wordId={currentWord?.id}
                     data-testid="play-sentence"
                     enableHighlighting={true}
                     onWordHighlight={(wordIndex) => {
@@ -368,7 +367,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                     }}
                   >
                     Play Sentence {currentWord?.sentences && currentWord.sentences.length > 1 ? `(${currentSentenceIndex + 1}/${currentWord.sentences.length})` : ''}
-                  </SynchronizedAudioPlayer>
+                  </SpeechSynthesisPlayer>
                   {currentWord?.sentences && currentWord.sentences.length > 1 && (
                     <DyslexiaButton
                       variant="ghost"
