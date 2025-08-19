@@ -33,6 +33,8 @@ export function DyslexicReader({
           key={`${text}-${index}`} // Better key for re-renders
           className={cn(
             "inline-block mx-1 px-3 py-2 rounded",
+            // Ensure consistent height regardless of highlighting
+            "min-h-[2.5rem] flex items-center",
             currentWordIndex === index ? 
               "font-medium" :
               ""
