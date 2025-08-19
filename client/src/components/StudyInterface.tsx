@@ -219,12 +219,12 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
         {/* Header */}
         <header className="p-6">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+            <h1 className="text-2xl font-semibold text-foreground">
               Vocabulary Coach
             </h1>
             <button
               onClick={onOpenParentDashboard}
-              className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-2xl px-6 py-3 text-lg font-medium transition-all"
+              className="bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-2xl px-6 py-3 text-lg font-medium transition-all"
               data-testid="parent-access"
             >
               ⚙ Parent
@@ -235,16 +235,16 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
         {/* Start Session */}
         <main className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-2xl w-full text-center">
-            <h2 className="text-4xl font-bold mb-6 text-gray-900 dark:text-white">
+            <h2 className="text-4xl font-bold mb-6 text-foreground">
               Ready to Practice?
             </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
+            <p className="text-xl text-muted-foreground mb-8">
               Let's work on today's vocabulary words together. 
               You'll hear each word and use it in a sentence.
             </p>
             <button
               onClick={handleStartSession}
-              className="bg-blue-500 hover:bg-blue-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
               data-testid="start-session"
             >
               Start Today's Practice
@@ -270,15 +270,15 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="max-w-md text-center">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-semibold mb-4 text-foreground">
             No Words to Practice
           </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400 mb-6">
+          <p className="text-lg text-muted-foreground mb-6">
             {error ? "There was an error loading your words." : "You've completed all your words for today! Great job!"}
           </p>
           <button
             onClick={() => setSessionStarted(false)}
-            className="bg-blue-500 hover:bg-blue-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
             data-testid="back-to-start"
           >
             Back to Start
@@ -290,16 +290,14 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Header with Progress */}
-      <header className="p-6">
+      {/* Progress Section */}
+      <div className="p-6">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-              Vocabulary Coach
-            </h1>
+            <div className="flex-1" />
             <button
               onClick={onOpenParentDashboard}
-              className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-2xl px-6 py-3 text-lg font-medium transition-all"
+              className="bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-2xl px-6 py-3 text-lg font-medium transition-all"
               data-testid="parent-access"
             >
               ⚙ Parent
@@ -308,23 +306,23 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           
           {/* Progress Indicator */}
           <div className="flex items-center space-x-4">
-            <span className="text-lg text-gray-600 dark:text-gray-400">
+            <span className="text-lg text-muted-foreground">
               Word {currentIndex + 1} of {totalWords}
             </span>
             <div className="flex-1">
-              <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+              <div className="bg-muted rounded-full h-3">
                 <div 
-                  className="bg-blue-500 h-3 rounded-full transition-all duration-300"
+                  className="bg-primary h-3 rounded-full transition-all duration-300"
                   style={{ width: `${progressPercentage}%` }}
                 />
               </div>
             </div>
-            <span className="text-lg font-medium text-blue-500">
+            <span className="text-lg font-medium text-primary">
               {Math.round(progressPercentage)}%
             </span>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Main Study Area */}
       <main className="flex-1 flex items-center justify-center p-6">
@@ -335,13 +333,13 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             {/* Word and Audio */}
             <div className="text-center mb-8">
               <div className="inline-flex items-center gap-6 mb-6">
-                <h2 className="text-6xl font-bold text-gray-900 dark:text-white tracking-tight">
+                <h2 className="text-6xl font-bold text-foreground tracking-tight">
                   {currentWord?.text}
                 </h2>
                 <AudioPlayer
                   text={currentWord?.text || ""}
                   type="word"
-                  className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold"
                   wordId={currentWord?.id}
                   data-testid="play-word"
                 >
@@ -349,7 +347,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 </AudioPlayer>
               </div>
               
-              <div className="text-gray-600 dark:text-gray-400 mb-8">
+              <div className="text-muted-foreground mb-8">
                 <span className="text-lg font-medium">{currentWord?.partOfSpeech}</span>
               </div>
             </div>
@@ -357,13 +355,13 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             {/* Definition */}
             {showDefinition && (
               <div className="text-center mb-12">
-                <p className="text-xl text-gray-700 dark:text-gray-300 mb-6">
+                <p className="text-xl text-foreground mb-6">
                   <strong>Definition:</strong> {currentWord?.kidDefinition}
                 </p>
                 <AudioPlayer
                   text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
                   type="sentence"
-                  className="bg-amber-500 hover:bg-amber-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                  className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
                   wordId={currentWord?.id}
                   data-testid="play-definition"
                 >
@@ -376,7 +374,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           {/* Sentence Practice */}
           <div className="mb-12">
             <div className="text-center mb-6">
-              <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">
+              <h3 className="text-2xl font-semibold text-foreground mb-6">
                 Listen & Learn
               </h3>
               <div className="flex justify-center gap-4 mb-8">
@@ -384,7 +382,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                   text={getCurrentSentence()}
                   onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
                   enableHighlighting={true}
-                  className="bg-green-500 hover:bg-green-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                  className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
                   data-testid="play-sentence"
                 >
                   Play Sentence
@@ -392,7 +390,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 {currentWord?.sentences && currentWord.sentences.length > 1 && (
                   <button
                     onClick={handleNextSentence}
-                    className="bg-gray-500 hover:bg-gray-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                    className="bg-muted hover:bg-muted/80 text-muted-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
                     data-testid="next-sentence"
                   >
                     Next Example ({currentSentenceIndex + 1}/{currentWord.sentences.length})
@@ -401,12 +399,12 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               </div>
             </div>
             
-            <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl p-8 min-h-[120px] flex items-center justify-center">
+            <div className="bg-muted rounded-2xl p-8 min-h-[120px] flex items-center justify-center">
               {currentWord?.sentences && currentWord.sentences.length > 0 && (
                 <DyslexicReader
                   text={getCurrentSentence()}
                   currentWordIndex={currentHighlightedWord}
-                  className="text-xl text-gray-800 dark:text-gray-200 leading-relaxed text-center"
+                  className="text-xl text-foreground leading-relaxed text-center"
                   highlightColor="bg-yellow-200 dark:bg-yellow-600"
                 />
               )}
@@ -419,7 +417,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               <div className="text-center">
                 <button
                   onClick={handleStartChallenge}
-                  className="bg-purple-500 hover:bg-purple-600 text-white rounded-2xl px-12 py-6 text-2xl font-medium transition-all hover:scale-105 active:scale-95"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-12 py-6 text-2xl font-medium transition-all hover:scale-105 active:scale-95"
                   data-testid="start-challenge"
                 >
                   What does <span className="font-bold">{currentWord?.text}</span> mean?
@@ -427,8 +425,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               </div>
             ) : (
               <>
-                <h3 className="text-2xl font-semibold text-gray-900 dark:text-white text-center mb-8">
-                  Choose the meaning of <span className="text-blue-600 dark:text-blue-400">{currentWord?.text}</span>
+                <h3 className="text-2xl font-semibold text-foreground text-center mb-8">
+                  Choose the meaning of <span className="text-primary">{currentWord?.text}</span>
                 </h3>
                 
                 <div className="space-y-4">
@@ -442,7 +440,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                         "w-full p-6 text-left rounded-2xl transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]",
                         selectedChoice === index && choice.isCorrect && "bg-green-500 text-white shadow-lg",
                         selectedChoice === index && !choice.isCorrect && "bg-orange-500 text-white shadow-lg",
-                        selectedChoice !== index && "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700",
+                        selectedChoice !== index && "bg-card hover:bg-muted",
                         selectedChoice !== null && selectedChoice !== index && "opacity-50"
                       )}
                     >
@@ -501,8 +499,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               className={cn(
                 "px-8 py-4 rounded-2xl text-lg font-medium transition-all",
                 currentIndex === 0 
-                  ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed"
-                  : "bg-gray-500 hover:bg-gray-600 text-white hover:scale-105 active:scale-95"
+                  ? "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "bg-secondary hover:bg-secondary/90 text-secondary-foreground hover:scale-105 active:scale-95"
               )}
               data-testid="back-btn"
             >
@@ -515,8 +513,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               className={cn(
                 "px-8 py-4 rounded-2xl text-lg font-medium transition-all",
                 (!showChoices || selectedChoice === null || (selectedChoice !== null && !meaningChoices[selectedChoice]?.isCorrect))
-                  ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed"
-                  : "bg-blue-500 hover:bg-blue-600 text-white hover:scale-105 active:scale-95"
+                  ? "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "bg-primary hover:bg-primary/90 text-primary-foreground hover:scale-105 active:scale-95"
               )}
               data-testid="next-btn"
             >
