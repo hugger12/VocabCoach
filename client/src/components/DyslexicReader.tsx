@@ -32,7 +32,7 @@ export function DyslexicReader({
         <span
           key={`${text}-${index}`} // Better key for re-renders
           className={cn(
-            "inline-block mx-1 px-3 py-2 rounded",
+            "inline-block mx-1 px-3 py-1 rounded",
             currentWordIndex === index ? 
               "font-medium" :
               ""
