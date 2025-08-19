@@ -104,7 +104,8 @@ export function SpeechSynthesisPlayer({
             charCount += wordsRef.current[i].length + 1; // +1 for space
           }
 
-          if (wordIndex !== currentWordIndex) {
+          // Only update if word actually changed - prevent rapid fire updates
+          if (wordIndex !== currentWordIndex && wordIndex < wordsRef.current.length) {
             setCurrentWordIndex(wordIndex);
             onWordHighlight?.(wordIndex);
             console.log('Highlighting word:', wordIndex, wordsRef.current[wordIndex], 'at char:', event.charIndex);

@@ -411,27 +411,29 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               </div>
 
               {/* Practice Mode: Hear & Choose */}
-              <div className="space-y-4">
+              <div className="space-y-4 mt-8">
                 <h3 className="text-dyslexia-lg font-semibold text-foreground text-center mb-6">
                   Choose the meaning:
                 </h3>
                 
-                {meaningChoices.map((choice, index) => (
-                  <DyslexiaButton
-                    key={index}
-                    variant="outline"
-                    className={cn(
-                      "choice-button h-16",
-                      selectedChoice === index && choice.isCorrect && "choice-button-correct",
-                      selectedChoice === index && !choice.isCorrect && "choice-button-incorrect"
-                    )}
-                    onClick={() => handleChoiceSelect(index)}
-                    disabled={selectedChoice !== null}
-                    data-testid={`choice-${index}`}
-                  >
-                    {choice.text}
-                  </DyslexiaButton>
-                ))}
+                <div className="space-y-4">
+                  {meaningChoices.map((choice, index) => (
+                    <DyslexiaButton
+                      key={`choice-${index}-${choice.text}`}
+                      variant="outline"
+                      className={cn(
+                        "choice-button h-16 w-full",
+                        selectedChoice === index && choice.isCorrect && "choice-button-correct",
+                        selectedChoice === index && !choice.isCorrect && "choice-button-incorrect"
+                      )}
+                      onClick={() => handleChoiceSelect(index)}
+                      disabled={selectedChoice !== null}
+                      data-testid={`choice-${index}`}
+                    >
+                      {choice.text}
+                    </DyslexiaButton>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
