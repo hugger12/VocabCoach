@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, RotateCcw, Settings } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -59,8 +59,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const totalWords = session?.totalWords || 0;
   const progressPercentage = totalWords > 0 ? ((currentIndex + 1) / totalWords) * 100 : 0;
 
-  // Generate meaning choices for current word
-  const generateMeaningChoices = (word: WordWithProgress): MeaningChoice[] => {
+  // Generate meaning choices for current word - FIXED: Use stable shuffle
+  const generateMeaningChoices = useCallback((word: WordWithProgress): MeaningChoice[] => {
     if (!word) return [];
 
     const choices: MeaningChoice[] = [
@@ -78,11 +78,27 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       choices.push({ text: distractor, isCorrect: false });
     });
 
-    // Shuffle choices
-    return choices.sort(() => Math.random() - 0.5);
-  };
+    // Create a stable seed based on word ID to prevent reshuffling on re-renders
+    const seed = word.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
 
-  const meaningChoices = currentWord ? generateMeaningChoices(currentWord) : [];
+    // Shuffle choices with stable seed
+    const shuffled = [...choices];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(seededRandom(seed + i) * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    
+    return shuffled;
+  }, []);
+
+  const meaningChoices = useMemo(() => 
+    currentWord ? generateMeaningChoices(currentWord) : [], 
+    [currentWord?.id, generateMeaningChoices]
+  );
 
   const handleChoiceSelect = async (choiceIndex: number) => {
     if (!currentWord || selectedChoice !== null) return;
