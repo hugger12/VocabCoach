@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, RotateCcw, Settings } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { DyslexiaButton } from "@/components/ui/dyslexia-button";
 import { AudioPlayer } from "./AudioPlayer";
-import { SynchronizedAudioPlayer } from "./SynchronizedAudioPlayer";
 import { SpeechSynthesisPlayer } from "./SpeechSynthesisPlayer";
 import { DyslexicReader } from "./DyslexicReader";
 import { Progress } from "@/components/ui/progress";
@@ -59,46 +58,32 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const totalWords = session?.totalWords || 0;
   const progressPercentage = totalWords > 0 ? ((currentIndex + 1) / totalWords) * 100 : 0;
 
-  // Generate meaning choices for current word - FIXED: Use stable shuffle
-  const generateMeaningChoices = useCallback((word: WordWithProgress): MeaningChoice[] => {
-    if (!word) return [];
+  // Generate meaning choices with stable shuffling (FIXED)
+  const meaningChoices = useMemo(() => {
+    if (!currentWord) return [];
 
-    const choices: MeaningChoice[] = [
-      { text: word.kidDefinition, isCorrect: true },
-    ];
+    const choices = [
+      { text: currentWord.kidDefinition, isCorrect: true },
+      { text: "To forget about an important event", isCorrect: false },
+      { text: "To prepare food for a gathering", isCorrect: false },
+      { text: "To clean and organize a space", isCorrect: false },
+    ].slice(0, 3);
 
-    // Add distractors (in a real app, these would come from the API)
-    const distractors = [
-      "To forget about an important event",
-      "To prepare food for a gathering",
-      "To clean and organize a space",
-    ];
-
-    distractors.slice(0, 2).forEach(distractor => {
-      choices.push({ text: distractor, isCorrect: false });
-    });
-
-    // Create a stable seed based on word ID to prevent reshuffling on re-renders
-    const seed = word.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const seededRandom = (seed: number) => {
-      const x = Math.sin(seed) * 10000;
+    // Stable shuffle using word ID as seed
+    const seed = currentWord.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const seededRandom = (index: number) => {
+      const x = Math.sin(seed + index) * 10000;
       return x - Math.floor(x);
     };
 
-    // Shuffle choices with stable seed
     const shuffled = [...choices];
     for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(seededRandom(seed + i) * (i + 1));
+      const j = Math.floor(seededRandom(i) * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     
     return shuffled;
-  }, []);
-
-  const meaningChoices = useMemo(() => 
-    currentWord ? generateMeaningChoices(currentWord) : [], 
-    [currentWord?.id, generateMeaningChoices]
-  );
+  }, [currentWord?.id, currentWord?.kidDefinition]);
 
   const handleChoiceSelect = async (choiceIndex: number) => {
     if (!currentWord || selectedChoice !== null) return;
@@ -409,7 +394,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 </AudioPlayer>
               </div>
 
-              {/* Current Sentence Display with Dyslexic Reading - ISOLATED */}
+              {/* Sentence Display - ISOLATED */}
               <div 
                 className="bg-muted rounded-xl p-6 mb-6" 
                 style={{ 
@@ -432,29 +417,31 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                     />
                   </div>
                 )}
+                <div className="absolute top-4 right-4">
+                  <SpeechSynthesisPlayer
+                    text={getCurrentSentence()}
+                    onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
+                    enableHighlighting={true}
+                    className="w-12 h-12 text-xs"
+                    data-testid="play-sentence"
+                  />
+                </div>
               </div>
 
-              {/* Practice Mode: Hear & Choose - COMPLETELY ISOLATED */}
+              {/* Choice Buttons - ISOLATED */}
               <div 
                 className="space-y-4" 
                 style={{
                   position: 'relative',
                   isolation: 'isolate',
-                  transform: 'translateZ(0)', // Force new stacking context
+                  transform: 'translateZ(0)',
                 }}
               >
-                <h3 
-                  className="text-dyslexia-lg font-semibold text-foreground text-center mb-6"
-                  style={{ 
-                    position: 'static',
-                    display: 'block',
-                    height: '2rem'
-                  }}
-                >
+                <h3 className="text-dyslexia-lg font-semibold text-foreground text-center mb-6">
                   Choose the meaning:
                 </h3>
                 
-                <div className="space-y-4" style={{ position: 'static' }}>
+                <div className="space-y-4">
                   {meaningChoices.map((choice, index) => (
                     <DyslexiaButton
                       key={`choice-${index}-${choice.text}`}
@@ -467,12 +454,6 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                       onClick={() => handleChoiceSelect(index)}
                       disabled={selectedChoice !== null}
                       data-testid={`choice-${index}`}
-                      style={{
-                        position: 'static',
-                        transform: 'none',
-                        transition: 'none',
-                        willChange: 'auto'
-                      }}
                     >
                       {choice.text}
                     </DyslexiaButton>
