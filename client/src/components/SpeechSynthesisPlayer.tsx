@@ -141,22 +141,19 @@ export function SpeechSynthesisPlayer({
   }, [text, isPlaying, enableHighlighting, onWordHighlight, onPlay, onPause, onEnded]);
 
   return (
-    <DyslexiaButton
+    <button
       onClick={handlePlay}
       disabled={isLoading || hasError}
-      variant={variant}
-      className={`${className} relative`}
+      className={className}
       data-testid="speech-synthesis-player"
     >
       {isLoading ? (
-        <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent" />
-      ) : isPlaying ? (
-        <Pause className="h-4 w-4 mr-2" />
+        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mx-auto" />
+      ) : hasError ? (
+        'Error'
       ) : (
-        <Play className="h-4 w-4 mr-2" />
+        children
       )}
-      {hasError ? 'Error' : children}
-      <Volume2 className="h-4 w-4 ml-2" />
-    </DyslexiaButton>
+    </button>
   );
 }

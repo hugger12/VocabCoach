@@ -166,8 +166,7 @@ export function AudioPlayer({
       aria-label={`${isPlaying ? "Stop" : "Play"} ${type === "word" ? "word" : "sentence"}: ${text}`}
       aria-pressed={isPlaying}
     >
-      {getIcon()}
-      {children && <span>{children}</span>}
+      {children ? children : getIcon()}
     </Button>
   );
 }
