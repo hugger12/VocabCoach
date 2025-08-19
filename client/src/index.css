@@ -233,11 +233,13 @@
   }
 
   .choice-button-correct {
-    @apply border-secondary bg-secondary bg-opacity-10 text-secondary;
+    @apply border-green-500 bg-green-500 bg-opacity-20 text-green-700 dark:text-green-300;
+    @apply ring-2 ring-green-500 ring-opacity-30;
   }
 
   .choice-button-incorrect {
-    @apply border-destructive bg-destructive bg-opacity-10 text-destructive;
+    @apply border-orange-500 bg-orange-500 bg-opacity-20 text-orange-700 dark:text-orange-300;
+    @apply ring-2 ring-orange-500 ring-opacity-30;
   }
 
   /* Dashboard tab styles */

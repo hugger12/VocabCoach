@@ -104,22 +104,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       console.error("Failed to record attempt:", error);
     }
 
-    // Show feedback
+    // Show integrated feedback (no more disruptive modals)
     setShowFeedback(true);
-
-    if (isCorrect) {
-      toast({
-        title: "Correct!",
-        description: `Great job! You understood "${currentWord.text}" from context.`,
-        variant: "default",
-      });
-    } else {
-      toast({
-        title: "Try again",
-        description: "Listen to the sentence once more and think about the context.",
-        variant: "destructive",
-      });
-    }
 
     // Auto-advance after 2 seconds if correct
     if (isCorrect) {
@@ -428,7 +414,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 </div>
               </div>
 
-              {/* Choice Buttons - ISOLATED */}
+              {/* Choice Buttons with Integrated Feedback */}
               <div 
                 className="space-y-4" 
                 style={{
@@ -459,6 +445,37 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                     </DyslexiaButton>
                   ))}
                 </div>
+
+                {/* Integrated Feedback Display */}
+                {showFeedback && selectedChoice !== null && (
+                  <div className="mt-6 p-4 rounded-xl text-center transition-all duration-500">
+                    {meaningChoices[selectedChoice]?.isCorrect ? (
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6">
+                        <div className="text-green-600 dark:text-green-400 text-dyslexia-xl font-semibold mb-2">
+                          ✓ Perfect!
+                        </div>
+                        <p className="text-green-700 dark:text-green-300 text-dyslexia-lg">
+                          Great job! You understood "{currentWord?.text}" from context.
+                        </p>
+                        <p className="text-green-600 dark:text-green-400 text-dyslexia-base mt-2">
+                          Moving to the next word...
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-6">
+                        <div className="text-orange-600 dark:text-orange-400 text-dyslexia-xl font-semibold mb-2">
+                          Let's try again
+                        </div>
+                        <p className="text-orange-700 dark:text-orange-300 text-dyslexia-lg">
+                          Listen to the sentence once more and think about the context.
+                        </p>
+                        <p className="text-orange-600 dark:text-orange-400 text-dyslexia-base mt-2">
+                          You can do this!
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
