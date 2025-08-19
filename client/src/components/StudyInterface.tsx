@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, RotateCcw, Settings } from "lucide-react";
+import { ArrowLeft, ArrowRight, RotateCcw, Settings, Volume2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { DyslexiaButton } from "@/components/ui/dyslexia-button";
 import { AudioPlayer } from "./AudioPlayer";
@@ -313,165 +313,166 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
       {/* Main Study Area */}
       <main className="flex-1 flex items-center justify-center p-6">
-        <div className="max-w-2xl w-full">
+        <div className="max-w-4xl w-full">
           
-          {/* Current Word Card */}
-          <Card className="card-dyslexia mb-8">
-            <CardContent>
+          {/* Modern Word Card */}
+          <Card className="bg-white dark:bg-gray-900 shadow-xl rounded-3xl border-0 mb-8">
+            <CardContent className="p-8">
               
-              {/* Word Display */}
-              <div className="text-center mb-8">
-                <h2 className="text-dyslexia-2xl font-bold text-foreground mb-4 tracking-wide">
-                  {currentWord?.text}
-                </h2>
-                <p className="text-dyslexia-base text-muted-foreground italic">
-                  {currentWord?.partOfSpeech}
-                </p>
-              </div>
-
-              {/* Audio Controls */}
-              <div className="flex flex-col space-y-4 mb-8">
-                <AudioPlayer
-                  text={currentWord?.text || ""}
-                  type="word"
-                  variant="primary"
-                  className="w-full h-16"
-                  wordId={currentWord?.id}
-                  data-testid="play-word"
-                >
-                  Play Word
-                </AudioPlayer>
-                
-                <div className="relative">
-                  <SpeechSynthesisPlayer
-                    text={getCurrentSentence()}
-                    variant="secondary"
-                    className="w-full h-16"
-                    data-testid="play-sentence"
-                    enableHighlighting={true}
-                    onWordHighlight={(wordIndex) => {
-                      setCurrentHighlightedWord(wordIndex);
-                    }}
+              {/* Clean Word Header */}
+              <div className="text-center mb-12">
+                <div className="inline-flex items-center gap-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl px-8 py-6 mb-6">
+                  <h2 className="text-5xl font-bold text-gray-900 dark:text-white tracking-tight">
+                    {currentWord?.text}
+                  </h2>
+                  <AudioPlayer
+                    text={currentWord?.text || ""}
+                    type="word"
+                    className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg transition-all border-0"
+                    wordId={currentWord?.id}
+                    data-testid="play-word"
                   >
-                    Play Sentence {currentWord?.sentences && currentWord.sentences.length > 1 ? `(${currentSentenceIndex + 1}/${currentWord.sentences.length})` : ''}
-                  </SpeechSynthesisPlayer>
-                  {currentWord?.sentences && currentWord.sentences.length > 1 && (
-                    <DyslexiaButton
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-2 top-2 h-12 px-2 text-xs"
-                      onClick={handleNextSentence}
-                      data-testid="cycle-sentence"
-                    >
-                      Next
-                    </DyslexiaButton>
-                  )}
+                    <Volume2 className="w-6 h-6" />
+                  </AudioPlayer>
+                </div>
+                
+                <div className="flex items-center justify-center gap-2 text-lg text-gray-600 dark:text-gray-400 mb-4">
+                  <span className="bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full text-sm font-medium">
+                    {currentWord?.partOfSpeech}
+                  </span>
                 </div>
 
-                <AudioPlayer
-                  text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
-                  type="sentence"
-                  variant="outline"
-                  className="w-full h-16"
-                  wordId={currentWord?.id}
-                  data-testid="play-definition"
-                >
-                  Play Definition
-                </AudioPlayer>
+                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-6 mb-8">
+                  <p className="text-lg text-gray-700 dark:text-gray-300 mb-4">
+                    <strong>Definition:</strong> {currentWord?.kidDefinition}
+                  </p>
+                  <AudioPlayer
+                    text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
+                    type="sentence"
+                    className="bg-amber-100 hover:bg-amber-200 dark:bg-amber-800 dark:hover:bg-amber-700 text-amber-800 dark:text-amber-200 rounded-xl px-6 py-3 text-sm font-medium transition-all border-0 inline-flex items-center"
+                    wordId={currentWord?.id}
+                    data-testid="play-definition"
+                  >
+                    <Volume2 className="w-4 h-4 mr-2" />
+                    Hear Definition
+                  </AudioPlayer>
+                </div>
               </div>
 
-              {/* Sentence Display - ISOLATED */}
-              <div 
-                className="bg-muted rounded-xl p-6 mb-6" 
-                style={{ 
-                  height: '160px', 
-                  overflow: 'hidden',
-                  position: 'relative',
-                  isolation: 'isolate'
-                }}
-              >
-                <p className="text-dyslexia-lg text-foreground text-center leading-relaxed mb-4">
-                  Listen to learn how <strong className="text-primary font-semibold">{currentWord?.text}</strong> is used.
-                </p>
-                {currentWord?.sentences && currentWord.sentences.length > 0 && (
-                  <div className="text-center absolute inset-x-6 bottom-6">
+              {/* Modern Sentence Display */}
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl p-8 mb-8 relative">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                    Listen & Learn
+                  </h3>
+                  <div className="flex gap-3">
+                    {currentWord?.sentences && currentWord.sentences.length > 1 && (
+                      <button
+                        onClick={handleNextSentence}
+                        className="bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl px-4 py-2 text-sm font-medium transition-all shadow-sm border border-gray-200 dark:border-gray-600"
+                        data-testid="next-sentence"
+                      >
+                        <ArrowRight className="w-4 h-4 mr-1 inline" />
+                        Next Example ({currentSentenceIndex + 1}/{currentWord.sentences.length})
+                      </button>
+                    )}
+                    <SpeechSynthesisPlayer
+                      text={getCurrentSentence()}
+                      onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
+                      enableHighlighting={true}
+                      className="bg-green-500 hover:bg-green-600 text-white rounded-xl px-6 py-2 font-medium transition-all shadow-sm border-0 inline-flex items-center"
+                      data-testid="play-sentence"
+                    >
+                      <Volume2 className="w-4 h-4 mr-2" />
+                      Play Sentence
+                    </SpeechSynthesisPlayer>
+                  </div>
+                </div>
+                
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 min-h-[100px] flex items-center justify-center">
+                  {currentWord?.sentences && currentWord.sentences.length > 0 && (
                     <DyslexicReader
                       text={getCurrentSentence()}
                       currentWordIndex={currentHighlightedWord}
-                      className="text-dyslexia-base text-foreground"
-                      highlightColor="bg-primary/40 dark:bg-primary/50 border-2 border-primary/60"
+                      className="text-lg text-gray-800 dark:text-gray-200 leading-relaxed text-center"
+                      highlightColor="bg-yellow-200 dark:bg-yellow-600"
                     />
-                  </div>
-                )}
-                <div className="absolute top-4 right-4">
-                  <SpeechSynthesisPlayer
-                    text={getCurrentSentence()}
-                    onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
-                    enableHighlighting={true}
-                    className="w-12 h-12 text-xs"
-                    data-testid="play-sentence"
-                  />
+                  )}
                 </div>
               </div>
 
-              {/* Choice Buttons with Integrated Feedback */}
-              <div 
-                className="space-y-4" 
-                style={{
-                  position: 'relative',
-                  isolation: 'isolate',
-                  transform: 'translateZ(0)',
-                }}
-              >
-                <h3 className="text-dyslexia-lg font-semibold text-foreground text-center mb-6">
-                  Choose the meaning:
+              {/* Modern Choice Interface */}
+              <div className="space-y-6">
+                <h3 className="text-2xl font-semibold text-gray-900 dark:text-white text-center mb-8">
+                  What does <span className="text-blue-600 dark:text-blue-400">{currentWord?.text}</span> mean?
                 </h3>
                 
-                <div className="space-y-4">
+                <div className="grid gap-4">
                   {meaningChoices.map((choice, index) => (
-                    <DyslexiaButton
+                    <button
                       key={`choice-${index}-${choice.text}`}
-                      variant="outline"
-                      className={cn(
-                        "choice-button h-16 w-full",
-                        selectedChoice === index && choice.isCorrect && "choice-button-correct",
-                        selectedChoice === index && !choice.isCorrect && "choice-button-incorrect"
-                      )}
                       onClick={() => handleChoiceSelect(index)}
                       disabled={selectedChoice !== null}
                       data-testid={`choice-${index}`}
+                      className={cn(
+                        "w-full p-6 text-left rounded-2xl border-2 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]",
+                        selectedChoice === index && choice.isCorrect && "border-green-400 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200 shadow-lg ring-4 ring-green-200/50",
+                        selectedChoice === index && !choice.isCorrect && "border-orange-400 bg-orange-50 dark:bg-orange-900/20 text-orange-800 dark:text-orange-200 shadow-lg ring-4 ring-orange-200/50",
+                        selectedChoice !== index && "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md",
+                        selectedChoice !== null && selectedChoice !== index && "opacity-60"
+                      )}
                     >
-                      {choice.text}
-                    </DyslexiaButton>
+                      <div className="flex items-center justify-between">
+                        <span className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                          {choice.text}
+                        </span>
+                        {selectedChoice === index && choice.isCorrect && (
+                          <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xl">✓</span>
+                          </div>
+                        )}
+                        {selectedChoice === index && !choice.isCorrect && (
+                          <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xl">×</span>
+                          </div>
+                        )}
+                      </div>
+                    </button>
                   ))}
                 </div>
 
-                {/* Integrated Feedback Display */}
+                {/* Modern Integrated Feedback */}
                 {showFeedback && selectedChoice !== null && (
-                  <div className="mt-6 p-4 rounded-xl text-center transition-all duration-500">
+                  <div className="mt-8 text-center transition-all duration-500">
                     {meaningChoices[selectedChoice]?.isCorrect ? (
-                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6">
-                        <div className="text-green-600 dark:text-green-400 text-dyslexia-xl font-semibold mb-2">
-                          ✓ Perfect!
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700 rounded-2xl p-8">
+                        <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <span className="text-white text-3xl">✓</span>
                         </div>
-                        <p className="text-green-700 dark:text-green-300 text-dyslexia-lg">
-                          Great job! You understood "{currentWord?.text}" from context.
+                        <div className="text-green-700 dark:text-green-300 text-2xl font-bold mb-2">
+                          Excellent Work!
+                        </div>
+                        <p className="text-green-600 dark:text-green-400 text-lg mb-4">
+                          You understood "{currentWord?.text}" perfectly from context.
                         </p>
-                        <p className="text-green-600 dark:text-green-400 text-dyslexia-base mt-2">
-                          Moving to the next word...
-                        </p>
+                        <div className="text-green-500 dark:text-green-400 text-sm font-medium">
+                          Moving to the next word in 2 seconds...
+                        </div>
                       </div>
                     ) : (
-                      <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-6">
-                        <div className="text-orange-600 dark:text-orange-400 text-dyslexia-xl font-semibold mb-2">
-                          Let's try again
+                      <div className="bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 border border-orange-200 dark:border-orange-700 rounded-2xl p-8">
+                        <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <span className="text-white text-2xl">↻</span>
                         </div>
-                        <p className="text-orange-700 dark:text-orange-300 text-dyslexia-lg">
+                        <div className="text-orange-700 dark:text-orange-300 text-2xl font-bold mb-2">
+                          Let's Try Again
+                        </div>
+                        <p className="text-orange-600 dark:text-orange-400 text-lg mb-4">
                           Listen to the sentence once more and think about the context.
                         </p>
-                        <p className="text-orange-600 dark:text-orange-400 text-dyslexia-base mt-2">
-                          You can do this!
-                        </p>
+                        <div className="text-orange-500 dark:text-orange-400 text-sm font-medium">
+                          Try again in 3 seconds...
+                        </div>
                       </div>
                     )}
                   </div>
@@ -480,26 +481,37 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             </CardContent>
           </Card>
 
-          {/* Navigation Controls */}
-          <div className="flex justify-between items-center">
-            <DyslexiaButton
-              variant="outline"
+          {/* Modern Navigation Controls */}
+          <div className="flex justify-between items-center mt-8">
+            <button
               onClick={handleBack}
               disabled={currentIndex === 0}
-              className="w-24 h-16"
+              className={cn(
+                "flex items-center gap-2 px-6 py-3 rounded-2xl font-medium transition-all",
+                currentIndex === 0 
+                  ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"
+                  : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 hover:scale-105 active:scale-95"
+              )}
               data-testid="back-btn"
             >
               <ArrowLeft className="w-5 h-5" />
-            </DyslexiaButton>
+              Previous
+            </button>
             
-            <DyslexiaButton
+            <button
               onClick={handleNext}
               disabled={selectedChoice === null || !meaningChoices[selectedChoice]?.isCorrect}
-              className="w-24 h-16"
+              className={cn(
+                "flex items-center gap-2 px-8 py-3 rounded-2xl font-medium transition-all",
+                (selectedChoice === null || !meaningChoices[selectedChoice]?.isCorrect)
+                  ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"
+                  : "bg-blue-500 hover:bg-blue-600 text-white hover:scale-105 active:scale-95 shadow-lg"
+              )}
               data-testid="next-btn"
             >
+              Next Word
               <ArrowRight className="w-5 h-5" />
-            </DyslexiaButton>
+            </button>
           </div>
         </div>
       </main>
