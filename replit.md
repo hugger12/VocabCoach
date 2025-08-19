@@ -8,9 +8,10 @@ Preferred communication style: Simple, everyday language.
 
 ## Branding and Design
 - Company: Hugger Digital
-- Logo: Bear mascot reading a book with tan/brown color scheme
-- Color theme: Warm tan backgrounds with dark brown/black text and accents
+- Logo: Bear mascot reading a book with tan/brown color scheme (prominent display on home screen)
+- Color theme: Light mode only - warm tan backgrounds with dark brown/black text and accents
 - Visual identity: Clean, friendly, educational focus with dyslexia-friendly design principles
+- Theme preference: Light mode only, no dark backgrounds - "happy software" with positive, bright interface
 
 # System Architecture
 

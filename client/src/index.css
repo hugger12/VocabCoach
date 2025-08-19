@@ -42,28 +42,7 @@
   --highlight-text: hsl(0 0% 0%);
 }
 
-.dark {
-  /* Dark mode with darker browns and tan accents */
-  --background: hsl(0 0% 8%); /* Very dark brown/black */
-  --foreground: hsl(30 25% 85%); /* Light tan text */
-  --card: hsl(0 0% 12%);
-  --card-foreground: hsl(30 25% 85%);
-  --popover: hsl(0 0% 12%);
-  --popover-foreground: hsl(30 25% 85%);
-  --primary: hsl(30 25% 75%); /* Tan for primary in dark mode */
-  --primary-foreground: hsl(0 0% 15%);
-  --secondary: hsl(0 0% 20%); /* Dark secondary */
-  --secondary-foreground: hsl(30 25% 85%);
-  --muted: hsl(0 0% 15%);
-  --muted-foreground: hsl(30 15% 60%);
-  --accent: hsl(0 0% 18%);
-  --accent-foreground: hsl(30 25% 85%);
-  --destructive: hsl(0 62.8% 30.6%);
-  --destructive-foreground: hsl(30 25% 85%);
-  --border: hsl(0 0% 18%);
-  --input: hsl(0 0% 18%);
-  --ring: hsl(30 25% 75%);
-}
+/* Removed dark mode - keeping only light, happy theme */
 
 @layer base {
   * {

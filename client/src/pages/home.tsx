@@ -21,21 +21,17 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen">
-      {/* Header with Logo */}
+      {/* Hero Header with Prominent Logo */}
       <header className="bg-card/50 backdrop-blur-sm border-b border-border">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <img 
-                src={huggerLogo} 
-                alt="Hugger Digital" 
-                className="h-12 w-auto"
-              />
-              <div>
-                <h1 className="text-xl font-semibold text-foreground">Vocabulary Coach</h1>
-                <p className="text-sm text-muted-foreground">Dyslexia-Friendly Learning</p>
-              </div>
-            </div>
+        <div className="container mx-auto px-6 py-8">
+          <div className="text-center">
+            <img 
+              src={huggerLogo} 
+              alt="Hugger Digital" 
+              className="h-24 w-auto mx-auto mb-4"
+            />
+            <h1 className="text-3xl font-bold text-foreground mb-2">Vocabulary Coach</h1>
+            <p className="text-lg text-muted-foreground">Dyslexia-Friendly Learning by Hugger Digital</p>
           </div>
         </div>
       </header>
