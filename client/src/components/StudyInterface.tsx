@@ -30,6 +30,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [sessionStarted, setSessionStarted] = useState(false);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [currentHighlightedWord, setCurrentHighlightedWord] = useState(-1);
+  const [showDefinition, setShowDefinition] = useState(true);
+  const [showChoices, setShowChoices] = useState(false);
 
   // Fetch study session
   const { data: session, isLoading, error } = useQuery<StudySession>({
@@ -126,8 +128,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setCurrentIndex(currentIndex + 1);
       setSelectedChoice(null);
       setShowFeedback(false);
-      setCurrentSentenceIndex(0); // Reset to first sentence for new word
-      setCurrentHighlightedWord(-1); // Stop any sentence playback
+      setCurrentSentenceIndex(0);
+      setCurrentHighlightedWord(-1);
+      setShowDefinition(true);
+      setShowChoices(false);
     } else {
       // Session complete
       toast({
@@ -139,6 +143,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setCurrentIndex(0);
       setCurrentSentenceIndex(0);
       setCurrentHighlightedWord(-1);
+      setShowDefinition(true);
+      setShowChoices(false);
     }
   };
 
@@ -147,8 +153,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setCurrentIndex(currentIndex - 1);
       setSelectedChoice(null);
       setShowFeedback(false);
-      setCurrentSentenceIndex(0); // Reset to first sentence for new word  
-      setCurrentHighlightedWord(-1); // Stop any highlighting
+      setCurrentSentenceIndex(0);
+      setCurrentHighlightedWord(-1);
+      setShowDefinition(true);
+      setShowChoices(false);
     }
   };
 
@@ -158,6 +166,13 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     setSelectedChoice(null);
     setShowFeedback(false);
     setCurrentSentenceIndex(0);
+    setShowDefinition(true);
+    setShowChoices(false);
+  };
+
+  const handleStartChallenge = () => {
+    setShowDefinition(false);
+    setShowChoices(true);
   };
 
   // Cycle through sentences for current word
@@ -340,20 +355,22 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             </div>
 
             {/* Definition */}
-            <div className="text-center mb-12">
-              <p className="text-xl text-gray-700 dark:text-gray-300 mb-6">
-                <strong>Definition:</strong> {currentWord?.kidDefinition}
-              </p>
-              <AudioPlayer
-                text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
-                type="sentence"
-                className="bg-amber-500 hover:bg-amber-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
-                wordId={currentWord?.id}
-                data-testid="play-definition"
-              >
-                Hear Definition
-              </AudioPlayer>
-            </div>
+            {showDefinition && (
+              <div className="text-center mb-12">
+                <p className="text-xl text-gray-700 dark:text-gray-300 mb-6">
+                  <strong>Definition:</strong> {currentWord?.kidDefinition}
+                </p>
+                <AudioPlayer
+                  text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
+                  type="sentence"
+                  className="bg-amber-500 hover:bg-amber-600 text-white rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                  wordId={currentWord?.id}
+                  data-testid="play-definition"
+                >
+                  Hear Definition
+                </AudioPlayer>
+              </div>
+            )}
           </div>
 
           {/* Sentence Practice */}
@@ -396,41 +413,55 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             </div>
           </div>
 
-          {/* Choice Interface */}
+          {/* Challenge Interface */}
           <div className="mb-12">
-            <h3 className="text-2xl font-semibold text-gray-900 dark:text-white text-center mb-8">
-              What does <span className="text-blue-600 dark:text-blue-400">{currentWord?.text}</span> mean?
-            </h3>
-            
-            <div className="space-y-4">
-              {meaningChoices.map((choice, index) => (
+            {!showChoices ? (
+              <div className="text-center">
                 <button
-                  key={`choice-${index}-${choice.text}`}
-                  onClick={() => handleChoiceSelect(index)}
-                  disabled={selectedChoice !== null}
-                  data-testid={`choice-${index}`}
-                  className={cn(
-                    "w-full p-6 text-left rounded-2xl transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]",
-                    selectedChoice === index && choice.isCorrect && "bg-green-500 text-white shadow-lg",
-                    selectedChoice === index && !choice.isCorrect && "bg-orange-500 text-white shadow-lg",
-                    selectedChoice !== index && "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700",
-                    selectedChoice !== null && selectedChoice !== index && "opacity-50"
-                  )}
+                  onClick={handleStartChallenge}
+                  className="bg-purple-500 hover:bg-purple-600 text-white rounded-2xl px-12 py-6 text-2xl font-medium transition-all hover:scale-105 active:scale-95"
+                  data-testid="start-challenge"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-lg font-medium">
-                      {choice.text}
-                    </span>
-                    {selectedChoice === index && choice.isCorrect && (
-                      <span className="text-2xl">✓</span>
-                    )}
-                    {selectedChoice === index && !choice.isCorrect && (
-                      <span className="text-2xl">×</span>
-                    )}
-                  </div>
+                  What does <span className="font-bold">{currentWord?.text}</span> mean?
                 </button>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-2xl font-semibold text-gray-900 dark:text-white text-center mb-8">
+                  Choose the meaning of <span className="text-blue-600 dark:text-blue-400">{currentWord?.text}</span>
+                </h3>
+                
+                <div className="space-y-4">
+                  {meaningChoices.map((choice, index) => (
+                    <button
+                      key={`choice-${index}-${choice.text}`}
+                      onClick={() => handleChoiceSelect(index)}
+                      disabled={selectedChoice !== null}
+                      data-testid={`choice-${index}`}
+                      className={cn(
+                        "w-full p-6 text-left rounded-2xl transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]",
+                        selectedChoice === index && choice.isCorrect && "bg-green-500 text-white shadow-lg",
+                        selectedChoice === index && !choice.isCorrect && "bg-orange-500 text-white shadow-lg",
+                        selectedChoice !== index && "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700",
+                        selectedChoice !== null && selectedChoice !== index && "opacity-50"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-lg font-medium">
+                          {choice.text}
+                        </span>
+                        {selectedChoice === index && choice.isCorrect && (
+                          <span className="text-2xl">✓</span>
+                        )}
+                        {selectedChoice === index && !choice.isCorrect && (
+                          <span className="text-2xl">×</span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
 
             {/* Clean Feedback */}
             {showFeedback && selectedChoice !== null && (
@@ -480,10 +511,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             
             <button
               onClick={handleNext}
-              disabled={selectedChoice === null || !meaningChoices[selectedChoice]?.isCorrect}
+              disabled={!showChoices || selectedChoice === null || (selectedChoice !== null && !meaningChoices[selectedChoice]?.isCorrect)}
               className={cn(
                 "px-8 py-4 rounded-2xl text-lg font-medium transition-all",
-                (selectedChoice === null || !meaningChoices[selectedChoice]?.isCorrect)
+                (!showChoices || selectedChoice === null || (selectedChoice !== null && !meaningChoices[selectedChoice]?.isCorrect))
                   ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed"
                   : "bg-blue-500 hover:bg-blue-600 text-white hover:scale-105 active:scale-95"
               )}
