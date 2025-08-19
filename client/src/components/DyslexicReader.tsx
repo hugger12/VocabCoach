@@ -12,7 +12,7 @@ export function DyslexicReader({
   text,
   currentWordIndex,
   className,
-  highlightColor = "bg-primary/40 dark:bg-primary/50 border-2 border-primary/60",
+  highlightColor,
 }: DyslexicReaderProps) {
   const [words, setWords] = useState<string[]>([]);
 
@@ -32,14 +32,14 @@ export function DyslexicReader({
         <span
           key={`${text}-${index}`} // Better key for re-renders
           className={cn(
-            "inline-block mx-1 px-2 py-1 rounded-md transition-all duration-300 ease-in-out",
-            currentWordIndex === index ? [
-              highlightColor,
-              "transform scale-105 font-semibold shadow-sm"
-            ] : "hover:bg-muted/50"
+            "inline-block mx-1 px-3 py-2 rounded",
+            currentWordIndex === index ? 
+              "font-medium" :
+              ""
           )}
           style={{
-            animationDelay: currentWordIndex === index ? '0ms' : `${index * 50}ms`
+            backgroundColor: currentWordIndex === index ? 'var(--highlight-yellow)' : 'transparent',
+            color: currentWordIndex === index ? 'var(--highlight-text)' : 'inherit',
           }}
         >
           {word}

@@ -35,6 +35,10 @@
   --line-height-dyslexia: 1.6;
   --spacing-generous: 1.5rem;
   --target-size-min: 48px;
+  
+  /* Word highlighting colors */
+  --highlight-yellow: hsl(60 100% 80%);
+  --highlight-text: hsl(0 0% 0%);
 }
 
 .dark {
@@ -108,6 +112,12 @@
     --secondary: hsl(120 100% 75%);
     --border: hsl(0 0% 100%);
   }
+
+.dark {
+  /* Dark mode word highlighting */
+  --highlight-yellow: hsl(60 100% 70%);
+  --highlight-text: hsl(0 0% 0%);
+}
 
   /* Focus styles for accessibility */
   .focus-visible {
