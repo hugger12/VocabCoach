@@ -35,6 +35,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [sessionComplete, setSessionComplete] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [sessionWords, setSessionWords] = useState<WordWithProgress[]>([]);
+  const [totalSessionWords, setTotalSessionWords] = useState(0);
 
   // Fetch study session
   const { data: session, isLoading, error } = useQuery<StudySession>({
@@ -46,8 +47,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   useEffect(() => {
     if (session?.words && sessionWords.length === 0) {
       setSessionWords([...session.words]);
+      setTotalSessionWords(session.totalWords);
     }
-  }, [session?.words, sessionWords.length]);
+  }, [session?.words, sessionWords.length, session?.totalWords]);
 
   // Record attempt mutation
   const recordAttempt = useMutation({
@@ -67,7 +69,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   });
 
   const currentWord = sessionWords[currentIndex];
-  const totalWords = sessionWords.length || 0;
+  const totalWords = totalSessionWords || sessionWords.length || 0;
   const progressPercentage = totalWords > 0 ? ((currentIndex + 1) / totalWords) * 100 : 0;
 
   // Generate meaning choices with stable shuffling (FIXED)
@@ -169,6 +171,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     setCurrentIndex(0);
     setCorrectAnswers(0);
     setSessionWords([]);
+    setTotalSessionWords(0);
     setSelectedChoice(null);
     setShowFeedback(false);
     setCurrentSentenceIndex(0);
@@ -298,6 +301,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               setCurrentIndex(0);
               setCorrectAnswers(0);
               setSessionWords([]);
+              setTotalSessionWords(0);
             }}
             className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
             data-testid="back-to-start"
