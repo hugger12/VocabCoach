@@ -307,15 +307,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get all word schedules for study session
       const allSchedules = await storage.getAllSchedules();
-      const dueSchedules = schedulerService.getWordsForToday(allSchedules, limit);
+      let dueSchedules = schedulerService.getWordsForToday(allSchedules, limit);
       
+      // If no words are due today, include all words from current week for initial learning
       if (dueSchedules.length === 0) {
-        return res.json({ 
-          words: [], 
-          currentIndex: 0, 
-          totalWords: 0,
-          message: "No words due for review today!" 
-        });
+        // Get all words from current week that are in box 1-3 (still learning)
+        dueSchedules = allSchedules.filter(schedule => schedule.box <= 3).slice(0, limit || 12);
+        
+        if (dueSchedules.length === 0) {
+          return res.json({ 
+            words: [], 
+            currentIndex: 0, 
+            totalWords: 0,
+            message: "No words to practice!" 
+          });
+        }
       }
 
       // Get all words with progress (simplified approach)
