@@ -63,8 +63,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       return response.json();
     },
     onSuccess: () => {
-      // Invalidate session to get updated progress
-      queryClient.invalidateQueries({ queryKey: ["/api/study/session"] });
+      // Don't invalidate session during active study - it breaks the flow
+      // Only invalidate when session is complete
     },
   });
 
@@ -148,8 +148,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setShowDefinition(true);
       setShowChoices(false);
     } else {
-      // Session complete - show final score
+      // Session complete - show final score and invalidate cache for next session
       setSessionComplete(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/study/session"] });
     }
   };
 
@@ -313,7 +314,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     );
   }
 
-  if (error || (sessionStarted && sessionWords.length === 0 && !isLoading)) {
+  if (error || (sessionStarted && sessionWords.length === 0 && !isLoading && totalSessionWords === 0)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="max-w-md text-center">
