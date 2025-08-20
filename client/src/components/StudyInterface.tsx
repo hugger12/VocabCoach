@@ -32,12 +32,22 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [currentHighlightedWord, setCurrentHighlightedWord] = useState(-1);
   const [showDefinition, setShowDefinition] = useState(true);
   const [showChoices, setShowChoices] = useState(false);
+  const [sessionComplete, setSessionComplete] = useState(false);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
+  const [sessionWords, setSessionWords] = useState<WordWithProgress[]>([]);
 
   // Fetch study session
   const { data: session, isLoading, error } = useQuery<StudySession>({
     queryKey: ["/api/study/session"],
-    enabled: sessionStarted,
+    enabled: sessionStarted && !sessionComplete,
   });
+
+  // Store session words when first loaded
+  useEffect(() => {
+    if (session?.words && sessionWords.length === 0) {
+      setSessionWords([...session.words]);
+    }
+  }, [session?.words, sessionWords.length]);
 
   // Record attempt mutation
   const recordAttempt = useMutation({
@@ -56,8 +66,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     },
   });
 
-  const currentWord = session?.words[currentIndex];
-  const totalWords = session?.totalWords || 0;
+  const currentWord = sessionWords[currentIndex];
+  const totalWords = sessionWords.length || 0;
   const progressPercentage = totalWords > 0 ? ((currentIndex + 1) / totalWords) * 100 : 0;
 
   // Generate meaning choices with stable shuffling (FIXED)
@@ -109,8 +119,11 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     // Show integrated feedback (no more disruptive modals)
     setShowFeedback(true);
 
-    // Auto-advance after 2 seconds if correct
+    // Track correct answers
     if (isCorrect) {
+      setCorrectAnswers(prev => prev + 1);
+      
+      // Auto-advance after 2 seconds if correct
       setTimeout(() => {
         handleNext();
       }, 2000);
@@ -133,18 +146,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setShowDefinition(true);
       setShowChoices(false);
     } else {
-      // Session complete
-      toast({
-        title: "Session Complete!",
-        description: `Great work! You've completed today's ${totalWords} words.`,
-        variant: "default",
-      });
-      setSessionStarted(false);
-      setCurrentIndex(0);
-      setCurrentSentenceIndex(0);
-      setCurrentHighlightedWord(-1);
-      setShowDefinition(true);
-      setShowChoices(false);
+      // Session complete - show final score
+      setSessionComplete(true);
     }
   };
 
@@ -162,7 +165,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   const handleStartSession = () => {
     setSessionStarted(true);
+    setSessionComplete(false);
     setCurrentIndex(0);
+    setCorrectAnswers(0);
+    setSessionWords([]);
     setSelectedChoice(null);
     setShowFeedback(false);
     setCurrentSentenceIndex(0);
@@ -266,7 +272,44 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     );
   }
 
-  if (error || !session || session.words.length === 0) {
+  // Show completion screen with score
+  if (sessionComplete) {
+    const percentage = Math.round((correctAnswers / totalWords) * 100);
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="max-w-md text-center">
+          <h2 className="text-4xl font-bold mb-6 text-foreground">
+            Session Complete!
+          </h2>
+          <div className="mb-8">
+            <div className="text-6xl font-bold text-primary mb-4">
+              {correctAnswers}/{totalWords}
+            </div>
+            <p className="text-xl text-muted-foreground">
+              {percentage >= 80 ? "Excellent work!" : 
+               percentage >= 60 ? "Good job!" : 
+               "Keep practicing!"}
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setSessionStarted(false);
+              setSessionComplete(false);
+              setCurrentIndex(0);
+              setCorrectAnswers(0);
+              setSessionWords([]);
+            }}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+            data-testid="back-to-start"
+          >
+            Back to Start
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || (sessionStarted && sessionWords.length === 0 && !isLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="max-w-md text-center">
@@ -274,7 +317,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             No Words to Practice
           </h2>
           <p className="text-lg text-muted-foreground mb-6">
-            {error ? "There was an error loading your words." : "You've completed all your words for today! Great job!"}
+            {error ? "There was an error loading your words." : "You need to add some vocabulary words first."}
           </p>
           <button
             onClick={() => setSessionStarted(false)}
