@@ -332,7 +332,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           <img 
             src={huggerLogo} 
             alt="Hugger Digital" 
-            className="h-12 w-auto"
+            className="w-[100px] h-[100px] object-contain"
           />
           <h1 className="text-2xl font-bold text-foreground">WordWizard</h1>
           <button
