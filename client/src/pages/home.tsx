@@ -21,15 +21,6 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen bg-background">
-      {/* Simple Settings Button */}
-      <button
-        onClick={handleParentAccess}
-        className="absolute top-6 right-6 p-3 text-muted-foreground hover:text-foreground transition-colors z-10"
-        data-testid="parent-access"
-      >
-        <Settings className="w-6 h-6" />
-      </button>
-
       {/* Study Interface (includes home screen when not started) */}
       <StudyInterface onOpenParentDashboard={handleParentAccess} />
     </div>

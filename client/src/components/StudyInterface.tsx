@@ -225,16 +225,25 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           <img 
             src={huggerLogo} 
             alt="Hugger Digital" 
-            className="h-16 w-auto mx-auto mb-8"
+            className="h-32 w-auto mx-auto mb-8"
           />
           <h1 className="text-4xl font-bold text-foreground mb-16">WordWizard</h1>
-          <button
-            onClick={handleStartSession}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-12 py-6 text-xl font-medium transition-all"
-            data-testid="start-session"
-          >
-            Start
-          </button>
+          <div className="flex gap-4">
+            <button
+              onClick={handleStartSession}
+              className="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-8 py-3 text-lg font-medium transition-all"
+              data-testid="student-button"
+            >
+              Student
+            </button>
+            <button
+              onClick={onOpenParentDashboard}
+              className="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-8 py-3 text-lg font-medium transition-all"
+              data-testid="instructor-button"
+            >
+              Instructor
+            </button>
+          </div>
         </div>
       </div>
     );
