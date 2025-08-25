@@ -24,6 +24,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manual word entry with teacher definition
+  app.post("/api/words/manual", async (req, res) => {
+    try {
+      const { text, definition, weekId } = req.body;
+      
+      if (!text || !definition) {
+        return res.status(400).json({ message: "Word text and definition are required" });
+      }
+
+      console.log(`Adding manual word: ${text} with teacher definition`);
+      
+      // Generate part of speech using AI but keep teacher definition
+      const analysis = await aiService.analyzeWord(text);
+      
+      // Generate morphology
+      const morphology = await aiService.analyzeMorphology(text);
+      
+      const wordData = {
+        text: text.trim(),
+        partOfSpeech: analysis.partOfSpeech,
+        kidDefinition: definition.trim(), // Use teacher's definition directly
+        teacherDefinition: definition.trim(),
+        weekId: weekId || await storage.getCurrentWeek(),
+        syllables: morphology.syllables,
+        morphemes: morphology.morphemes,
+        ipa: null, // Optional field
+      };
+
+      // Create word
+      const word = await storage.createWord(wordData);
+
+      // Generate sentences using the teacher's definition
+      const sentences = await aiService.generateSentences(word.text, definition);
+      
+      // Add sentences to word
+      if (sentences.length > 0) {
+        for (const sentence of sentences) {
+          await storage.createSentence({
+            text: sentence,
+            wordId: word.id,
+          });
+        }
+      }
+
+      // Initialize schedule
+      await storage.createSchedule({
+        wordId: word.id,
+        box: 1,
+        nextReview: new Date(),
+        intervalDays: 1,
+      });
+
+      res.json({ 
+        ...word, 
+        sentences: sentences.map((s, i) => ({ id: `${word.id}-${i}`, text: s, wordId: word.id }))
+      });
+      
+    } catch (error) {
+      console.error("Error adding manual word:", error);
+      res.status(500).json({ message: "Failed to add word with manual definition" });
+    }
+  });
+
   app.post("/api/words", async (req, res) => {
     try {
       // Try simple word input first (text only), fallback to full schema
