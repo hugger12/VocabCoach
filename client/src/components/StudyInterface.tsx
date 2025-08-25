@@ -166,6 +166,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setSelectedChoice(null);
       setCurrentSentenceIndex(0);
       setCurrentHighlightedWord(-1);
+    } else if (step === 'sentence') {
+      setCurrentSentenceIndex(0);
+      setCurrentHighlightedWord(-1);
     }
   };
 
@@ -207,6 +210,20 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       return `Here is an example: The ${currentWord?.partOfSpeech} "${currentWord?.text}" means ${currentWord?.kidDefinition}.`;
     }
     return currentWord.sentences[currentSentenceIndex]?.text || "";
+  };
+
+  const goToPreviousSentence = () => {
+    if (currentSentenceIndex > 0) {
+      setCurrentSentenceIndex(currentSentenceIndex - 1);
+      setCurrentHighlightedWord(-1);
+    }
+  };
+
+  const goToNextSentence = () => {
+    if (currentWord?.sentences && currentSentenceIndex < currentWord.sentences.length - 1) {
+      setCurrentSentenceIndex(currentSentenceIndex + 1);
+      setCurrentHighlightedWord(-1);
+    }
   };
 
   // Auto-play word and sentence when word changes
@@ -454,7 +471,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           </AudioPlayer>
           <button
             onClick={() => handleStepNavigation('definition')}
-            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all inline-block"
             data-testid="next-to-definition"
           >
             Continue
@@ -490,7 +507,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           </AudioPlayer>
           <button
             onClick={() => handleStepNavigation('sentence')}
-            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all inline-block"
             data-testid="next-to-sentence"
           >
             Continue
@@ -504,15 +521,21 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   // Step 3: Sentence Practice - matches your Screenshot 4
   if (currentStep === 'sentence') {
+    const totalSentences = currentWord?.sentences?.length || 0;
+    const sentenceNumber = currentSentenceIndex + 1;
+    
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <StudyHeader />
         <div className="flex-1 flex flex-col items-center justify-center px-6">
           <div className="text-center flex-1 flex flex-col justify-center max-w-3xl">
-          <h3 className="text-4xl font-bold text-foreground mb-12">
+          <h3 className="text-4xl font-bold text-foreground mb-8">
             {currentWord?.text}
           </h3>
-          <div className="text-xl text-foreground mb-12 leading-relaxed">
+          <p className="text-lg text-muted-foreground mb-8">
+            Sentence {sentenceNumber} of {totalSentences}
+          </p>
+          <div className="text-xl text-foreground mb-12 leading-relaxed max-w-2xl mx-auto">
             <DyslexicReader
               text={getCurrentSentence()}
               currentWordIndex={currentHighlightedWord}
@@ -520,18 +543,45 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               highlightColor="bg-yellow-200"
             />
           </div>
-          <SpeechSynthesisPlayer
-            text={getCurrentSentence()}
-            onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
-            enableHighlighting={true}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold mx-auto mb-12"
-            data-testid="play-sentence"
-          >
-            ▶
-          </SpeechSynthesisPlayer>
+          
+          {/* Navigation Controls */}
+          <div className="flex items-center justify-center gap-4 mb-12">
+            <button
+              onClick={goToPreviousSentence}
+              disabled={currentSentenceIndex === 0}
+              className="rounded-full w-12 h-12 flex items-center justify-center border-2 border-foreground/20 hover:border-foreground/40 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              data-testid="previous-sentence"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18l-6-6 6-6"/>
+              </svg>
+            </button>
+            
+            <SpeechSynthesisPlayer
+              text={getCurrentSentence()}
+              onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
+              enableHighlighting={true}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold"
+              data-testid="play-sentence"
+            >
+              ▶
+            </SpeechSynthesisPlayer>
+            
+            <button
+              onClick={goToNextSentence}
+              disabled={currentSentenceIndex >= totalSentences - 1}
+              className="rounded-full w-12 h-12 flex items-center justify-center border-2 border-foreground/20 hover:border-foreground/40 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              data-testid="next-sentence"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </button>
+          </div>
+          
           <button
             onClick={() => handleStepNavigation('quiz')}
-            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all inline-block"
             data-testid="next-to-quiz"
           >
             Continue
