@@ -6,7 +6,7 @@
 
 :root {
   /* Hugger Digital Tan/Black Color Scheme */
-  --background: hsl(30 25% 85%); /* Warm tan background */
+  --background: #CFB8A7; /* Hugger Digital tan background */
   --foreground: hsl(0 0% 15%); /* Dark brown/black text */
   --card: hsl(30 25% 88%);
   --card-foreground: hsl(0 0% 15%);
