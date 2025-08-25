@@ -7,6 +7,7 @@ import { DyslexicReader } from "./DyslexicReader";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { WordWithProgress, StudySession } from "@shared/schema";
+import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
 
 interface StudyInterfaceProps {
   onOpenParentDashboard: () => void;
@@ -219,19 +220,22 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   if (!sessionStarted) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        {/* Main Study Interface - Simple Start */}
-        <main className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-md w-full text-center">
-            <button
-              onClick={handleStartSession}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-12 py-6 text-xl font-medium transition-all w-full"
-              data-testid="start-session"
-            >
-              Start
-            </button>
-          </div>
-        </main>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
+        <div className="text-center flex-1 flex flex-col justify-center">
+          <img 
+            src={huggerLogo} 
+            alt="Hugger Digital" 
+            className="h-16 w-auto mx-auto mb-8"
+          />
+          <h1 className="text-4xl font-bold text-foreground mb-16">WordWizard</h1>
+          <button
+            onClick={handleStartSession}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-12 py-6 text-xl font-medium transition-all"
+            data-testid="start-session"
+          >
+            Start
+          </button>
+        </div>
       </div>
     );
   }
@@ -300,161 +304,153 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     );
   }
 
-  // Modal overlay background
-  const ModalOverlay = ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <div className="relative bg-card rounded-3xl shadow-xl max-w-lg w-full p-8 text-center">
-        {/* Close button */}
-        <button
-          onClick={handleCloseSession}
-          className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground"
-          data-testid="close-session"
-        >
-          <X className="w-6 h-6" />
-        </button>
-        
-        {/* Progress indicator */}
-        <div className="text-sm text-muted-foreground mb-6">
-          {currentIndex + 1} of {totalWords}
-        </div>
-        
-        {children}
-      </div>
+  // Progress dots component
+  const ProgressDots = () => (
+    <div className="flex justify-center space-x-2 mb-8">
+      {Array.from({ length: 4 }, (_, i) => (
+        <div
+          key={i}
+          className={cn(
+            "w-3 h-3 rounded-full",
+            i === (['word', 'definition', 'sentence', 'quiz'].indexOf(currentStep)) 
+              ? "bg-primary" 
+              : "bg-muted"
+          )}
+        />
+      ))}
     </div>
   );
 
-  // Step 1: Word Introduction
+  // Step 1: Word Introduction - matches your Screenshot 2
   if (currentStep === 'word') {
     return (
-      <ModalOverlay>
-        <h1 className="text-5xl font-bold text-foreground mb-8">
-          {currentWord?.text}
-        </h1>
-        <AudioPlayer
-          text={currentWord?.text || ""}
-          type="word"
-          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-20 h-20 flex items-center justify-center shadow-lg transition-all text-3xl font-bold mx-auto mb-8"
-          wordId={currentWord?.id}
-          data-testid="play-word"
-        >
-          ▶
-        </AudioPlayer>
-        <button
-          onClick={() => handleStepNavigation('definition')}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
-          data-testid="next-to-definition"
-        >
-          Continue
-        </button>
-      </ModalOverlay>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
+        <div className="text-center flex-1 flex flex-col justify-center">
+          <h1 className="text-6xl font-bold text-foreground mb-12">
+            {currentWord?.text}
+          </h1>
+          <AudioPlayer
+            text={currentWord?.text || ""}
+            type="word"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-20 h-20 flex items-center justify-center shadow-lg transition-all text-3xl font-bold mx-auto mb-12"
+            wordId={currentWord?.id}
+            data-testid="play-word"
+          >
+            ▶
+          </AudioPlayer>
+          <button
+            onClick={() => handleStepNavigation('definition')}
+            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+            data-testid="next-to-definition"
+          >
+            Continue
+          </button>
+        </div>
+        <ProgressDots />
+      </div>
     );
   }
 
-  // Step 2: Definition
+  // Step 2: Definition - matches your Screenshot 3
   if (currentStep === 'definition') {
     return (
-      <ModalOverlay>
-        <h2 className="text-4xl font-bold text-foreground mb-6">
-          {currentWord?.text}
-        </h2>
-        <p className="text-lg text-muted-foreground mb-6">
-          {currentWord?.kidDefinition}
-        </p>
-        <AudioPlayer
-          text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
-          type="sentence"
-          className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold mx-auto mb-8"
-          wordId={currentWord?.id}
-          data-testid="play-definition"
-        >
-          ▶
-        </AudioPlayer>
-        <button
-          onClick={() => handleStepNavigation('sentence')}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
-          data-testid="next-to-sentence"
-        >
-          Continue
-        </button>
-      </ModalOverlay>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
+        <div className="text-center flex-1 flex flex-col justify-center max-w-2xl">
+          <h2 className="text-4xl font-bold text-foreground mb-8">
+            {currentWord?.text}
+          </h2>
+          <p className="text-xl text-foreground mb-12 leading-relaxed">
+            {currentWord?.kidDefinition}
+          </p>
+          <AudioPlayer
+            text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
+            type="sentence"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold mx-auto mb-12"
+            wordId={currentWord?.id}
+            data-testid="play-definition"
+          >
+            ▶
+          </AudioPlayer>
+          <button
+            onClick={() => handleStepNavigation('sentence')}
+            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+            data-testid="next-to-sentence"
+          >
+            Continue
+          </button>
+        </div>
+        <ProgressDots />
+      </div>
     );
   }
 
-  // Step 3: Sentence Practice
+  // Step 3: Sentence Practice - matches your Screenshot 4
   if (currentStep === 'sentence') {
     return (
-      <ModalOverlay>
-        <h3 className="text-3xl font-bold text-foreground mb-6">
-          {currentWord?.text}
-        </h3>
-        <p className="text-base text-muted-foreground mb-6">
-          Listen to how the word is used:
-        </p>
-        <div className="bg-muted rounded-2xl p-6 mb-8">
-          <DyslexicReader
-            text={getCurrentSentence()}
-            currentWordIndex={currentHighlightedWord}
-            className="text-lg text-foreground leading-relaxed"
-            highlightColor="bg-yellow-200"
-          />
-        </div>
-        <div className="flex flex-col gap-4">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
+        <div className="text-center flex-1 flex flex-col justify-center max-w-3xl">
+          <h3 className="text-4xl font-bold text-foreground mb-12">
+            {currentWord?.text}
+          </h3>
+          <div className="text-xl text-foreground mb-12 leading-relaxed">
+            <DyslexicReader
+              text={getCurrentSentence()}
+              currentWordIndex={currentHighlightedWord}
+              className="text-xl text-foreground leading-relaxed"
+              highlightColor="bg-yellow-200"
+            />
+          </div>
           <SpeechSynthesisPlayer
             text={getCurrentSentence()}
             onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
             enableHighlighting={true}
-            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold mx-auto"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold mx-auto mb-12"
             data-testid="play-sentence"
           >
             ▶
           </SpeechSynthesisPlayer>
-          {currentWord?.sentences && currentWord.sentences.length > 1 && (
-            <button
-              onClick={handleNextSentence}
-              className="text-sm text-muted-foreground hover:text-foreground"
-              data-testid="next-sentence"
-            >
-              Another Example ({currentSentenceIndex + 1}/{currentWord.sentences.length})
-            </button>
-          )}
           <button
             onClick={() => handleStepNavigation('quiz')}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all mt-4"
+            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
             data-testid="next-to-quiz"
           >
             Continue
           </button>
         </div>
-      </ModalOverlay>
+        <ProgressDots />
+      </div>
     );
   }
 
-  // Step 4: Quiz
+  // Step 4: Quiz - matches your Screenshot 5
   if (currentStep === 'quiz') {
     return (
-      <ModalOverlay>
-        <h3 className="text-3xl font-bold text-foreground mb-8">
-          {currentWord?.text}
-        </h3>
-        <p className="text-lg text-muted-foreground mb-8">
-          What does it mean?
-        </p>
-        <div className="space-y-3">
-          {meaningChoices.map((choice, index) => (
-            <button
-              key={`choice-${index}-${choice.text}`}
-              onClick={() => handleChoiceSelect(index)}
-              disabled={selectedChoice !== null}
-              data-testid={`choice-${index}`}
-              className="w-full p-4 text-left rounded-2xl transition-all bg-card hover:bg-muted text-foreground border-2 border-border hover:border-primary/50"
-            >
-              <span className="text-base">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
+        <div className="text-center flex-1 flex flex-col justify-center max-w-2xl w-full">
+          <h3 className="text-4xl font-bold text-foreground mb-16">
+            {currentWord?.text}
+          </h3>
+          <div className="space-y-6">
+            {meaningChoices.map((choice, index) => (
+              <button
+                key={`choice-${index}-${choice.text}`}
+                onClick={() => handleChoiceSelect(index)}
+                disabled={selectedChoice !== null}
+                data-testid={`choice-${index}`}
+                className={cn(
+                  "w-full p-6 text-left rounded-2xl transition-all text-lg font-medium",
+                  selectedChoice === index && choice.isCorrect && "bg-green-500 text-white",
+                  selectedChoice === index && !choice.isCorrect && "bg-red-500 text-white", 
+                  selectedChoice !== index && "bg-card hover:bg-muted text-foreground border-2 border-border hover:border-primary/50"
+                )}
+              >
                 {choice.text}
-              </span>
-            </button>
-          ))}
+              </button>
+            ))}
+          </div>
         </div>
-      </ModalOverlay>
+        <ProgressDots />
+      </div>
     );
   }
 
@@ -462,27 +458,23 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   if (currentStep === 'feedback') {
     const isCorrect = selectedChoice !== null && meaningChoices[selectedChoice]?.isCorrect;
     return (
-      <ModalOverlay>
-        <div className={cn("text-center", isCorrect ? "text-green-600" : "text-orange-500")}>
-          <div className="text-6xl mb-6">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
+        <div className="text-center flex-1 flex flex-col justify-center">
+          <div className={cn("text-6xl mb-8", isCorrect ? "text-green-600" : "text-red-500")}>
             {isCorrect ? "✓" : "✗"}
           </div>
-          <h3 className="text-2xl font-bold mb-4">
+          <h3 className="text-3xl font-bold mb-6 text-foreground">
             {isCorrect ? "Correct!" : "Try Again"}
           </h3>
-          <p className="text-lg mb-6">
+          <p className="text-xl text-muted-foreground mb-8">
             {isCorrect ? 
-              `Great! You know what "${currentWord?.text}" means.` :
-              `Let's practice "${currentWord?.text}" some more.`
+              `Great work!` :
+              `The correct answer was: ${meaningChoices.find(c => c.isCorrect)?.text}`
             }
           </p>
-          {!isCorrect && (
-            <p className="text-base text-muted-foreground">
-              The correct answer was: <strong>{meaningChoices.find(c => c.isCorrect)?.text}</strong>
-            </p>
-          )}
         </div>
-      </ModalOverlay>
+        <ProgressDots />
+      </div>
     );
   }
 

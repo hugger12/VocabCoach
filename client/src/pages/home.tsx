@@ -30,20 +30,8 @@ export default function Home() {
         <Settings className="w-6 h-6" />
       </button>
 
-      {/* Centered Logo and Title */}
-      <div className="min-h-screen flex flex-col items-center justify-center p-6">
-        <div className="text-center mb-16">
-          <img 
-            src={huggerLogo} 
-            alt="Hugger Digital" 
-            className="h-20 w-auto mx-auto mb-6"
-          />
-          <h1 className="text-4xl font-bold text-foreground">WordWizard</h1>
-        </div>
-
-        {/* Study Interface */}
-        <StudyInterface onOpenParentDashboard={handleParentAccess} />
-      </div>
+      {/* Study Interface (includes home screen when not started) */}
+      <StudyInterface onOpenParentDashboard={handleParentAccess} />
     </div>
   );
 }
