@@ -225,7 +225,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           <img 
             src={huggerLogo} 
             alt="Hugger Digital" 
-            className="h-32 w-auto mx-auto mb-8"
+            className="w-[200px] h-[200px] mx-auto mb-8 object-contain"
           />
           <h1 className="text-4xl font-bold text-foreground mb-16">WordWizard</h1>
           <div className="flex gap-4">
