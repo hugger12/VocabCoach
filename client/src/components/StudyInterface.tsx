@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, Volume2, RotateCcw } from "lucide-react";
+import { X, Volume2, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { AudioPlayer } from "./AudioPlayer";
 import { SpeechSynthesisPlayer } from "./SpeechSynthesisPlayer";
 import { DyslexicReader } from "./DyslexicReader";
@@ -18,7 +18,7 @@ interface MeaningChoice {
   isCorrect: boolean;
 }
 
-type StudyStep = 'word' | 'definition' | 'sentence' | 'quiz' | 'feedback';
+type StudyStep = 'landing' | 'word' | 'definition' | 'sentence' | 'quiz' | 'feedback';
 
 export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const { toast } = useToast();
@@ -27,7 +27,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
   const [sessionStarted, setSessionStarted] = useState(false);
-  const [currentStep, setCurrentStep] = useState<StudyStep>('word');
+  const [currentStep, setCurrentStep] = useState<StudyStep>('landing');
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [currentHighlightedWord, setCurrentHighlightedWord] = useState(-1);
   const [sessionComplete, setSessionComplete] = useState(false);
@@ -140,13 +140,23 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     if (currentIndex < totalWords - 1) {
       setCurrentIndex(currentIndex + 1);
       setSelectedChoice(null);
-      setCurrentStep('word');
+      setCurrentStep('landing');
       setCurrentSentenceIndex(0);
       setCurrentHighlightedWord(-1);
     } else {
       // Session complete - show final score and invalidate cache for next session
       setSessionComplete(true);
       queryClient.invalidateQueries({ queryKey: ["/api/study/session"] });
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+      setSelectedChoice(null);
+      setCurrentStep('landing');
+      setCurrentSentenceIndex(0);
+      setCurrentHighlightedWord(-1);
     }
   };
 
@@ -167,7 +177,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     setSessionWords([]);
     setTotalSessionWords(0);
     setSelectedChoice(null);
-    setCurrentStep('word');
+    setCurrentStep('landing');
     setCurrentSentenceIndex(0);
   };
 
@@ -309,6 +319,95 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             OK
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // Student Landing Modal - Frame 2
+  if (currentStep === 'landing') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        {/* Header */}
+        <header className="flex items-center justify-between p-6">
+          <img 
+            src={huggerLogo} 
+            alt="Hugger Digital" 
+            className="h-12 w-auto"
+          />
+          <h1 className="text-2xl font-bold text-foreground">WordWizard</h1>
+          <button
+            onClick={handleCloseSession}
+            className="p-2 text-foreground hover:text-muted-foreground transition-colors"
+            data-testid="close-session"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col items-center justify-center px-6">
+          <h2 className="text-6xl font-bold text-foreground mb-16">
+            {currentWord?.text || 'Loading...'}
+          </h2>
+          
+          {/* Action Buttons */}
+          <div className="flex gap-4 mb-16">
+            <button
+              onClick={() => handleStepNavigation('definition')}
+              className="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-6 py-3 text-lg font-medium transition-all"
+              data-testid="definition-button"
+            >
+              Definition
+            </button>
+            <button
+              onClick={() => handleStepNavigation('sentence')}
+              className="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-6 py-3 text-lg font-medium transition-all"
+              data-testid="sentences-button"
+            >
+              Sentences
+            </button>
+            <button
+              onClick={() => handleStepNavigation('quiz')}
+              className="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-6 py-3 text-lg font-medium transition-all"
+              data-testid="quiz-button"
+            >
+              Quiz
+            </button>
+          </div>
+        </main>
+
+        {/* Bottom Navigation */}
+        <footer className="flex items-center justify-center gap-4 p-6">
+          <button
+            onClick={handlePrevious}
+            disabled={currentIndex === 0}
+            className={cn(
+              "p-2 rounded-full transition-colors",
+              currentIndex === 0 
+                ? "text-muted-foreground cursor-not-allowed"
+                : "text-foreground hover:bg-muted"
+            )}
+            data-testid="previous-word"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <span className="text-lg font-medium text-foreground">
+            {currentIndex + 1} of {totalWords}
+          </span>
+          <button
+            onClick={handleNext}
+            disabled={currentIndex >= totalWords - 1}
+            className={cn(
+              "p-2 rounded-full transition-colors",
+              currentIndex >= totalWords - 1
+                ? "text-muted-foreground cursor-not-allowed"
+                : "text-foreground hover:bg-muted"
+            )}
+            data-testid="next-word"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        </footer>
       </div>
     );
   }
