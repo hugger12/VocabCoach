@@ -323,26 +323,30 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     );
   }
 
+  // Header component for all screens except home
+  const StudyHeader = () => (
+    <header className="flex items-center justify-between p-6">
+      <img 
+        src={huggerLogo} 
+        alt="Hugger Digital" 
+        className="w-[100px] h-[100px] object-contain"
+      />
+      <h1 className="text-2xl font-bold text-foreground">WordWizard</h1>
+      <button
+        onClick={handleCloseSession}
+        className="p-2 text-foreground hover:text-muted-foreground transition-colors"
+        data-testid="close-session"
+      >
+        <X className="w-6 h-6" />
+      </button>
+    </header>
+  );
+
   // Student Landing Modal - Frame 2
   if (currentStep === 'landing') {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        {/* Header */}
-        <header className="flex items-center justify-between p-6">
-          <img 
-            src={huggerLogo} 
-            alt="Hugger Digital" 
-            className="w-[100px] h-[100px] object-contain"
-          />
-          <h1 className="text-2xl font-bold text-foreground">WordWizard</h1>
-          <button
-            onClick={handleCloseSession}
-            className="p-2 text-foreground hover:text-muted-foreground transition-colors"
-            data-testid="close-session"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </header>
+        <StudyHeader />
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col items-center justify-center px-6">
@@ -432,8 +436,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   // Step 1: Word Introduction - matches your Screenshot 2
   if (currentStep === 'word') {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
-        <div className="text-center flex-1 flex flex-col justify-center">
+      <div className="min-h-screen bg-background flex flex-col">
+        <StudyHeader />
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="text-center flex-1 flex flex-col justify-center">
           <h1 className="text-6xl font-bold text-foreground mb-12">
             {currentWord?.text}
           </h1>
@@ -453,8 +459,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           >
             Continue
           </button>
+          </div>
+          <ProgressDots />
         </div>
-        <ProgressDots />
       </div>
     );
   }
@@ -462,8 +469,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   // Step 2: Definition - matches your Screenshot 3
   if (currentStep === 'definition') {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
-        <div className="text-center flex-1 flex flex-col justify-center max-w-2xl">
+      <div className="min-h-screen bg-background flex flex-col">
+        <StudyHeader />
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="text-center flex-1 flex flex-col justify-center max-w-2xl">
           <h2 className="text-4xl font-bold text-foreground mb-8">
             {currentWord?.text}
           </h2>
@@ -486,8 +495,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           >
             Continue
           </button>
+          </div>
+          <ProgressDots />
         </div>
-        <ProgressDots />
       </div>
     );
   }
@@ -495,8 +505,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   // Step 3: Sentence Practice - matches your Screenshot 4
   if (currentStep === 'sentence') {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
-        <div className="text-center flex-1 flex flex-col justify-center max-w-3xl">
+      <div className="min-h-screen bg-background flex flex-col">
+        <StudyHeader />
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="text-center flex-1 flex flex-col justify-center max-w-3xl">
           <h3 className="text-4xl font-bold text-foreground mb-12">
             {currentWord?.text}
           </h3>
@@ -524,8 +536,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           >
             Continue
           </button>
+          </div>
+          <ProgressDots />
         </div>
-        <ProgressDots />
       </div>
     );
   }
@@ -533,8 +546,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   // Step 4: Quiz - matches your Screenshot 5
   if (currentStep === 'quiz') {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
-        <div className="text-center flex-1 flex flex-col justify-center max-w-2xl w-full">
+      <div className="min-h-screen bg-background flex flex-col">
+        <StudyHeader />
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="text-center flex-1 flex flex-col justify-center max-w-2xl w-full">
           <h3 className="text-4xl font-bold text-foreground mb-16">
             {currentWord?.text}
           </h3>
@@ -556,8 +571,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               </button>
             ))}
           </div>
+          </div>
+          <ProgressDots />
         </div>
-        <ProgressDots />
       </div>
     );
   }
@@ -566,8 +582,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   if (currentStep === 'feedback') {
     const isCorrect = selectedChoice !== null && meaningChoices[selectedChoice]?.isCorrect;
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
-        <div className="text-center flex-1 flex flex-col justify-center">
+      <div className="min-h-screen bg-background flex flex-col">
+        <StudyHeader />
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="text-center flex-1 flex flex-col justify-center">
           <div className={cn("text-6xl mb-8", isCorrect ? "text-green-600" : "text-red-500")}>
             {isCorrect ? "✓" : "✗"}
           </div>
@@ -580,8 +598,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               `The correct answer was: ${meaningChoices.find(c => c.isCorrect)?.text}`
             }
           </p>
+          </div>
+          <ProgressDots />
         </div>
-        <ProgressDots />
       </div>
     );
   }
