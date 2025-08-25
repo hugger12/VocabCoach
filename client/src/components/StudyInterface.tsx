@@ -1,12 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, RotateCcw, Settings, Volume2 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { DyslexiaButton } from "@/components/ui/dyslexia-button";
+import { X, Volume2, RotateCcw } from "lucide-react";
 import { AudioPlayer } from "./AudioPlayer";
 import { SpeechSynthesisPlayer } from "./SpeechSynthesisPlayer";
 import { DyslexicReader } from "./DyslexicReader";
-import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { WordWithProgress, StudySession } from "@shared/schema";
@@ -20,18 +17,18 @@ interface MeaningChoice {
   isCorrect: boolean;
 }
 
+type StudyStep = 'word' | 'definition' | 'sentence' | 'quiz' | 'feedback';
+
 export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
-  const [showFeedback, setShowFeedback] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [currentStep, setCurrentStep] = useState<StudyStep>('word');
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [currentHighlightedWord, setCurrentHighlightedWord] = useState(-1);
-  const [showDefinition, setShowDefinition] = useState(true);
-  const [showChoices, setShowChoices] = useState(false);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [sessionWords, setSessionWords] = useState<WordWithProgress[]>([]);
@@ -118,8 +115,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       console.error("Failed to record attempt:", error);
     }
 
-    // Show integrated feedback (no more disruptive modals)
-    setShowFeedback(true);
+    // Show feedback step
+    setCurrentStep('feedback');
 
     // Track correct answers
     if (isCorrect) {
@@ -133,7 +130,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       // Reset after 3 seconds to try again
       setTimeout(() => {
         setSelectedChoice(null);
-        setShowFeedback(false);
+        setCurrentStep('quiz');
       }, 3000);
     }
   };
@@ -142,11 +139,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     if (currentIndex < totalWords - 1) {
       setCurrentIndex(currentIndex + 1);
       setSelectedChoice(null);
-      setShowFeedback(false);
+      setCurrentStep('word');
       setCurrentSentenceIndex(0);
       setCurrentHighlightedWord(-1);
-      setShowDefinition(true);
-      setShowChoices(false);
     } else {
       // Session complete - show final score and invalidate cache for next session
       setSessionComplete(true);
@@ -154,15 +149,12 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     }
   };
 
-  const handleBack = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
+  const handleStepNavigation = (step: StudyStep) => {
+    setCurrentStep(step);
+    if (step === 'word') {
       setSelectedChoice(null);
-      setShowFeedback(false);
       setCurrentSentenceIndex(0);
       setCurrentHighlightedWord(-1);
-      setShowDefinition(true);
-      setShowChoices(false);
     }
   };
 
@@ -174,15 +166,17 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     setSessionWords([]);
     setTotalSessionWords(0);
     setSelectedChoice(null);
-    setShowFeedback(false);
+    setCurrentStep('word');
     setCurrentSentenceIndex(0);
-    setShowDefinition(true);
-    setShowChoices(false);
   };
 
-  const handleStartChallenge = () => {
-    setShowDefinition(false);
-    setShowChoices(true);
+  const handleCloseSession = () => {
+    setSessionStarted(false);
+    setSessionComplete(false);
+    setCurrentIndex(0);
+    setCorrectAnswers(0);
+    setSessionWords([]);
+    setTotalSessionWords(0);
   };
 
   // Cycle through sentences for current word
@@ -226,38 +220,15 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   if (!sessionStarted) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        {/* Header */}
-        <header className="p-6">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <h1 className="text-2xl font-semibold text-foreground">
-              Vocabulary Coach
-            </h1>
-            <button
-              onClick={onOpenParentDashboard}
-              className="bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-2xl px-6 py-3 text-lg font-medium transition-all"
-              data-testid="parent-access"
-            >
-              ⚙ Parent
-            </button>
-          </div>
-        </header>
-
-        {/* Start Session */}
+        {/* Main Study Interface - Simple Start */}
         <main className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-2xl w-full text-center">
-            <h2 className="text-4xl font-bold mb-6 text-foreground">
-              Ready to Practice?
-            </h2>
-            <p className="text-xl text-muted-foreground mb-8">
-              Let's work on today's vocabulary words together. 
-              You'll hear each word and use it in a sentence.
-            </p>
+          <div className="max-w-md w-full text-center">
             <button
               onClick={handleStartSession}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-12 py-6 text-xl font-medium transition-all w-full"
               data-testid="start-session"
             >
-              Start Today's Practice
+              Start
             </button>
           </div>
         </main>
@@ -267,10 +238,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <RotateCcw className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-dyslexia-lg">Loading your words...</p>
+          <p className="text-lg">Loading your words...</p>
         </div>
       </div>
     );
@@ -281,33 +252,26 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     const percentage = Math.round((correctAnswers / totalWords) * 100);
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="max-w-md text-center">
-          <h2 className="text-4xl font-bold mb-6 text-foreground">
-            Session Complete!
+        <div className="max-w-md text-center p-8">
+          <h2 className="text-3xl font-bold mb-6 text-foreground">
+            Well Done!
           </h2>
           <div className="mb-8">
-            <div className="text-6xl font-bold text-primary mb-4">
+            <div className="text-5xl font-bold text-primary mb-4">
               {correctAnswers}/{totalWords}
             </div>
-            <p className="text-xl text-muted-foreground">
+            <p className="text-lg text-muted-foreground">
               {percentage >= 80 ? "Excellent work!" : 
                percentage >= 60 ? "Good job!" : 
                "Keep practicing!"}
             </p>
           </div>
           <button
-            onClick={() => {
-              setSessionStarted(false);
-              setSessionComplete(false);
-              setCurrentIndex(0);
-              setCorrectAnswers(0);
-              setSessionWords([]);
-              setTotalSessionWords(0);
-            }}
+            onClick={handleCloseSession}
             className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
             data-testid="back-to-start"
           >
-            Back to Start
+            Done
           </button>
         </div>
       </div>
@@ -316,261 +280,211 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   if (error || (sessionStarted && sessionWords.length === 0 && !isLoading && totalSessionWords === 0)) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="max-w-md text-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="max-w-md text-center p-8">
           <h2 className="text-2xl font-semibold mb-4 text-foreground">
-            No Words to Practice
+            No Words Available
           </h2>
           <p className="text-lg text-muted-foreground mb-6">
-            {error ? "There was an error loading your words." : "You need to add some vocabulary words first."}
+            {error ? "Error loading words." : "Add vocabulary words first."}
           </p>
           <button
-            onClick={() => setSessionStarted(false)}
+            onClick={handleCloseSession}
             className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
             data-testid="back-to-start"
           >
-            Back to Start
+            OK
           </button>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      {/* Progress Section */}
-      <div className="p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex-1" />
-            <button
-              onClick={onOpenParentDashboard}
-              className="bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-2xl px-6 py-3 text-lg font-medium transition-all"
-              data-testid="parent-access"
-            >
-              ⚙ Parent
-            </button>
-          </div>
-          
-          {/* Progress Indicator */}
-          <div className="flex items-center space-x-4">
-            <span className="text-lg text-muted-foreground">
-              Word {currentIndex + 1} of {totalWords}
-            </span>
-            <div className="flex-1">
-              <div className="bg-muted rounded-full h-3">
-                <div 
-                  className="bg-primary h-3 rounded-full transition-all duration-300"
-                  style={{ width: `${progressPercentage}%` }}
-                />
-              </div>
-            </div>
-            <span className="text-lg font-medium text-primary">
-              {Math.round(progressPercentage)}%
-            </span>
-          </div>
+  // Modal overlay background
+  const ModalOverlay = ({ children }: { children: React.ReactNode }) => (
+    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+      <div className="relative bg-card rounded-3xl shadow-xl max-w-lg w-full p-8 text-center">
+        {/* Close button */}
+        <button
+          onClick={handleCloseSession}
+          className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground"
+          data-testid="close-session"
+        >
+          <X className="w-6 h-6" />
+        </button>
+        
+        {/* Progress indicator */}
+        <div className="text-sm text-muted-foreground mb-6">
+          {currentIndex + 1} of {totalWords}
         </div>
+        
+        {children}
       </div>
-
-      {/* Main Study Area */}
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="max-w-4xl w-full">
-          
-          {/* Clean Word Display */}
-          <div className="mb-12">
-            {/* Word and Audio */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center gap-6 mb-6">
-                <h2 className="text-6xl font-bold text-foreground tracking-tight">
-                  {currentWord?.text}
-                </h2>
-                <AudioPlayer
-                  text={currentWord?.text || ""}
-                  type="word"
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold"
-                  wordId={currentWord?.id}
-                  data-testid="play-word"
-                >
-                  ▶
-                </AudioPlayer>
-              </div>
-              
-              <div className="text-muted-foreground mb-8">
-                <span className="text-lg font-medium">{currentWord?.partOfSpeech}</span>
-              </div>
-            </div>
-
-            {/* Definition */}
-            {showDefinition && (
-              <div className="text-center mb-12">
-                <p className="text-xl text-foreground mb-6">
-                  <strong>Definition:</strong> {currentWord?.kidDefinition}
-                </p>
-                <AudioPlayer
-                  text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
-                  type="sentence"
-                  className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
-                  wordId={currentWord?.id}
-                  data-testid="play-definition"
-                >
-                  Hear Definition
-                </AudioPlayer>
-              </div>
-            )}
-          </div>
-
-          {/* Sentence Practice */}
-          <div className="mb-12">
-            <div className="text-center mb-6">
-              <h3 className="text-2xl font-semibold text-foreground mb-6">
-                Listen & Learn
-              </h3>
-              <div className="flex justify-center gap-4 mb-8">
-                <SpeechSynthesisPlayer
-                  text={getCurrentSentence()}
-                  onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
-                  enableHighlighting={true}
-                  className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
-                  data-testid="play-sentence"
-                >
-                  Play Sentence
-                </SpeechSynthesisPlayer>
-                {currentWord?.sentences && currentWord.sentences.length > 1 && (
-                  <button
-                    onClick={handleNextSentence}
-                    className="bg-muted hover:bg-muted/80 text-muted-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
-                    data-testid="next-sentence"
-                  >
-                    Next Example ({currentSentenceIndex + 1}/{currentWord.sentences.length})
-                  </button>
-                )}
-              </div>
-            </div>
-            
-            <div className="bg-muted rounded-2xl p-8 min-h-[120px] flex items-center justify-center">
-              {currentWord?.sentences && currentWord.sentences.length > 0 && (
-                <DyslexicReader
-                  text={getCurrentSentence()}
-                  currentWordIndex={currentHighlightedWord}
-                  className="text-xl text-foreground leading-relaxed text-center"
-                  highlightColor="bg-yellow-200 dark:bg-yellow-600"
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Challenge Interface */}
-          <div className="mb-12">
-            {!showChoices ? (
-              <div className="text-center">
-                <button
-                  onClick={handleStartChallenge}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-12 py-6 text-2xl font-medium transition-all hover:scale-105 active:scale-95"
-                  data-testid="start-challenge"
-                >
-                  What does <span className="font-bold">{currentWord?.text}</span> mean?
-                </button>
-              </div>
-            ) : (
-              <>
-                <h3 className="text-2xl font-semibold text-foreground text-center mb-8">
-                  Choose the meaning of <span className="text-primary">{currentWord?.text}</span>
-                </h3>
-                
-                <div className="space-y-4">
-                  {meaningChoices.map((choice, index) => (
-                    <button
-                      key={`choice-${index}-${choice.text}`}
-                      onClick={() => handleChoiceSelect(index)}
-                      disabled={selectedChoice !== null}
-                      data-testid={`choice-${index}`}
-                      className={cn(
-                        "w-full p-6 text-left rounded-2xl transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]",
-                        selectedChoice === index && choice.isCorrect && "bg-green-500 text-white shadow-lg",
-                        selectedChoice === index && !choice.isCorrect && "bg-orange-500 text-white shadow-lg",
-                        selectedChoice !== index && "bg-card hover:bg-muted",
-                        selectedChoice !== null && selectedChoice !== index && "opacity-50"
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-lg font-medium">
-                          {choice.text}
-                        </span>
-                        {selectedChoice === index && choice.isCorrect && (
-                          <span className="text-2xl">✓</span>
-                        )}
-                        {selectedChoice === index && !choice.isCorrect && (
-                          <span className="text-2xl">×</span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* Clean Feedback */}
-            {showFeedback && selectedChoice !== null && (
-              <div className="mt-8 text-center transition-all duration-500">
-                {meaningChoices[selectedChoice]?.isCorrect ? (
-                  <div className="text-green-600 dark:text-green-400">
-                    <div className="text-4xl mb-4">✓</div>
-                    <div className="text-2xl font-bold mb-2">Excellent Work!</div>
-                    <p className="text-lg mb-4">
-                      You understood "{currentWord?.text}" perfectly from context.
-                    </p>
-                    <div className="text-base font-medium">
-                      Moving to the next word in 2 seconds...
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-orange-500 dark:text-orange-400">
-                    <div className="text-4xl mb-4">↻</div>
-                    <div className="text-2xl font-bold mb-2">Let's Try Again</div>
-                    <p className="text-lg mb-4">
-                      Listen to the sentence once more and think about the context.
-                    </p>
-                    <div className="text-base font-medium">
-                      Try again in 3 seconds...
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Navigation */}
-          <div className="flex justify-between items-center">
-            <button
-              onClick={handleBack}
-              disabled={currentIndex === 0}
-              className={cn(
-                "px-8 py-4 rounded-2xl text-lg font-medium transition-all",
-                currentIndex === 0 
-                  ? "bg-muted text-muted-foreground cursor-not-allowed"
-                  : "bg-secondary hover:bg-secondary/90 text-secondary-foreground hover:scale-105 active:scale-95"
-              )}
-              data-testid="back-btn"
-            >
-              Previous
-            </button>
-            
-            <button
-              onClick={handleNext}
-              disabled={!showChoices || selectedChoice === null || (selectedChoice !== null && !meaningChoices[selectedChoice]?.isCorrect)}
-              className={cn(
-                "px-8 py-4 rounded-2xl text-lg font-medium transition-all",
-                (!showChoices || selectedChoice === null || (selectedChoice !== null && !meaningChoices[selectedChoice]?.isCorrect))
-                  ? "bg-muted text-muted-foreground cursor-not-allowed"
-                  : "bg-primary hover:bg-primary/90 text-primary-foreground hover:scale-105 active:scale-95"
-              )}
-              data-testid="next-btn"
-            >
-              Next Word
-            </button>
-          </div>
-        </div>
-      </main>
     </div>
   );
+
+  // Step 1: Word Introduction
+  if (currentStep === 'word') {
+    return (
+      <ModalOverlay>
+        <h1 className="text-5xl font-bold text-foreground mb-8">
+          {currentWord?.text}
+        </h1>
+        <AudioPlayer
+          text={currentWord?.text || ""}
+          type="word"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-20 h-20 flex items-center justify-center shadow-lg transition-all text-3xl font-bold mx-auto mb-8"
+          wordId={currentWord?.id}
+          data-testid="play-word"
+        >
+          ▶
+        </AudioPlayer>
+        <button
+          onClick={() => handleStepNavigation('definition')}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+          data-testid="next-to-definition"
+        >
+          Continue
+        </button>
+      </ModalOverlay>
+    );
+  }
+
+  // Step 2: Definition
+  if (currentStep === 'definition') {
+    return (
+      <ModalOverlay>
+        <h2 className="text-4xl font-bold text-foreground mb-6">
+          {currentWord?.text}
+        </h2>
+        <p className="text-lg text-muted-foreground mb-6">
+          {currentWord?.kidDefinition}
+        </p>
+        <AudioPlayer
+          text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
+          type="sentence"
+          className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold mx-auto mb-8"
+          wordId={currentWord?.id}
+          data-testid="play-definition"
+        >
+          ▶
+        </AudioPlayer>
+        <button
+          onClick={() => handleStepNavigation('sentence')}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+          data-testid="next-to-sentence"
+        >
+          Continue
+        </button>
+      </ModalOverlay>
+    );
+  }
+
+  // Step 3: Sentence Practice
+  if (currentStep === 'sentence') {
+    return (
+      <ModalOverlay>
+        <h3 className="text-3xl font-bold text-foreground mb-6">
+          {currentWord?.text}
+        </h3>
+        <p className="text-base text-muted-foreground mb-6">
+          Listen to how the word is used:
+        </p>
+        <div className="bg-muted rounded-2xl p-6 mb-8">
+          <DyslexicReader
+            text={getCurrentSentence()}
+            currentWordIndex={currentHighlightedWord}
+            className="text-lg text-foreground leading-relaxed"
+            highlightColor="bg-yellow-200"
+          />
+        </div>
+        <div className="flex flex-col gap-4">
+          <SpeechSynthesisPlayer
+            text={getCurrentSentence()}
+            onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
+            enableHighlighting={true}
+            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold mx-auto"
+            data-testid="play-sentence"
+          >
+            ▶
+          </SpeechSynthesisPlayer>
+          {currentWord?.sentences && currentWord.sentences.length > 1 && (
+            <button
+              onClick={handleNextSentence}
+              className="text-sm text-muted-foreground hover:text-foreground"
+              data-testid="next-sentence"
+            >
+              Another Example ({currentSentenceIndex + 1}/{currentWord.sentences.length})
+            </button>
+          )}
+          <button
+            onClick={() => handleStepNavigation('quiz')}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all mt-4"
+            data-testid="next-to-quiz"
+          >
+            Continue
+          </button>
+        </div>
+      </ModalOverlay>
+    );
+  }
+
+  // Step 4: Quiz
+  if (currentStep === 'quiz') {
+    return (
+      <ModalOverlay>
+        <h3 className="text-3xl font-bold text-foreground mb-8">
+          {currentWord?.text}
+        </h3>
+        <p className="text-lg text-muted-foreground mb-8">
+          What does it mean?
+        </p>
+        <div className="space-y-3">
+          {meaningChoices.map((choice, index) => (
+            <button
+              key={`choice-${index}-${choice.text}`}
+              onClick={() => handleChoiceSelect(index)}
+              disabled={selectedChoice !== null}
+              data-testid={`choice-${index}`}
+              className="w-full p-4 text-left rounded-2xl transition-all bg-card hover:bg-muted text-foreground border-2 border-border hover:border-primary/50"
+            >
+              <span className="text-base">
+                {choice.text}
+              </span>
+            </button>
+          ))}
+        </div>
+      </ModalOverlay>
+    );
+  }
+
+  // Step 5: Feedback
+  if (currentStep === 'feedback') {
+    const isCorrect = selectedChoice !== null && meaningChoices[selectedChoice]?.isCorrect;
+    return (
+      <ModalOverlay>
+        <div className={cn("text-center", isCorrect ? "text-green-600" : "text-orange-500")}>
+          <div className="text-6xl mb-6">
+            {isCorrect ? "✓" : "✗"}
+          </div>
+          <h3 className="text-2xl font-bold mb-4">
+            {isCorrect ? "Correct!" : "Try Again"}
+          </h3>
+          <p className="text-lg mb-6">
+            {isCorrect ? 
+              `Great! You know what "${currentWord?.text}" means.` :
+              `Let's practice "${currentWord?.text}" some more.`
+            }
+          </p>
+          {!isCorrect && (
+            <p className="text-base text-muted-foreground">
+              The correct answer was: <strong>{meaningChoices.find(c => c.isCorrect)?.text}</strong>
+            </p>
+          )}
+        </div>
+      </ModalOverlay>
+    );
+  }
+
+  return null;
 }
