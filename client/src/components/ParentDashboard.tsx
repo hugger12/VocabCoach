@@ -110,7 +110,7 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
     },
   });
 
-  // Delete word mutation
+  // Delete word mutation with optimistic updates
   const deleteWordMutation = useMutation({
     mutationFn: async (wordId: string) => {
       const response = await fetch(`/api/words/${wordId}`, {
@@ -119,20 +119,42 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
       if (!response.ok) throw new Error("Failed to delete word");
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/words"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
-      toast({
-        title: "Word Deleted",
-        description: "The word has been removed from this week's list.",
+    onMutate: async (wordId: string) => {
+      // Cancel any outgoing refetches to avoid overwriting our optimistic update
+      await queryClient.cancelQueries({ queryKey: ["/api/words"] });
+      
+      // Snapshot the previous value
+      const previousWords = queryClient.getQueryData(["/api/words"]);
+      
+      // Optimistically remove the word from the cache
+      queryClient.setQueryData(["/api/words"], (old: WordWithProgress[] | undefined) => {
+        return old ? old.filter(word => word.id !== wordId) : [];
       });
+      
+      // Return a context object with the snapshotted value
+      return { previousWords };
     },
-    onError: () => {
+    onError: (err, wordId, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousWords) {
+        queryClient.setQueryData(["/api/words"], context.previousWords);
+      }
       toast({
         title: "Error",
         description: "Failed to delete word. Please try again.",
         variant: "destructive",
       });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Word Deleted",
+        description: "The word has been removed from this week's list.",
+      });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure we have the latest data
+      queryClient.invalidateQueries({ queryKey: ["/api/words"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
     },
   });
 
