@@ -81,7 +81,7 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
         morphemes: null,
         ipa: null,
         createdAt: new Date(),
-        schedule: null,
+        schedule: undefined,
         sentences: [],
       };
       
@@ -154,7 +154,7 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
         morphemes: null,
         ipa: null,
         createdAt: new Date(),
-        schedule: null,
+        schedule: undefined,
         sentences: [],
       };
       

@@ -56,13 +56,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const word = await storage.createWord(wordData);
 
       // Generate sentences using the teacher's definition
-      const sentences = await aiService.generateSentences(word.text, definition);
+      const sentences = await aiService.generateSentences(word.text, word.partOfSpeech, definition);
       
       // Add sentences to word
       if (sentences.length > 0) {
         for (const sentence of sentences) {
           await storage.createSentence({
-            text: sentence.text || sentence,
+            text: sentence.text,
             wordId: word.id,
           });
         }
