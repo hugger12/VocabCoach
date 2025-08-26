@@ -72,16 +72,9 @@ export class DatabaseStorage implements IStorage {
   private generateWeekId(): string {
     const now = new Date();
     const year = now.getFullYear();
-    const week = this.getWeekNumber(now);
-    return `${year}-W${week.toString().padStart(2, '0')}`;
-  }
-
-  private getWeekNumber(date: Date): number {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    // Use same calculation as frontend for consistency
+    const weekNumber = Math.ceil((now.getTime() - new Date(year, 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
+    return `${year}-W${weekNumber.toString().padStart(2, '0')}`;
   }
 
   // Words

@@ -257,7 +257,7 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: wordText.trim(),
-            weekId: `week-${Math.ceil(Date.now() / (7 * 24 * 60 * 60 * 1000))}`,
+            weekId: currentWeekId,
           }),
         });
         if (!response.ok) throw new Error(`Failed to add word: ${wordText}`);
