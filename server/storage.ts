@@ -92,9 +92,9 @@ export class DatabaseStorage implements IStorage {
 
   async getWords(weekId?: string): Promise<Word[]> {
     if (!weekId) {
-      return await db.select().from(words).orderBy(desc(words.createdAt));
+      return await db.select().from(words).orderBy(words.createdAt);
     }
-    return await db.select().from(words).where(eq(words.weekId, weekId)).orderBy(desc(words.createdAt));
+    return await db.select().from(words).where(eq(words.weekId, weekId)).orderBy(words.createdAt);
   }
 
   async getWordsWithProgress(weekId?: string): Promise<WordWithProgress[]> {
