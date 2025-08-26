@@ -72,7 +72,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createSchedule({
         wordId: word.id,
         box: 1,
-        nextReview: new Date(),
+        nextDueAt: new Date(),
         intervalDays: 1,
       });
 
