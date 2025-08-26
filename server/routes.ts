@@ -384,27 +384,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
       const currentWeek = await storage.getCurrentWeek();
       
-      // Get all word schedules for study session
+      // Get words from current week only
+      const currentWeekWords = await storage.getWords(currentWeek);
+      const currentWeekWordIds = currentWeekWords.map(word => word.id);
+      
+      // Get all schedules and filter to current week words only
       const allSchedules = await storage.getAllSchedules();
-      let dueSchedules = schedulerService.getWordsForToday(allSchedules, limit);
+      const currentWeekSchedules = allSchedules.filter(schedule => 
+        currentWeekWordIds.includes(schedule.wordId)
+      );
+      
+      let dueSchedules = schedulerService.getWordsForToday(currentWeekSchedules, limit);
       
       // If no words are due today, include all words from current week for initial learning
       if (dueSchedules.length === 0) {
         // Get all words from current week that are in box 1-3 (still learning)
-        dueSchedules = allSchedules.filter(schedule => schedule.box <= 3).slice(0, limit || 12);
+        dueSchedules = currentWeekSchedules.filter(schedule => schedule.box <= 3).slice(0, limit || 12);
         
         if (dueSchedules.length === 0) {
           return res.json({ 
             words: [], 
             currentIndex: 0, 
             totalWords: 0,
-            message: "No words to practice!" 
+            message: "No words to practice! Add some words to this week first." 
           });
         }
       }
 
-      // Get all words with progress (simplified approach)
-      const words = await storage.getWordsWithProgress();
+      // Get words with progress for current week only
+      const words = await storage.getWordsWithProgress(currentWeek);
       const session = schedulerService.createStudySession(dueSchedules, words);
       
       res.json(session);
