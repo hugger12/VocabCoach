@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, Plus, Trash2, TrendingUp, Archive } from "lucide-react";
+import { X, Plus, Trash2, TrendingUp, Archive, Edit, Save, Undo2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +19,9 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
   const [teacherDefinition, setTeacherDefinition] = useState("");
   const [bulkWords, setBulkWords] = useState("");
   const [entryMode, setEntryMode] = useState<"manual" | "ai" | "bulk">("manual");
+  const [editingWordId, setEditingWordId] = useState<string | null>(null);
+  const [editWordText, setEditWordText] = useState("");
+  const [editDefinition, setEditDefinition] = useState("");
   const [currentWeekId, setCurrentWeekId] = useState(() => {
     const now = new Date();
     const year = now.getFullYear();
@@ -324,10 +327,86 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
     });
   };
 
+  // Update word mutation with optimistic updates
+  const updateWordMutation = useMutation({
+    mutationFn: async ({ wordId, updateData }: { wordId: string; updateData: { text?: string; teacherDefinition?: string } }) => {
+      const response = await fetch(`/api/words/${wordId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      });
+      if (!response.ok) throw new Error("Failed to update word");
+      return response.json();
+    },
+    onMutate: async ({ wordId, updateData }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/words"] });
+      
+      const previousWords = queryClient.getQueryData(["/api/words"]);
+      
+      // Optimistically update the word
+      queryClient.setQueryData(["/api/words"], (old: WordWithProgress[] | undefined) => {
+        return old ? old.map(word => 
+          word.id === wordId 
+            ? { ...word, ...updateData }
+            : word
+        ) : [];
+      });
+      
+      return { previousWords };
+    },
+    onSuccess: () => {
+      setEditingWordId(null);
+      setEditWordText("");
+      setEditDefinition("");
+      toast({
+        title: "Word Updated",
+        description: "The word has been successfully updated.",
+      });
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousWords) {
+        queryClient.setQueryData(["/api/words"], context.previousWords);
+      }
+      toast({
+        title: "Error",
+        description: "Failed to update word. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/words"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+    },
+  });
+
   const handleDeleteWord = (wordId: string) => {
     if (confirm("Are you sure you want to delete this word?")) {
       deleteWordMutation.mutate(wordId);
     }
+  };
+
+  const handleEditWord = (word: WordWithProgress) => {
+    setEditingWordId(word.id);
+    setEditWordText(word.text);
+    setEditDefinition(word.teacherDefinition || word.kidDefinition);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingWordId || !editWordText.trim()) return;
+    
+    updateWordMutation.mutate({
+      wordId: editingWordId,
+      updateData: {
+        text: editWordText.trim(),
+        teacherDefinition: editDefinition.trim(),
+      },
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingWordId(null);
+    setEditWordText("");
+    setEditDefinition("");
   };
 
   const handleBulkAddWords = () => {
@@ -620,29 +699,90 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
                   {currentWeekWords.map((word) => (
                     <div
                       key={word.id}
-                      className="flex items-center justify-between p-4 bg-white/10 rounded-lg"
+                      className="p-4 bg-white/10 rounded-lg"
                       data-testid={`word-item-${word.id}`}
                     >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-foreground text-lg">
-                            {word.text}
-                          </span>
-                          <span className="text-sm text-foreground/60">
-                            ({word.partOfSpeech})
-                          </span>
+                      {editingWordId === word.id ? (
+                        // Edit mode
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-sm font-medium text-foreground mb-1">
+                              Word
+                            </label>
+                            <Input
+                              value={editWordText}
+                              onChange={(e) => setEditWordText(e.target.value)}
+                              className="bg-white/20 border-foreground/20"
+                              placeholder="Enter word"
+                              data-testid={`edit-word-input-${word.id}`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-foreground mb-1">
+                              Definition
+                            </label>
+                            <Textarea
+                              value={editDefinition}
+                              onChange={(e) => setEditDefinition(e.target.value)}
+                              className="bg-white/20 border-foreground/20 min-h-[100px]"
+                              placeholder="Enter definition"
+                              data-testid={`edit-definition-input-${word.id}`}
+                            />
+                          </div>
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={handleCancelEdit}
+                              className="flex items-center gap-1 px-3 py-2 text-sm text-foreground/70 hover:text-foreground transition-colors"
+                              data-testid={`cancel-edit-${word.id}`}
+                            >
+                              <Undo2 className="w-4 h-4" />
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleSaveEdit}
+                              disabled={updateWordMutation.isPending}
+                              className="flex items-center gap-1 px-3 py-2 text-sm bg-foreground text-background rounded hover:bg-foreground/90 transition-colors disabled:opacity-50"
+                              data-testid={`save-edit-${word.id}`}
+                            >
+                              <Save className="w-4 h-4" />
+                              {updateWordMutation.isPending ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
                         </div>
-                        <p className="text-sm text-foreground/80">
-                          {word.kidDefinition}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteWord(word.id)}
-                        className="p-2 text-foreground/60 hover:text-red-500 transition-colors"
-                        data-testid={`delete-word-${word.id}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      ) : (
+                        // Display mode
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-foreground text-lg">
+                                {word.text}
+                              </span>
+                              <span className="text-sm text-foreground/60">
+                                ({word.partOfSpeech})
+                              </span>
+                            </div>
+                            <p className="text-sm text-foreground/80">
+                              {word.teacherDefinition || word.kidDefinition}
+                            </p>
+                          </div>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleEditWord(word)}
+                              className="p-2 text-foreground/60 hover:text-blue-500 transition-colors"
+                              data-testid={`edit-word-${word.id}`}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteWord(word.id)}
+                              className="p-2 text-foreground/60 hover:text-red-500 transition-colors"
+                              data-testid={`delete-word-${word.id}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

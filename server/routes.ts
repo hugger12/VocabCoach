@@ -182,6 +182,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update word
+  app.patch("/api/words/:id", async (req, res) => {
+    try {
+      // Validate update data
+      const updateData = insertWordSchema.partial().parse(req.body);
+      
+      // Update word
+      const updatedWord = await storage.updateWord(req.params.id, updateData);
+      
+      res.json(updatedWord);
+    } catch (error) {
+      console.error("Error updating word:", error);
+      res.status(500).json({ message: "Failed to update word" });
+    }
+  });
+
   app.delete("/api/words/:id", async (req, res) => {
     try {
       await storage.deleteWord(req.params.id);
