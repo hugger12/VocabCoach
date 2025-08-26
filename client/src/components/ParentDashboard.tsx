@@ -62,9 +62,43 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
       if (!response.ok) throw new Error("Failed to add word");
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/words"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+    onMutate: async (wordData) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/words"] });
+      
+      // Snapshot the previous value
+      const previousWords = queryClient.getQueryData(["/api/words"]);
+      
+      // Create temporary word for optimistic update
+      const tempWord: WordWithProgress = {
+        id: `temp-${Date.now()}`,
+        text: wordData.text,
+        partOfSpeech: "...", // Will be determined by AI
+        kidDefinition: wordData.definition,
+        teacherDefinition: wordData.definition,
+        weekId: wordData.weekId,
+        syllables: null,
+        morphemes: null,
+        ipa: null,
+        createdAt: new Date(),
+        schedule: null,
+        sentences: [],
+      };
+      
+      // Optimistically add the word
+      queryClient.setQueryData(["/api/words"], (old: WordWithProgress[] | undefined) => {
+        return old ? [...old, tempWord] : [tempWord];
+      });
+      
+      return { previousWords };
+    },
+    onSuccess: (newWord, wordData) => {
+      // Replace the temporary word with the real one from the server
+      queryClient.setQueryData(["/api/words"], (old: WordWithProgress[] | undefined) => {
+        return old ? old.map(word => 
+          word.id === `temp-${newWord.createdAt}` ? newWord : word
+        ) : [newWord];
+      });
       setWordText("");
       setTeacherDefinition("");
       toast({
@@ -72,12 +106,21 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
         description: "Word has been added with the teacher's definition.",
       });
     },
-    onError: () => {
+    onError: (err, wordData, context) => {
+      // Roll back on error
+      if (context?.previousWords) {
+        queryClient.setQueryData(["/api/words"], context.previousWords);
+      }
       toast({
         title: "Error",
         description: "Failed to add word. Please try again.",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Always refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ["/api/words"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
     },
   });
 
@@ -92,21 +135,64 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
       if (!response.ok) throw new Error("Failed to add word");
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/words"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+    onMutate: async (wordData) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/words"] });
+      
+      // Snapshot the previous value
+      const previousWords = queryClient.getQueryData(["/api/words"]);
+      
+      // Create temporary word for optimistic update
+      const tempWord: WordWithProgress = {
+        id: `temp-${Date.now()}`,
+        text: wordData.text,
+        partOfSpeech: "Loading...", 
+        kidDefinition: "AI is processing...",
+        teacherDefinition: null,
+        weekId: wordData.weekId,
+        syllables: null,
+        morphemes: null,
+        ipa: null,
+        createdAt: new Date(),
+        schedule: null,
+        sentences: [],
+      };
+      
+      // Optimistically add the word
+      queryClient.setQueryData(["/api/words"], (old: WordWithProgress[] | undefined) => {
+        return old ? [...old, tempWord] : [tempWord];
+      });
+      
+      return { previousWords };
+    },
+    onSuccess: (newWord, wordData) => {
+      // Replace the temporary word with the real one from the server
+      queryClient.setQueryData(["/api/words"], (old: WordWithProgress[] | undefined) => {
+        return old ? old.map(word => 
+          word.id.startsWith('temp-') && word.text === wordData.text ? newWord : word
+        ) : [newWord];
+      });
       setWordText("");
       toast({
         title: "Word Added Successfully",
         description: "AI has processed the word with definitions and example sentences.",
       });
     },
-    onError: () => {
+    onError: (err, wordData, context) => {
+      // Roll back on error
+      if (context?.previousWords) {
+        queryClient.setQueryData(["/api/words"], context.previousWords);
+      }
       toast({
         title: "Error",
         description: "Failed to add word. Please try again.",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Always refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ["/api/words"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
     },
   });
 

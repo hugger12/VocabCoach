@@ -62,7 +62,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (sentences.length > 0) {
         for (const sentence of sentences) {
           await storage.createSentence({
-            text: sentence,
+            text: sentence.text || sentence,
             wordId: word.id,
           });
         }
@@ -73,7 +73,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         wordId: word.id,
         box: 1,
         nextDueAt: new Date(),
-        intervalDays: 1,
+        reviewCount: 0,
       });
 
       res.json({ 
