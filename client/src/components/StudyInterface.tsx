@@ -200,6 +200,18 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   };
 
   const handleStepNavigation = (step: StudyStep) => {
+    // Stop all audio playback when navigating to a new step
+    // Stop any HTML audio elements
+    document.querySelectorAll('audio').forEach(audio => {
+      audio.pause();
+      audio.currentTime = 0;
+    });
+    
+    // Stop any SpeechSynthesis playback
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    }
+    
     setCurrentStep(step);
     if (step === 'word') {
       setSelectedChoice(null);
@@ -253,6 +265,15 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   const goToPreviousSentence = () => {
     if (currentSentenceIndex > 0) {
+      // Stop all audio playback when navigating between sentences
+      document.querySelectorAll('audio').forEach(audio => {
+        audio.pause();
+        audio.currentTime = 0;
+      });
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+      }
+      
       setCurrentSentenceIndex(currentSentenceIndex - 1);
       setCurrentHighlightedWord(-1);
     }
@@ -260,6 +281,15 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   const goToNextSentence = () => {
     if (currentWord?.sentences && currentSentenceIndex < currentWord.sentences.length - 1) {
+      // Stop all audio playback when navigating between sentences
+      document.querySelectorAll('audio').forEach(audio => {
+        audio.pause();
+        audio.currentTime = 0;
+      });
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+      }
+      
       setCurrentSentenceIndex(currentSentenceIndex + 1);
       setCurrentHighlightedWord(-1);
     }
