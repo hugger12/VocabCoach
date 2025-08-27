@@ -27,6 +27,16 @@ export interface WordAnalysis {
   teacherDefinition?: string;
 }
 
+export interface QuizDistractor {
+  text: string;
+  reason: string;
+}
+
+export interface QuizDistractors {
+  distractors: QuizDistractor[];
+  difficulty: string;
+}
+
 export class AIService {
   // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
   private model = "gpt-4o";
@@ -250,6 +260,62 @@ Respond with JSON:
     } catch (error) {
       console.error("Error validating content:", error);
       return { safe: false, reason: "Validation failed" };
+    }
+  }
+
+  async generateQuizDistractors(word: string, correctDefinition: string, partOfSpeech: string): Promise<QuizDistractors> {
+    try {
+      const prompt = `Create 2 plausible but incorrect definitions for the word "${word}" (${partOfSpeech}).
+
+Given that the CORRECT definition is: "${correctDefinition}"
+
+Requirements:
+- Each distractor should look like a real definition with proper formatting
+- Use similar complexity and length as the correct definition
+- Include part of speech, examples, and synonyms where appropriate
+- Make them believable but clearly wrong to anyone who knows the word
+- Use vocabulary appropriate for a 9-year-old
+- Avoid obvious mistakes like completely different parts of speech
+
+Format each distractor like a real dictionary definition with examples if needed.
+
+Respond with JSON:
+{
+  "distractors": [
+    {
+      "text": "plausible but incorrect definition 1",
+      "reason": "why this is wrong but believable"
+    },
+    {
+      "text": "plausible but incorrect definition 2", 
+      "reason": "why this is wrong but believable"
+    }
+  ],
+  "difficulty": "moderate"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert at creating educational quiz questions for children with dyslexia. Focus on creating believable but incorrect alternatives that test genuine understanding."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+        max_tokens: 600,
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || "{}");
+      return result;
+    } catch (error) {
+      console.error("Error generating quiz distractors:", error);
+      throw new Error("Failed to generate quiz distractors");
     }
   }
 

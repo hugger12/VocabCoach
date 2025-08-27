@@ -71,31 +71,70 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const progressPercentage = totalWords > 0 ? ((currentIndex + 1) / totalWords) * 100 : 0;
 
   // Generate meaning choices with stable shuffling (FIXED)
-  const meaningChoices = useMemo(() => {
-    if (!currentWord) return [];
+  const [meaningChoices, setMeaningChoices] = useState<{ text: string; isCorrect: boolean }[]>([]);
+  const [loadingChoices, setLoadingChoices] = useState(false);
 
-    const choices = [
-      { text: currentWord.kidDefinition, isCorrect: true },
-      { text: "To forget about an important event", isCorrect: false },
-      { text: "To prepare food for a gathering", isCorrect: false },
-      { text: "To clean and organize a space", isCorrect: false },
-    ].slice(0, 3);
+  // Generate quiz choices when word changes
+  useEffect(() => {
+    if (!currentWord) return;
 
-    // Stable shuffle using word ID as seed
-    const seed = currentWord.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const seededRandom = (index: number) => {
-      const x = Math.sin(seed + index) * 10000;
-      return x - Math.floor(x);
+    const generateChoices = async () => {
+      setLoadingChoices(true);
+      try {
+        // Fetch AI-generated distractors
+        const response = await fetch("/api/quiz/distractors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            word: currentWord.text,
+            definition: currentWord.kidDefinition,
+            partOfSpeech: currentWord.partOfSpeech,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to generate distractors");
+        }
+
+        const data = await response.json();
+        const distractors = data.distractors || [];
+
+        // Create choices array with correct answer and AI distractors
+        const choices = [
+          { text: currentWord.kidDefinition, isCorrect: true },
+          ...distractors.map((d: { text: string }) => ({ text: d.text, isCorrect: false }))
+        ];
+
+        // Stable shuffle using word ID as seed
+        const seed = currentWord.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const seededRandom = (index: number) => {
+          const x = Math.sin(seed + index) * 10000;
+          return x - Math.floor(x);
+        };
+
+        const shuffled = [...choices];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(seededRandom(i) * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        setMeaningChoices(shuffled);
+      } catch (error) {
+        console.error("Failed to generate quiz choices:", error);
+        // Fallback to basic choices if AI fails
+        const fallbackChoices = [
+          { text: currentWord.kidDefinition, isCorrect: true },
+          { text: "To forget about an important event", isCorrect: false },
+          { text: "To prepare food for a gathering", isCorrect: false },
+        ];
+        setMeaningChoices(fallbackChoices);
+      } finally {
+        setLoadingChoices(false);
+      }
     };
 
-    const shuffled = [...choices];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(seededRandom(i) * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    
-    return shuffled;
-  }, [currentWord?.id, currentWord?.kidDefinition]);
+    generateChoices();
+  }, [currentWord?.id, currentWord?.kidDefinition, currentWord?.text, currentWord?.partOfSpeech]);
 
   const handleChoiceSelect = async (choiceIndex: number) => {
     if (!currentWord || selectedChoice !== null) return;
@@ -604,22 +643,29 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             {currentWord?.text}
           </h3>
           <div className="space-y-6">
-            {meaningChoices.map((choice, index) => (
-              <button
-                key={`choice-${index}-${choice.text}`}
-                onClick={() => handleChoiceSelect(index)}
-                disabled={selectedChoice !== null}
-                data-testid={`choice-${index}`}
-                className={cn(
-                  "w-full p-6 text-left rounded-2xl transition-all text-lg font-medium",
-                  selectedChoice === index && choice.isCorrect && "bg-green-500 text-white",
-                  selectedChoice === index && !choice.isCorrect && "bg-red-500 text-white", 
-                  selectedChoice !== index && "bg-card hover:bg-muted text-foreground border-2 border-border hover:border-primary/50"
-                )}
-              >
-                {choice.text}
-              </button>
-            ))}
+            {loadingChoices ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground mx-auto mb-4"></div>
+                <p className="text-lg text-foreground/60">Generating quiz questions...</p>
+              </div>
+            ) : (
+              meaningChoices.map((choice, index) => (
+                <button
+                  key={`choice-${index}-${choice.text}`}
+                  onClick={() => handleChoiceSelect(index)}
+                  disabled={selectedChoice !== null}
+                  data-testid={`choice-${index}`}
+                  className={cn(
+                    "w-full p-6 text-left rounded-2xl transition-all text-lg font-medium",
+                    selectedChoice === index && choice.isCorrect && "bg-green-500 text-white",
+                    selectedChoice === index && !choice.isCorrect && "bg-red-500 text-white", 
+                    selectedChoice !== index && "bg-card hover:bg-muted text-foreground border-2 border-border hover:border-primary/50"
+                  )}
+                >
+                  {choice.text}
+                </button>
+              ))
+            )}
           </div>
           </div>
           <ProgressDots />

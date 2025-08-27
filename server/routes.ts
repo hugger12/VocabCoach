@@ -587,6 +587,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Quiz distractor generation API
+  app.post("/api/quiz/distractors", async (req, res) => {
+    try {
+      const { word, definition, partOfSpeech } = req.body;
+      
+      if (!word || !definition || !partOfSpeech) {
+        return res.status(400).json({ message: "Word, definition, and part of speech are required" });
+      }
+
+      const distractors = await aiService.generateQuizDistractors(word, definition, partOfSpeech);
+      
+      res.json(distractors);
+    } catch (error) {
+      console.error("Error generating quiz distractors:", error);
+      res.status(500).json({ message: "Failed to generate quiz distractors" });
+    }
+  });
+
   // Health check
   app.get("/api/health", async (req, res) => {
     res.json({ 
