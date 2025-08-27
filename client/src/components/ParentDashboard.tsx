@@ -22,11 +22,31 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
   const [editingWordId, setEditingWordId] = useState<string | null>(null);
   const [editWordText, setEditWordText] = useState("");
   const [editDefinition, setEditDefinition] = useState("");
-  const [currentWeekId, setCurrentWeekId] = useState(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const weekNumber = Math.ceil((now.getTime() - new Date(year, 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
+
+  // Helper function to generate week ID starting from Sundays
+  const generateWeekId = (date: Date): string => {
+    const year = date.getFullYear();
+    
+    // Find the first Sunday of the year
+    const jan1 = new Date(year, 0, 1);
+    const firstSunday = new Date(jan1);
+    const daysUntilSunday = (7 - jan1.getDay()) % 7;
+    firstSunday.setDate(jan1.getDate() + daysUntilSunday);
+    
+    // If date is before first Sunday, it's the last week of previous year
+    if (date < firstSunday) {
+      return generateWeekId(new Date(year - 1, 11, 31));
+    }
+    
+    // Calculate week number from first Sunday
+    const daysDiff = Math.floor((date.getTime() - firstSunday.getTime()) / (24 * 60 * 60 * 1000));
+    const weekNumber = Math.floor(daysDiff / 7) + 1;
+    
     return `${year}-W${weekNumber.toString().padStart(2, '0')}`;
+  };
+
+  const [currentWeekId, setCurrentWeekId] = useState(() => {
+    return generateWeekId(new Date());
   });
 
   // Fetch words
