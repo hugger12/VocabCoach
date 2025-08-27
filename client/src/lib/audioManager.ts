@@ -33,7 +33,7 @@ class AudioManager {
       }
     });
 
-    // Stop speech synthesis
+    // Stop speech synthesis (this might trigger error events, but components should handle gracefully)
     if (speechSynthesis.speaking) {
       speechSynthesis.cancel();
     }

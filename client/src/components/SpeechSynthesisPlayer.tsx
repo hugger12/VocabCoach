@@ -45,13 +45,21 @@ export function SpeechSynthesisPlayer({
     };
   }, [text]);
 
-  const stopCurrentSpeech = useCallback(() => {
+  const stopCurrentSpeech = useCallback((clearError = true) => {
     if (speechSynthesis.speaking || isPlaying) {
+      // Clear the utterance reference before canceling to prevent error callback
+      if (utteranceRef.current) {
+        utteranceRef.current.onerror = null;
+        utteranceRef.current = null;
+      }
+      
       speechSynthesis.cancel();
       setIsPlaying(false);
       setCurrentWordIndex(-1);
       setIsLoading(false);
-      setHasError(false);
+      if (clearError) {
+        setHasError(false);
+      }
       onWordHighlight?.(-1);
       onPause?.();
     }
@@ -140,12 +148,15 @@ export function SpeechSynthesisPlayer({
 
       utterance.onerror = (event) => {
         console.error('Speech synthesis error:', event);
-        setIsPlaying(false);
-        setIsLoading(false);
-        setHasError(true);
-        setCurrentWordIndex(-1);
-        onWordHighlight?.(-1);
-        utteranceRef.current = null;
+        // Only set error state if this wasn't an intentional cancellation
+        if (utteranceRef.current === utterance) {
+          setIsPlaying(false);
+          setIsLoading(false);
+          setHasError(true);
+          setCurrentWordIndex(-1);
+          onWordHighlight?.(-1);
+          utteranceRef.current = null;
+        }
       };
 
       // Start speech synthesis
