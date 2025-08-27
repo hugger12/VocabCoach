@@ -257,7 +257,11 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   const goToPreviousSentence = () => {
     if (currentSentenceIndex > 0) {
-      // Stop all audio playback when navigating between sentences
+      // Stop speech synthesis specifically to prevent pause icon persistence
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+      }
+      // Stop all other audio playback when navigating between sentences
       stopAllAudio();
       
       setCurrentSentenceIndex(currentSentenceIndex - 1);
@@ -267,7 +271,11 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   const goToNextSentence = () => {
     if (currentWord?.sentences && currentSentenceIndex < currentWord.sentences.length - 1) {
-      // Stop all audio playback when navigating between sentences
+      // Stop speech synthesis specifically to prevent pause icon persistence
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+      }
+      // Stop all other audio playback when navigating between sentences
       stopAllAudio();
       
       setCurrentSentenceIndex(currentSentenceIndex + 1);
@@ -614,21 +622,23 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               </svg>
             </button>
             
-            <AudioPlayer
+            <SpeechSynthesisPlayer
               text={getCurrentSentence()}
-              type="sentence"
-              variant="primary"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all border-0 outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-              data-testid="play-sentence"
-              wordId={currentWord?.id}
-              sentenceId={currentWord?.sentences?.[currentSentenceIndex]?.id}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 shadow-lg transition-all border-0 outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              variant="default"
+              enableHighlighting={true}
+              onWordHighlight={(wordIndex) => {
+                setCurrentHighlightedWord(wordIndex);
+              }}
               onPlay={() => {
-                // Audio player handles stopping its own audio internally
-                // Don't stop all audio here as it creates a race condition
+                // Audio starts playing, highlighting will be handled by onWordHighlight
+              }}
+              onEnded={() => {
+                setCurrentHighlightedWord(-1);
               }}
             >
               <div className="flex items-center justify-center w-full h-full text-2xl">▶</div>
-            </AudioPlayer>
+            </SpeechSynthesisPlayer>
             
             <button
               onClick={goToNextSentence}
