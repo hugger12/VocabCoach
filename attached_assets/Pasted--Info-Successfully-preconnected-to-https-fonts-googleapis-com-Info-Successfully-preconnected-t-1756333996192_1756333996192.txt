@@ -1,0 +1,30 @@
+[Info] Successfully preconnected to https://fonts.googleapis.com/
+[Info] Successfully preconnected to https://fonts.gstatic.com/
+[Debug] [vite] connecting... (client, line 495)
+[Debug] [vite] connected. (client, line 618)
+[Log] AudioPlayer starting playback for: – {type: "sentence", wordId: "0c988b46-38c6-4d3b-8809-f9e0e9d5e4a9", sentenceId: undefined, …} (AudioPlayer.tsx, line 66)
+{type: "sentence", wordId: "0c988b46-38c6-4d3b-8809-f9e0e9d5e4a9", sentenceId: undefined, text: "The word annual means (adj) coming each year; once"}Object
+[Log] No cached audio, generating new audio for: – "sentence_normal_The_word_annual_means__adj__coming_each_year__once_a_year__lasting_a_year__The_annual_class_picnic_is_planned_for_the_last_w…" (AudioPlayer.tsx, line 70)
+"sentence_normal_The_word_annual_means__adj__coming_each_year__once_a_year__lasting_a_year__The_annual_class_picnic_is_planned_for_the_last_week_of_the_school_year___n__a_book_or_magazine_that_comes_out_once_a_year__a_plant_that_lives_or_lasts_for_just_one_growing_season__One_of_my_poems_will_appear_in_the_1998_poetry_annual___SYNONYMS___adj__yearly___n__a_yearbook"
+[Log] Requesting audio from: – "/api/audio/generate" – "with body:" – {text: "The word annual means (adjective) coming each year…) SYNONYMS: (adjective) yearly; (noun) a yearbook", type: "sentence", wordId: "0c988b46-38c6-4d3b-8809-f9e0e9d5e4a9", …} (AudioPlayer.tsx, line 79)
+{text: "The word annual means (adjective) coming each year…) SYNONYMS: (adjective) yearly; (noun) a yearbook", type: "sentence", wordId: "0c988b46-38c6-4d3b-8809-f9e0e9d5e4a9", sentenceId: undefined}Object
+[Log] Audio API response status: – 200 – "OK" (AudioPlayer.tsx, line 87)
+[Log] Received audio blob, size: – 516960 (AudioPlayer.tsx, line 94)
+[Log] Audio cached with URL: – "blob:https://63c23892-536e-4dbc-b8e4-958c02e2f8f8-00-2d94bjtq36wiw.kirk.replit.dev/78ff9bcc-9728-4ee2-9e9f-986c416a9b45" (AudioPlayer.tsx, line 96)
+[Log] Audio started playing: – "sentence" – "The word annual means (adj) coming each year; once" (AudioPlayer.tsx, line 107)
+[Log] DyslexicReader - highlighting word: – -1 – undefined (DyslexicReader.tsx, line 33)
+[Log] DyslexicReader - highlighting word: – -1 – undefined (DyslexicReader.tsx, line 33)
+[Log] AudioPlayer starting playback for: – {type: "sentence", wordId: "0c988b46-38c6-4d3b-8809-f9e0e9d5e4a9", sentenceId: "6ac12057-4cef-4ad9-885b-8b8221ef9225", …} (AudioPlayer.tsx, line 66)
+{type: "sentence", wordId: "0c988b46-38c6-4d3b-8809-f9e0e9d5e4a9", sentenceId: "6ac12057-4cef-4ad9-885b-8b8221ef9225", text: "Our school holds an annual science fair every spri"}Object
+[Log] No cached audio, generating new audio for: – "sentence_normal_Our_school_holds_an_annual_science_fair_every_spring_for_students_" (AudioPlayer.tsx, line 70)
+[Log] Requesting audio from: – "/api/audio/generate" – "with body:" – {text: "Our school holds an annual science fair every spring for students.", type: "sentence", wordId: "0c988b46-38c6-4d3b-8809-f9e0e9d5e4a9", …} (AudioPlayer.tsx, line 79)
+{text: "Our school holds an annual science fair every spring for students.", type: "sentence", wordId: "0c988b46-38c6-4d3b-8809-f9e0e9d5e4a9", sentenceId: "6ac12057-4cef-4ad9-885b-8b8221ef9225"}Object
+[Log] Audio API response status: – 200 – "OK" (AudioPlayer.tsx, line 87)
+[Log] Received audio blob, size: – 88800 (AudioPlayer.tsx, line 94)
+[Log] Audio cached with URL: – "blob:https://63c23892-536e-4dbc-b8e4-958c02e2f8f8-00-2d94bjtq36wiw.kirk.replit.dev/6d1ea965-e082-41cb-bc20-6cb5f3e87dfb" (AudioPlayer.tsx, line 96)
+[Log] Audio started playing: – "sentence" – "Our school holds an annual science fair every spri" (AudioPlayer.tsx, line 107)
+[Error] Audio playback error:
+AbortError: The operation was aborted.
+	(anonymous function) (AudioPlayer.tsx:127)
+[Error] Audio details - type: – "sentence" – "wordId:" – "0c988b46-38c6-4d3b-8809-f9e0e9d5e4a9" – "sentenceId:" – "6ac12057-4cef-4ad9-885b-8b8221ef9225" – "text:" – "Our school holds an annual science fair every spring for students."
+	(anonymous function) (AudioPlayer.tsx:128)

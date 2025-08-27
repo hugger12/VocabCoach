@@ -623,8 +623,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               wordId={currentWord?.id}
               sentenceId={currentWord?.sentences?.[currentSentenceIndex]?.id}
               onPlay={() => {
-                // Stop any existing audio when starting sentence playback
-                stopAllAudio();
+                // Audio player handles stopping its own audio internally
+                // Don't stop all audio here as it creates a race condition
               }}
             >
               <div className="flex items-center justify-center w-full h-full text-2xl">▶</div>
