@@ -125,7 +125,9 @@ export function AudioPlayer({
         onEnded?.();
       };
 
-      audio.onerror = () => {
+      audio.onerror = (event) => {
+        console.error("HTML Audio element error:", event);
+        console.error("Audio URL that failed:", audioUrl);
         setIsPlaying(false);
         setIsLoading(false);
         setHasError(true);
@@ -135,6 +137,7 @@ export function AudioPlayer({
       await audio.play();
     } catch (error) {
       console.error("Audio playback error:", error);
+      console.error("Audio details - type:", type, "wordId:", wordId, "sentenceId:", sentenceId, "text:", text.substring(0, 100));
       setIsLoading(false);
       setIsPlaying(false);
       setHasError(true);
