@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { WordWithProgress, StudySession } from "@shared/schema";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
+import { stopAllAudio } from "@/lib/audioManager";
 
 interface StudyInterfaceProps {
   onOpenParentDashboard: () => void;
@@ -201,16 +202,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   const handleStepNavigation = (step: StudyStep) => {
     // Stop all audio playback when navigating to a new step
-    // Stop any HTML audio elements
-    document.querySelectorAll('audio').forEach(audio => {
-      audio.pause();
-      audio.currentTime = 0;
-    });
-    
-    // Stop any SpeechSynthesis playback
-    if (speechSynthesis.speaking) {
-      speechSynthesis.cancel();
-    }
+    stopAllAudio();
     
     setCurrentStep(step);
     if (step === 'word') {
@@ -266,13 +258,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const goToPreviousSentence = () => {
     if (currentSentenceIndex > 0) {
       // Stop all audio playback when navigating between sentences
-      document.querySelectorAll('audio').forEach(audio => {
-        audio.pause();
-        audio.currentTime = 0;
-      });
-      if (speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-      }
+      stopAllAudio();
       
       setCurrentSentenceIndex(currentSentenceIndex - 1);
       setCurrentHighlightedWord(-1);
@@ -282,13 +268,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const goToNextSentence = () => {
     if (currentWord?.sentences && currentSentenceIndex < currentWord.sentences.length - 1) {
       // Stop all audio playback when navigating between sentences
-      document.querySelectorAll('audio').forEach(audio => {
-        audio.pause();
-        audio.currentTime = 0;
-      });
-      if (speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-      }
+      stopAllAudio();
       
       setCurrentSentenceIndex(currentSentenceIndex + 1);
       setCurrentHighlightedWord(-1);
@@ -642,11 +622,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               data-testid="play-sentence"
               onPlay={() => {
                 // Stop any existing audio when starting speech
-                const audioElements = document.querySelectorAll('audio');
-                audioElements.forEach(audio => {
-                  audio.pause();
-                  audio.currentTime = 0;
-                });
+                stopAllAudio();
               }}
             >
               <div className="flex items-center justify-center w-full h-full text-2xl">▶</div>

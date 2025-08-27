@@ -3,6 +3,7 @@ import { Volume2, VolumeX, RotateCcw, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAudioCache } from "@/hooks/use-audio-cache";
 import { cn } from "@/lib/utils";
+import { audioManager } from "@/lib/audioManager";
 
 interface AudioPlayerProps {
   text: string;
@@ -107,6 +108,9 @@ export function AudioPlayer({
 
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
+      
+      // Register audio with global manager for tracking
+      audioManager.registerAudio(audio);
 
       audio.onplay = () => {
         console.log('Audio started playing:', type, text.substring(0, 50));
