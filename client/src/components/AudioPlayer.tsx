@@ -68,10 +68,14 @@ export function AudioPlayer({
     onPlay?.();
 
     try {
+      console.log("AudioPlayer starting playback for:", { type, wordId, sentenceId, text: text.substring(0, 50) });
+      
       const cacheKey = generateCacheKey(text, type, speed);
       let audioUrl = getCachedAudio(cacheKey);
 
       if (!audioUrl) {
+        console.log("No cached audio, generating new audio for:", cacheKey);
+        
         // Process text to expand abbreviations for TTS
         const processedText = text
           .replace(/\(adj\)/gi, '(adjective)')
@@ -80,25 +84,37 @@ export function AudioPlayer({
         
         // Generate new audio
         const endpoint = speed === "slow" ? "/api/audio/slow" : "/api/audio/generate";
+        const requestBody = {
+          text: processedText,
+          type,
+          wordId,
+          sentenceId,
+        };
+        
+        console.log("Requesting audio from:", endpoint, "with body:", requestBody);
+        
         const response = await fetch(endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            text: processedText,
-            type,
-            wordId,
-            sentenceId,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
+        console.log("Audio API response status:", response.status, response.statusText);
+
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          const errorText = await response.text();
+          console.error("Audio API error response:", errorText);
+          throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
         }
 
         const audioBlob = await response.blob();
+        console.log("Received audio blob, size:", audioBlob.size);
         audioUrl = cacheAudio(cacheKey, audioBlob);
+        console.log("Audio cached with URL:", audioUrl);
+      } else {
+        console.log("Using cached audio:", audioUrl);
       }
 
       // Play the audio
