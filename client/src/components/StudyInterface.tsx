@@ -502,12 +502,16 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           <AudioPlayer
             text={currentWord?.text || ""}
             type="word"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-20 h-20 flex items-center justify-center shadow-lg transition-all text-3xl font-bold mx-auto mb-12"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-20 h-20 flex items-center justify-center shadow-lg transition-all mx-auto mb-12 border-0 outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            onPlay={() => {
+              // Stop any existing speech when starting new audio
+              if (speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+              }
+            }}
             wordId={currentWord?.id}
             data-testid="play-word"
-          >
-            ▶
-          </AudioPlayer>
+          />
           <button
             onClick={() => handleStepNavigation('definition')}
             className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all inline-block"
@@ -538,12 +542,16 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           <AudioPlayer
             text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
             type="sentence"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold mx-auto mb-12"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all mx-auto mb-12 border-0 outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             wordId={currentWord?.id}
             data-testid="play-definition"
-          >
-            ▶
-          </AudioPlayer>
+            onPlay={() => {
+              // Stop any existing speech when starting new audio
+              if (speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+              }
+            }}
+          />
           <button
             onClick={() => handleStepNavigation('sentence')}
             className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all inline-block"
@@ -600,10 +608,18 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               text={getCurrentSentence()}
               onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
               enableHighlighting={true}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all text-2xl font-bold"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all border-0 outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
               data-testid="play-sentence"
+              onPlay={() => {
+                // Stop any existing audio when starting speech
+                const audioElements = document.querySelectorAll('audio');
+                audioElements.forEach(audio => {
+                  audio.pause();
+                  audio.currentTime = 0;
+                });
+              }}
             >
-              ▶
+              <div className="flex items-center justify-center w-full h-full text-2xl">▶</div>
             </SpeechSynthesisPlayer>
             
             <button

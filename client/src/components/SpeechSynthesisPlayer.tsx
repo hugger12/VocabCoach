@@ -45,24 +45,40 @@ export function SpeechSynthesisPlayer({
     };
   }, [text]);
 
-  const handlePlay = useCallback(async () => {
-    if (isPlaying) {
-      // Pause/stop current speech
+  const stopCurrentSpeech = useCallback(() => {
+    if (speechSynthesis.speaking || isPlaying) {
       speechSynthesis.cancel();
       setIsPlaying(false);
       setCurrentWordIndex(-1);
+      setIsLoading(false);
+      setHasError(false);
       onWordHighlight?.(-1);
       onPause?.();
+    }
+  }, [isPlaying, onWordHighlight, onPause]);
+
+  const handlePlay = useCallback(async () => {
+    if (isPlaying) {
+      stopCurrentSpeech();
       return;
     }
 
     try {
+      // Stop any existing speech first
+      stopCurrentSpeech();
+      
       setIsLoading(true);
       setHasError(false);
       setCurrentWordIndex(-1);
 
-      // Create new utterance
-      const utterance = new SpeechSynthesisUtterance(text);
+      // Process text to expand abbreviations
+      const processedText = text
+        .replace(/\(adj\)/gi, '(adjective)')
+        .replace(/\(n\)/gi, '(noun)')
+        .replace(/\(v\)/gi, '(verb)');
+
+      // Create new utterance with processed text
+      const utterance = new SpeechSynthesisUtterance(processedText);
       utteranceRef.current = utterance;
 
       // Configure voice settings for child-friendly speech
@@ -118,6 +134,7 @@ export function SpeechSynthesisPlayer({
         setIsPlaying(false);
         setCurrentWordIndex(-1);
         onWordHighlight?.(-1);
+        utteranceRef.current = null;
         onEnded?.();
       };
 
@@ -128,6 +145,7 @@ export function SpeechSynthesisPlayer({
         setHasError(true);
         setCurrentWordIndex(-1);
         onWordHighlight?.(-1);
+        utteranceRef.current = null;
       };
 
       // Start speech synthesis

@@ -43,17 +43,25 @@ export function AudioPlayer({
     return `${type}-${speed}-${text}`.replace(/[^a-zA-Z0-9]/g, "_");
   }, []);
 
+  const stopCurrentAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsPlaying(false);
+      setIsLoading(false);
+      setHasError(false);
+    }
+  }, []);
+
   const playAudio = useCallback(async () => {
     if (isPlaying) {
-      // Stop current audio
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        setIsPlaying(false);
-      }
+      stopCurrentAudio();
       return;
     }
 
+    // Stop any existing audio first
+    stopCurrentAudio();
+    
     setIsLoading(true);
     setHasError(false);
     onPlay?.();
@@ -63,6 +71,12 @@ export function AudioPlayer({
       let audioUrl = getCachedAudio(cacheKey);
 
       if (!audioUrl) {
+        // Process text to expand abbreviations for TTS
+        const processedText = text
+          .replace(/\(adj\)/gi, '(adjective)')
+          .replace(/\(n\)/gi, '(noun)')
+          .replace(/\(v\)/gi, '(verb)');
+        
         // Generate new audio
         const endpoint = speed === "slow" ? "/api/audio/slow" : "/api/audio/generate";
         const response = await fetch(endpoint, {
@@ -71,7 +85,7 @@ export function AudioPlayer({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            text,
+            text: processedText,
             type,
             wordId,
             sentenceId,
@@ -158,15 +172,26 @@ export function AudioPlayer({
   };
 
   return (
-    <Button
+    <button
       onClick={playAudio}
       disabled={isLoading}
-      className={cn(getVariantStyles(), className)}
+      className={cn(
+        "inline-flex items-center justify-center transition-colors disabled:opacity-50",
+        className
+      )}
       data-testid={testId}
       aria-label={`${isPlaying ? "Stop" : "Play"} ${type === "word" ? "word" : "sentence"}: ${text}`}
       aria-pressed={isPlaying}
     >
-      {children ? children : getIcon()}
-    </Button>
+      {isLoading ? (
+        <div className="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent" />
+      ) : isPlaying ? (
+        <div className="flex items-center justify-center w-full h-full text-2xl">⏸</div>
+      ) : hasError ? (
+        <div className="flex items-center justify-center w-full h-full text-lg">❌</div>
+      ) : (
+        children || <div className="flex items-center justify-center w-full h-full text-2xl">▶</div>
+      )}
+    </button>
   );
 }
