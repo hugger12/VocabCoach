@@ -29,6 +29,7 @@ export function SpeechSynthesisPlayer({
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
+  const [isCancelling, setIsCancelling] = useState(false);
   
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const wordsRef = useRef<string[]>([]);
@@ -36,6 +37,12 @@ export function SpeechSynthesisPlayer({
   useEffect(() => {
     // Split text into words for tracking
     wordsRef.current = text.split(/\s+/).filter(word => word.length > 0);
+    
+    // Reset error state when text changes (new sentence)
+    setHasError(false);
+    setIsPlaying(false);
+    setIsLoading(false);
+    setCurrentWordIndex(-1);
     
     // Cleanup on unmount or text change
     return () => {
@@ -47,9 +54,12 @@ export function SpeechSynthesisPlayer({
 
   const stopCurrentSpeech = useCallback((clearError = true) => {
     if (speechSynthesis.speaking || isPlaying) {
+      setIsCancelling(true);
+      
       // Clear the utterance reference before canceling to prevent error callback
       if (utteranceRef.current) {
         utteranceRef.current.onerror = null;
+        utteranceRef.current.onend = null;
         utteranceRef.current = null;
       }
       
@@ -62,6 +72,9 @@ export function SpeechSynthesisPlayer({
       }
       onWordHighlight?.(-1);
       onPause?.();
+      
+      // Reset cancelling flag after a short delay
+      setTimeout(() => setIsCancelling(false), 100);
     }
   }, [isPlaying, onWordHighlight, onPause]);
 
@@ -149,7 +162,7 @@ export function SpeechSynthesisPlayer({
       utterance.onerror = (event) => {
         console.error('Speech synthesis error:', event);
         // Only set error state if this wasn't an intentional cancellation
-        if (utteranceRef.current === utterance) {
+        if (utteranceRef.current === utterance && !isCancelling) {
           setIsPlaying(false);
           setIsLoading(false);
           setHasError(true);
@@ -167,19 +180,25 @@ export function SpeechSynthesisPlayer({
       setIsLoading(false);
       setHasError(true);
     }
-  }, [text, isPlaying, enableHighlighting, onWordHighlight, onPlay, onPause, onEnded]);
+  }, [text, isPlaying, isCancelling, enableHighlighting, onWordHighlight, onPlay, onPause, onEnded, stopCurrentSpeech]);
 
   return (
     <button
       onClick={handlePlay}
-      disabled={isLoading || hasError}
+      disabled={isLoading}
       className={className}
       data-testid="speech-synthesis-player"
     >
       {isLoading ? (
         <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mx-auto" />
       ) : hasError ? (
-        'Error'
+        <div onClick={(e) => {
+          e.stopPropagation();
+          setHasError(false);
+          handlePlay();
+        }}>
+          Retry
+        </div>
       ) : (
         children
       )}
