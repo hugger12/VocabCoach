@@ -202,9 +202,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAudioCache(audio: Omit<AudioCache, 'id' | 'createdAt'>): Promise<AudioCache> {
+    // Handle null sentenceId for fallback sentences
+    const audioData = {
+      ...audio,
+      sentenceId: audio.sentenceId || null
+    };
+    
     const [created] = await db
       .insert(audioCacheTable)
-      .values(audio)
+      .values(audioData)
       .returning();
     return created;
   }
