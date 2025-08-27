@@ -385,10 +385,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentWeek = await storage.getCurrentWeek();
       
       // Get words from current week only
-      const currentWeekWords = await storage.getWords(currentWeek);
+      let currentWeekWords = await storage.getWords(currentWeek);
+      let activeWeek = currentWeek;
+      
+      // If no words in current week, look at the previous week (common case when day changes)
+      if (currentWeekWords.length === 0) {
+        // Calculate previous week
+        const now = new Date();
+        const year = now.getFullYear();
+        const currentWeekNumber = Math.ceil((now.getTime() - new Date(year, 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
+        const previousWeekNumber = currentWeekNumber - 1;
+        const previousWeek = `${year}-W${previousWeekNumber.toString().padStart(2, '0')}`;
+        
+        console.log(`No words found in current week ${currentWeek}, checking previous week ${previousWeek}`);
+        currentWeekWords = await storage.getWords(previousWeek);
+        activeWeek = previousWeek;
+        
+        // If still no words, get all words regardless of week (fallback for migration cases)
+        if (currentWeekWords.length === 0) {
+          console.log(`No words found in previous week ${previousWeek}, getting all words`);
+          currentWeekWords = await storage.getWords();
+          activeWeek = "all";
+        }
+      }
+      
       const currentWeekWordIds = currentWeekWords.map(word => word.id);
       
-      // Get all schedules and filter to current week words only
+      // Get all schedules and filter to active words only
       const allSchedules = await storage.getAllSchedules();
       const currentWeekSchedules = allSchedules.filter(schedule => 
         currentWeekWordIds.includes(schedule.wordId)
@@ -396,9 +419,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let dueSchedules = schedulerService.getWordsForToday(currentWeekSchedules, limit);
       
-      // If no words are due today, include all words from current week for initial learning
+      // If no words are due today, include all words from active week for initial learning
       if (dueSchedules.length === 0) {
-        // Get all words from current week that are in box 1-3 (still learning)
+        // Get all words from active week that are in box 1-3 (still learning)
         dueSchedules = currentWeekSchedules.filter(schedule => schedule.box <= 3).slice(0, limit || 12);
         
         if (dueSchedules.length === 0) {
@@ -411,10 +434,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Get words with progress for current week only
-      const words = await storage.getWordsWithProgress(currentWeek);
+      // Get words with progress for active week
+      const words = activeWeek === "all" ? 
+        await storage.getWordsWithProgress() : 
+        await storage.getWordsWithProgress(activeWeek);
       const session = schedulerService.createStudySession(dueSchedules, words);
       
+      console.log(`Created study session with ${session.words.length} words from ${activeWeek}`);
       res.json(session);
     } catch (error) {
       console.error("Error creating study session:", error);
