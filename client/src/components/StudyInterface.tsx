@@ -621,7 +621,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all border-0 outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
               data-testid="play-sentence"
               wordId={currentWord?.id}
-              sentenceId={currentSentenceIndex.toString()}
+              sentenceId={currentWord?.sentences?.[currentSentenceIndex]?.id}
               onPlay={() => {
                 // Stop any existing audio when starting sentence playback
                 stopAllAudio();
