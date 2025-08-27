@@ -614,19 +614,21 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               </svg>
             </button>
             
-            <SpeechSynthesisPlayer
+            <AudioPlayer
               text={getCurrentSentence()}
-              onWordHighlight={(wordIndex: number) => setCurrentHighlightedWord(wordIndex)}
-              enableHighlighting={true}
+              type="sentence"
+              variant="primary"
               className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all border-0 outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
               data-testid="play-sentence"
+              wordId={currentWord?.id}
+              sentenceId={currentSentenceIndex.toString()}
               onPlay={() => {
-                // Stop any existing audio when starting speech
+                // Stop any existing audio when starting sentence playback
                 stopAllAudio();
               }}
             >
               <div className="flex items-center justify-center w-full h-full text-2xl">▶</div>
-            </SpeechSynthesisPlayer>
+            </AudioPlayer>
             
             <button
               onClick={goToNextSentence}
