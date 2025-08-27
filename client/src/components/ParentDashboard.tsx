@@ -144,6 +144,7 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
       // Always refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ["/api/words"] });
       queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/study/session"] });
     },
   });
 
@@ -216,6 +217,7 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
       // Always refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ["/api/words"] });
       queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/study/session"] });
     },
   });
 
@@ -264,6 +266,7 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
       // Always refetch after error or success to ensure we have the latest data
       queryClient.invalidateQueries({ queryKey: ["/api/words"] });
       queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/study/session"] });
     },
   });
 
@@ -289,6 +292,7 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
     onSuccess: (results) => {
       queryClient.invalidateQueries({ queryKey: ["/api/words"] });
       queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/study/session"] });
       setBulkWords("");
       setEntryMode("manual");
       toast({
@@ -396,6 +400,7 @@ export function ParentDashboard({ onClose }: InstructorDashboardProps) {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/words"] });
       queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/study/session"] });
     },
   });
 
