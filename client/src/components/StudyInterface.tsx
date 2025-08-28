@@ -329,9 +329,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           // Handle passage data properly - it might be an object with text property
           const passageText = typeof passageData.passage === 'string' 
             ? passageData.passage 
-            : passageData.passage?.text || passageData.passage?.content || "";
+            : passageData.passage?.passageText || "";
           setPassage(passageText);
-          setPassageQuestions(passageData.questions || []);
+          setPassageQuestions(passageData.blanks || []);
         }
       }
 
@@ -453,9 +453,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           // Handle passage data properly - it might be an object with text property
           const passageText = typeof passageData.passage === 'string' 
             ? passageData.passage 
-            : passageData.passage?.text || passageData.passage?.content || "";
+            : passageData.passage?.passageText || "";
           setPassage(passageText);
-          setPassageQuestions(passageData.questions || []);
+          setPassageQuestions(passageData.blanks || []);
         }
       }
 
@@ -938,10 +938,11 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       } else {
         // Passage question (7-12)
         const passageIndex = currentQuizQuestion - clozeQuestions.length - 1;
-        const question = passageQuestions[passageIndex];
+        const blank = passageQuestions[passageIndex];
+        console.log("Current passage blank:", blank, "Index:", passageIndex);
         return {
           type: 'passage',
-          question,
+          question: blank,
           instructions: "Read the passage. Choose the word from the list that best completes the meaning of the passage.",
           passage: passage
         };
