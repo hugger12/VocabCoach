@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import { StudyInterface } from "@/components/StudyInterface";
+import { QuizInterface } from "@/components/QuizInterface";
 import { Button } from "@/components/ui/button";
-import { LogOut, ArrowLeft } from "lucide-react";
+import { LogOut, BookOpen, Trophy } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
+import type { StudySession } from "@shared/schema";
 
 interface StudentData {
   id: string;
@@ -17,7 +20,8 @@ interface StudentData {
 
 export function StudentInterface() {
   const [student, setStudent] = useState<StudentData | null>(null);
-  const [showStudy, setShowStudy] = useState(true); // Start with study mode enabled
+  const [showStudy, setShowStudy] = useState(false); // Show welcome screen first
+  const [showQuiz, setShowQuiz] = useState(false);
 
   useEffect(() => {
     // Get student data from localStorage
@@ -41,12 +45,31 @@ export function StudentInterface() {
     window.location.href = "/";
   };
 
+  // Fetch study session data for quiz purposes
+  const { data: session } = useQuery<StudySession>({
+    queryKey: ["/api/study/session"],
+    enabled: showQuiz, // Only fetch when quiz is needed
+  });
+
   const handleStartStudy = () => {
     setShowStudy(true);
   };
 
+  const handleStartQuiz = () => {
+    setShowQuiz(true);
+  };
+
   const handleCloseStudy = () => {
     setShowStudy(false);
+  };
+
+  const handleCloseQuiz = () => {
+    setShowQuiz(false);
+  };
+
+  const handleQuizComplete = (score: number) => {
+    console.log("Quiz completed with score:", score);
+    // Could save score or show additional feedback here
   };
 
   if (!student) {
@@ -62,6 +85,16 @@ export function StudentInterface() {
 
   if (showStudy) {
     return <StudyInterface onClose={handleCloseStudy} />;
+  }
+
+  if (showQuiz && session?.words) {
+    return (
+      <QuizInterface 
+        words={session.words}
+        onClose={handleCloseQuiz}
+        onComplete={handleQuizComplete}
+      />
+    );
   }
 
   return (
@@ -114,13 +147,25 @@ export function StudentInterface() {
               )}
             </div>
             
-            <Button
-              onClick={handleStartStudy}
-              className="w-full h-14 tap-target bg-primary text-primary-foreground hover:bg-primary/90 dyslexia-text-lg"
-              data-testid="button-start-study"
-            >
-              Start Learning
-            </Button>
+            <div className="space-y-4">
+              <Button
+                onClick={handleStartStudy}
+                className="w-full h-14 tap-target bg-secondary text-secondary-foreground hover:bg-secondary/90 dyslexia-text-lg flex items-center justify-center gap-3"
+                data-testid="button-practice-words"
+              >
+                <BookOpen className="w-6 h-6" />
+                Practice Words
+              </Button>
+              
+              <Button
+                onClick={handleStartQuiz}
+                className="w-full h-14 tap-target bg-primary text-primary-foreground hover:bg-primary/90 dyslexia-text-lg flex items-center justify-center gap-3"
+                data-testid="button-take-quiz"
+              >
+                <Trophy className="w-6 h-6" />
+                Take Quiz
+              </Button>
+            </div>
           </div>
         </div>
 
