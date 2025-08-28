@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { X, BookOpen, Trophy } from "lucide-react";
 import { AudioPlayer } from "./AudioPlayer";
 import { DyslexicReader } from "./DyslexicReader";
+import { QuizInterface } from "./QuizInterface";
 import { stopAllAudio } from "@/lib/audioManager";
 import type { WordWithProgress, StudySession } from "@shared/schema";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
@@ -33,6 +34,7 @@ const StudyHeader = ({ onClose }: { onClose: () => void }) => (
 export function StudyInterface({ onClose }: StudyInterfaceProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionComplete, setSessionComplete] = useState(false);
+  const [showQuiz, setShowQuiz] = useState(false);
   const [sessionWords, setSessionWords] = useState<WordWithProgress[]>([]);
   const [totalSessionWords, setTotalSessionWords] = useState(0);
   const [currentWordHighlightIndex, setCurrentWordHighlightIndex] = useState(-1);
@@ -103,6 +105,20 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     setActiveSentenceIndex(-1);
   };
 
+  const handleStartQuiz = () => {
+    setShowQuiz(true);
+  };
+
+  const handleQuizComplete = (score: number) => {
+    // Quiz completed - could save score here if needed
+    console.log("Quiz completed with score:", score);
+  };
+
+  const handleQuizClose = () => {
+    setShowQuiz(false);
+    // After closing quiz, user can either retake or finish
+  };
+
   const currentWord = sessionWords[currentIndex];
   const totalWords = totalSessionWords || sessionWords.length || 0;
 
@@ -133,23 +149,57 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     );
   }
 
+  // Show quiz interface if quiz is active
+  if (showQuiz) {
+    return (
+      <QuizInterface 
+        words={sessionWords}
+        onClose={handleQuizClose}
+        onComplete={handleQuizComplete}
+      />
+    );
+  }
+
   if (sessionComplete) {
     return (
       <div className="h-screen bg-background flex flex-col">
         <StudyHeader onClose={onClose} />
         <div className="flex-1 flex flex-col items-center justify-center px-6">
-          <div className="text-center">
-            <h2 className="text-4xl font-bold text-foreground mb-8">Great job!</h2>
-            <p className="text-xl text-muted-foreground mb-8">
+          <div className="text-center max-w-2xl">
+            <h2 className="text-4xl font-bold text-foreground mb-8 dyslexia-text-2xl">Great job!</h2>
+            <p className="text-xl text-muted-foreground mb-8 dyslexia-text-lg">
               You've reviewed all {totalWords} words.
             </p>
-            <button
-              onClick={onClose}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
-              data-testid="finish-session"
-            >
-              Finish
-            </button>
+            
+            <div className="space-y-4 mb-8">
+              <p className="text-lg text-foreground mb-6 dyslexia-text-base">
+                What would you like to do next?
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <button
+                  onClick={handleStartQuiz}
+                  className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all flex items-center justify-center gap-3 min-w-[200px] dyslexia-text-base"
+                  data-testid="start-quiz"
+                >
+                  <Trophy className="w-6 h-6" />
+                  Take Quiz
+                </button>
+                
+                <button
+                  onClick={onClose}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all flex items-center justify-center gap-3 min-w-[200px] dyslexia-text-base"
+                  data-testid="finish-session"
+                >
+                  <BookOpen className="w-6 h-6" />
+                  Finish
+                </button>
+              </div>
+            </div>
+            
+            <p className="text-sm text-muted-foreground dyslexia-text-base">
+              The quiz will test what you've learned with fun questions!
+            </p>
           </div>
         </div>
       </div>
