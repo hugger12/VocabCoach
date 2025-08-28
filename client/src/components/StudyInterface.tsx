@@ -101,6 +101,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   
   // Quiz state for new teacher-approved format
   const [quizAnswers, setQuizAnswers] = useState<{[key: number]: string}>({});
+  const [clozeQuestions, setClozeQuestions] = useState<any[]>([]);
+  const [passageQuestions, setPassageQuestions] = useState<any[]>([]);
+  const [passage, setPassage] = useState<string>("");
+  const [quizLoading, setQuizLoading] = useState(false);
 
   // Generate quiz choices when word changes
   useEffect(() => {
@@ -248,6 +252,65 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       [questionNum]: answer
     }));
   };
+
+  // Generate quiz content using AI and actual weekly words
+  const generateQuizContent = async () => {
+    try {
+      setQuizLoading(true);
+      
+      // Use first 6 words for cloze questions
+      const wordsForCloze = sessionWords.slice(0, 6);
+      // Use words 7-12 for passage questions  
+      const wordsForPassage = sessionWords.slice(6, 12);
+
+      // Generate cloze questions (Section 1)
+      const clozeResponse = await fetch("/api/quiz/cloze/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ words: wordsForCloze }),
+      });
+
+      if (clozeResponse.ok) {
+        const clozeData = await clozeResponse.json();
+        setClozeQuestions(clozeData.questions || []);
+      }
+
+      // Generate passage quiz (Section 2)
+      const passageResponse = await fetch("/api/quiz/passage/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ words: wordsForPassage }),
+      });
+
+      if (passageResponse.ok) {
+        const passageData = await passageResponse.json();
+        setPassage(passageData.passage || "");
+        setPassageQuestions(passageData.questions || []);
+      }
+
+    } catch (error) {
+      console.error("Error generating quiz content:", error);
+      // Fallback to basic static content if AI fails
+      setClozeQuestions([
+        {
+          id: 1,
+          sentence1: "The grass was crushed in the _______.",
+          sentence2: "The crowd began to _______ toward the exit.",
+          choices: ['counsel', 'stampede', 'haul', 'pledge'],
+          correctAnswer: 'stampede'
+        }
+      ]);
+    } finally {
+      setQuizLoading(false);
+    }
+  };
+
+  // Generate quiz content when quiz step is reached
+  useEffect(() => {
+    if (currentStep === 'quiz' && sessionWords.length > 0 && clozeQuestions.length === 0) {
+      generateQuizContent();
+    }
+  }, [currentStep, sessionWords.length]);
 
   const handleStartSession = () => {
     setSessionStarted(true);
@@ -669,57 +732,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     );
   }
 
-  // Step 4: New Teacher-Approved Quiz Format
+  // Step 4: New Teacher-Approved Quiz Format with AI-Generated Content
   if (currentStep === 'quiz') {
-
-    // Sample quiz data - will be replaced with AI-generated content
-    const clozeQuestions = [
-      {
-        id: 1,
-        sentence: "The grass was crushed in the _______. The crowd began to _______ toward the exit.",
-        choices: ['counsel', 'stampede', 'haul', 'pledge'],
-        correct: 'stampede'
-      },
-      {
-        id: 2,
-        sentence: "The teacher will _______ the students about their career choices. We need good _______ before making this decision.",
-        choices: ['counsel', 'stampede', 'haul', 'pledge'],
-        correct: 'counsel'
-      },
-      {
-        id: 3,
-        sentence: "The workers will _______ the heavy boxes to the truck. It took great effort to _______ the furniture upstairs.",
-        choices: ['counsel', 'stampede', 'haul', 'pledge'],
-        correct: 'haul'
-      },
-      {
-        id: 4,
-        sentence: "Students must _______ to follow the school rules. I make a _______ to do my homework every day.",
-        choices: ['counsel', 'stampede', 'haul', 'pledge'],
-        correct: 'pledge'
-      },
-      {
-        id: 5,
-        sentence: "The horses began to _______ when they heard the loud noise. There was a _______ of people rushing to the exit.",
-        choices: ['counsel', 'stampede', 'haul', 'pledge'],
-        correct: 'stampede'
-      },
-      {
-        id: 6,
-        sentence: "The school _______ helped students choose their classes. Parents often _______ their children about important decisions.",
-        choices: ['counsel', 'stampede', 'haul', 'pledge'],
-        correct: 'counsel'
-      }
-    ];
-
-    const passageQuestions = [
-      { id: 7, choices: ['pledge', 'hardship', 'haul', 'counsel'], correct: 'hardship' },
-      { id: 8, choices: ['celebrity', 'counsel', 'stampede', 'pledge'], correct: 'celebrity' },
-      { id: 9, choices: ['comfortable', 'annual', 'hardship', 'haul'], correct: 'comfortable' },
-      { id: 10, choices: ['restless', 'comfortable', 'celebrity', 'annual'], correct: 'restless' },
-      { id: 11, choices: ['demonstrate', 'pledge', 'counsel', 'haul'], correct: 'demonstrate' },
-      { id: 12, choices: ['sincere', 'comfortable', 'celebrity', 'restless'], correct: 'sincere' }
-    ];
 
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -728,134 +742,109 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           <div className="max-w-4xl mx-auto">
             <h1 className="text-3xl font-bold text-foreground mb-8 text-center">Weekly Vocabulary Quiz</h1>
             
-            {/* Section 1: Cloze Questions (1-6) */}
-            <div className="mb-12">
-              <div className="bg-muted/30 rounded-lg p-6 mb-8">
-                <h2 className="text-xl font-semibold text-foreground mb-4">
-                  For Numbers 1-6, read the sentences. Then choose the word that best completes both sentences.
-                </h2>
+            {quizLoading ? (
+              <div className="text-center py-16">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto mb-4"></div>
+                <p className="text-xl text-foreground/60">Generating your quiz...</p>
               </div>
-              
-              <div className="space-y-8">
-                {clozeQuestions.map(question => (
-                  <div key={question.id} className="bg-card border rounded-lg p-6">
-                    <div className="flex items-start gap-4">
-                      <div className={cn(
-                        "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-                        quizAnswers[question.id] ? "bg-green-100" : "bg-gray-100"
-                      )}>
-                        {quizAnswers[question.id] ? (
-                          <span className="text-green-700 font-semibold">✓</span>
-                        ) : (
-                          <span className="text-gray-500 font-semibold">{question.id}</span>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-right text-sm text-muted-foreground mb-2">
-                          {quizAnswers[question.id] ? "1/1" : "0/1"}
-                        </div>
-                        <div className="space-y-3 mb-6">
+            ) : (
+              <>
+                {/* Section 1: Cloze Questions (1-6) */}
+                <div className="mb-12">
+                  <div className="bg-muted/30 rounded-lg p-6 mb-8">
+                    <h2 className="text-xl font-semibold text-foreground mb-4">
+                      For Numbers 1-6, read the sentences. Then choose the word that best completes both sentences.
+                    </h2>
+                  </div>
+                  
+                  <div className="space-y-8">
+                    {clozeQuestions.map((question, index) => (
+                      <div key={index + 1} className="bg-card border rounded-lg p-6">
+                        <div className="space-y-4">
                           <p className="text-lg leading-relaxed">
-                            {question.id}. {question.sentence}
+                            {index + 1}. {question.sentence1} {question.sentence2}
                           </p>
-                        </div>
-                        
-                        <div className="space-y-3">
-                          {question.choices.map((choice, index) => (
-                            <label 
-                              key={choice} 
-                              className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 p-2 rounded"
-                              onClick={() => handleAnswerSelect(question.id, choice)}
-                            >
-                              <div className="w-6 h-6 border-2 border-gray-400 rounded-full flex items-center justify-center">
-                                {quizAnswers[question.id] === choice && <div className="w-4 h-4 bg-gray-700 rounded-full"></div>}
-                              </div>
-                              <span className="text-lg">{choice}</span>
-                              {quizAnswers[question.id] === choice && <span className="ml-auto text-green-600">✓</span>}
-                            </label>
-                          ))}
+                          
+                          <div className="space-y-3">
+                            {question.choices?.map((choice: string) => (
+                              <label 
+                                key={choice} 
+                                className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 p-2 rounded"
+                                onClick={() => handleAnswerSelect(index + 1, choice)}
+                              >
+                                <div className="w-6 h-6 border-2 border-gray-400 rounded-full flex items-center justify-center">
+                                  {quizAnswers[index + 1] === choice && <div className="w-4 h-4 bg-gray-700 rounded-full"></div>}
+                                </div>
+                                <span className="text-lg">{choice}</span>
+                                {quizAnswers[index + 1] === choice && <span className="ml-auto text-green-600">✓</span>}
+                              </label>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Section 2: Passage Questions (7-12) */}
-            <div>
-              <div className="bg-muted/30 rounded-lg p-6 mb-8">
-                <h2 className="text-xl font-semibold text-foreground mb-4">
-                  For 7 through 12, read the passage. For each numbered blank, there is a list of words with the same number. Choose the word from each list that best completes the meaning of the passage.
-                </h2>
-              </div>
-              
-              <div className="bg-card border rounded-lg p-6 mb-8">
-                <div className="prose prose-lg max-w-none">
-                  <p className="text-lg leading-relaxed">
-                    Do you toss and turn at night? Some people have insomnia and find that falling asleep is a <span className="border-b-2 border-foreground px-1">__(7)__</span>. It happens to many people, whether they are a regular "Joe" or a <span className="border-b-2 border-foreground px-1">__(8)__</span>. There are tips that can help. 1. Sleep in a <span className="border-b-2 border-foreground px-1">__(9)__</span> room that is dark and quiet. 2. Have a snack. You won't feel <span className="border-b-2 border-foreground px-1">__(10)__</span> if you are thinking about food. 3. Have good sleepers <span className="border-b-2 border-foreground px-1">__(11)__</span> their habits. It helps when someone shows what to do. A person who makes a <span className="border-b-2 border-foreground px-1">__(12)__</span> effort to try these tips will sleep better soon.
-                  </p>
                 </div>
-              </div>
 
-              <div className="space-y-6">
-                {passageQuestions.map(question => (
-                  <div key={question.id} className="bg-card border rounded-lg p-6">
-                    <div className="flex items-start gap-4">
-                      <div className={cn(
-                        "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-                        quizAnswers[question.id] ? "bg-green-100" : "bg-gray-100"
-                      )}>
-                        {quizAnswers[question.id] ? (
-                          <span className="text-green-700 font-semibold">✓</span>
-                        ) : (
-                          <span className="text-gray-500 font-semibold">{question.id}</span>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-right text-sm text-muted-foreground mb-4">
-                          {quizAnswers[question.id] ? "1/1" : "0/1"}
-                        </div>
-                        <div className="mb-4">
-                          <span className="text-lg font-semibold text-foreground">{question.id}.</span>
-                        </div>
-                        <div className="space-y-3">
-                          {question.choices.map((choice, index) => (
-                            <label 
-                              key={choice} 
-                              className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 p-2 rounded"
-                              onClick={() => handleAnswerSelect(question.id, choice)}
-                            >
-                              <div className="w-6 h-6 border-2 border-gray-400 rounded-full flex items-center justify-center">
-                                {quizAnswers[question.id] === choice && <div className="w-4 h-4 bg-gray-700 rounded-full"></div>}
-                              </div>
-                              <span className="text-lg">{choice}</span>
-                              {quizAnswers[question.id] === choice && <span className="ml-auto text-green-600">✓</span>}
-                            </label>
-                          ))}
-                        </div>
+                {/* Section 2: Passage Questions (7-12) */}
+                <div>
+                  <div className="bg-muted/30 rounded-lg p-6 mb-8">
+                    <h2 className="text-xl font-semibold text-foreground mb-4">
+                      For 7 through 12, read the passage. For each numbered blank, there is a list of words with the same number. Choose the word from each list that best completes the meaning of the passage.
+                    </h2>
+                  </div>
+                  
+                  {passage && (
+                    <div className="bg-card border rounded-lg p-6 mb-8">
+                      <div className="prose prose-lg max-w-none">
+                        <p className="text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: passage }} />
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+                  )}
 
-            <div className="mt-12 text-center">
-              <button
-                onClick={() => handleStepNavigation('feedback')}
-                disabled={Object.keys(quizAnswers).length < 12}
-                className={cn(
-                  "rounded-2xl px-12 py-4 text-xl font-medium transition-all",
-                  Object.keys(quizAnswers).length >= 12 
-                    ? "bg-primary hover:bg-primary/90 text-primary-foreground" 
-                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                )}
-                data-testid="submit-quiz"
-              >
-                Submit Quiz ({Object.keys(quizAnswers).length}/12)
-              </button>
-            </div>
+                  <div className="space-y-6">
+                    {passageQuestions.map((question, index) => (
+                      <div key={index + 7} className="bg-card border rounded-lg p-6">
+                        <div className="space-y-4">
+                          <p className="text-lg font-semibold text-foreground">{index + 7}.</p>
+                          <div className="space-y-3">
+                            {question.choices?.map((choice: string) => (
+                              <label 
+                                key={choice} 
+                                className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 p-2 rounded"
+                                onClick={() => handleAnswerSelect(index + 7, choice)}
+                              >
+                                <div className="w-6 h-6 border-2 border-gray-400 rounded-full flex items-center justify-center">
+                                  {quizAnswers[index + 7] === choice && <div className="w-4 h-4 bg-gray-700 rounded-full"></div>}
+                                </div>
+                                <span className="text-lg">{choice}</span>
+                                {quizAnswers[index + 7] === choice && <span className="ml-auto text-green-600">✓</span>}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-12 text-center">
+                  <button
+                    onClick={() => handleStepNavigation('feedback')}
+                    disabled={Object.keys(quizAnswers).length < 12}
+                    className={cn(
+                      "rounded-2xl px-12 py-4 text-xl font-medium transition-all",
+                      Object.keys(quizAnswers).length >= 12 
+                        ? "bg-primary hover:bg-primary/90 text-primary-foreground" 
+                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    )}
+                    data-testid="submit-quiz"
+                  >
+                    Submit Quiz ({Object.keys(quizAnswers).length}/12)
+                  </button>
+                </div>
+              </>
+            )}
           </div>
           <ProgressDots />
         </div>
