@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { AudioPlayer } from "./AudioPlayer";
+import { stopAllAudio } from "@/lib/audioManager";
 import type { WordWithProgress, StudySession } from "@shared/schema";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
 
@@ -47,6 +48,18 @@ export function StudentStudyInterface({ onClose }: StudentStudyInterfaceProps) {
       setTotalSessionWords(session.totalWords);
     }
   }, [session?.words, sessionWords.length, session?.totalWords]);
+
+  // Stop audio when word changes or component unmounts
+  useEffect(() => {
+    return () => {
+      stopAllAudio(); // Cleanup on unmount
+    };
+  }, []);
+
+  // Stop audio when currentIndex changes (word changes)
+  useEffect(() => {
+    stopAllAudio();
+  }, [currentIndex]);
 
   const currentWord = sessionWords[currentIndex];
   const totalWords = totalSessionWords || sessionWords.length || 0;
@@ -133,6 +146,7 @@ export function StudentStudyInterface({ onClose }: StudentStudyInterfaceProps) {
             <button
               onClick={() => {
                 if (currentIndex > 0) {
+                  stopAllAudio(); // Stop any playing audio
                   setCurrentIndex(currentIndex - 1);
                 }
               }}
@@ -145,6 +159,7 @@ export function StudentStudyInterface({ onClose }: StudentStudyInterfaceProps) {
             
             <button
               onClick={() => {
+                stopAllAudio(); // Stop any playing audio
                 if (currentIndex + 1 < sessionWords.length) {
                   setCurrentIndex(currentIndex + 1);
                 } else {
