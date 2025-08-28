@@ -98,6 +98,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   // Generate meaning choices with stable shuffling (FIXED)
   const [meaningChoices, setMeaningChoices] = useState<{ text: string; isCorrect: boolean }[]>([]);
   const [loadingChoices, setLoadingChoices] = useState(false);
+  
+  // Quiz state for new teacher-approved format
+  const [quizAnswers, setQuizAnswers] = useState<{[key: number]: string}>({});
 
   // Generate quiz choices when word changes
   useEffect(() => {
@@ -237,6 +240,13 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setCurrentSentenceIndex(0);
       setCurrentHighlightedWord(-1);
     }
+  };
+
+  const handleAnswerSelect = (questionNum: number, answer: string) => {
+    setQuizAnswers(prev => ({
+      ...prev,
+      [questionNum]: answer
+    }));
   };
 
   const handleStartSession = () => {
@@ -661,15 +671,6 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   // Step 4: New Teacher-Approved Quiz Format
   if (currentStep === 'quiz') {
-    // State for tracking answers
-    const [quizAnswers, setQuizAnswers] = useState<{[key: number]: string}>({});
-    
-    const handleAnswerSelect = (questionNum: number, answer: string) => {
-      setQuizAnswers(prev => ({
-        ...prev,
-        [questionNum]: answer
-      }));
-    };
 
     // Sample quiz data - will be replaced with AI-generated content
     const clozeQuestions = [
