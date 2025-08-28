@@ -60,10 +60,10 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [sessionWords, setSessionWords] = useState<WordWithProgress[]>([]);
   const [totalSessionWords, setTotalSessionWords] = useState(0);
 
-  // Fetch study session
+  // Fetch study session (disabled for quiz mode)
   const { data: session, isLoading, error } = useQuery<StudySession>({
     queryKey: ["/api/study/session"],
-    enabled: sessionStarted && !sessionComplete,
+    enabled: sessionStarted && !sessionComplete && currentStep !== 'quiz',
   });
 
   // Store session words when first loaded
@@ -335,16 +335,22 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   // Fetch all weekly words for quiz (separate from regular study session)
   const fetchQuizSession = async () => {
     try {
+      console.log("Fetching quiz session with all weekly words...");
       const response = await fetch("/api/study/session?quiz=true");
       if (response.ok) {
         const quizSession = await response.json();
+        console.log("Quiz session received:", quizSession);
         if (quizSession.words && quizSession.words.length > 0) {
+          console.log(`Found ${quizSession.words.length} words for quiz`);
           // Generate quiz content directly with fetched words
           await generateQuizContentWithWords(quizSession.words);
         } else {
           console.log("No words available for quiz");
           setTotalQuizQuestions(0);
         }
+      } else {
+        console.error("Failed to fetch quiz session:", response.status);
+        setTotalQuizQuestions(0);
       }
     } catch (error) {
       console.error("Error fetching quiz session:", error);
