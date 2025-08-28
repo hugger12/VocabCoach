@@ -132,14 +132,39 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
             {currentWord?.kidDefinition}
           </p>
           
-          {/* Audio Player - matches original style */}
+          {/* Audio Player for Definition */}
           <AudioPlayer
             text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
             type="sentence"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-20 h-20 flex items-center justify-center shadow-lg transition-all mx-auto mb-12 border-0 outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-20 h-20 flex items-center justify-center shadow-lg transition-all mx-auto mb-8 border-0 outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             wordId={currentWord?.id}
             data-testid="play-definition"
           />
+
+          {/* Sentences Section */}
+          {currentWord?.sentences && currentWord.sentences.length > 0 && (
+            <div className="mb-12 w-full">
+              <h3 className="text-xl font-bold text-foreground mb-6 text-center">
+                Listen to sentences with "{currentWord.text}":
+              </h3>
+              <div className="space-y-4">
+                {currentWord.sentences.map((sentence, index) => (
+                  <div key={sentence.id} className="bg-card border border-border rounded-xl p-6">
+                    <p className="text-lg text-foreground mb-4 leading-relaxed">
+                      {sentence.text}
+                    </p>
+                    <AudioPlayer
+                      text={sentence.text}
+                      type="sentence"
+                      className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all mx-auto border-0 outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
+                      sentenceId={sentence.id}
+                      data-testid={`play-sentence-${index}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Navigation */}
           <div className="flex items-center justify-center gap-8 mb-8">
