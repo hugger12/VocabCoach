@@ -221,6 +221,19 @@ export function AudioPlayer({
         audioManager.unregisterAudio(audio);
       };
 
+      // Listen for pause events (when audio is stopped externally)
+      audio.onpause = () => {
+        console.log('Audio paused externally:', type, text.substring(0, 50));
+        setIsPlaying(false);
+        
+        // Clear highlighting when audio is paused
+        if (highlightTimeoutRef.current) {
+          clearTimeout(highlightTimeoutRef.current);
+          highlightTimeoutRef.current = null;
+        }
+        onWordHighlight?.(-1);
+      };
+
       audio.onerror = (event) => {
         console.error("HTML Audio element error:", event);
         console.error("Audio URL that failed:", audioUrl);

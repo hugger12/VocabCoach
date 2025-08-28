@@ -37,7 +37,7 @@ export function DyslexicReader({
             color: currentWordIndex === index ? 'var(--highlight-text)' : 'inherit',
             borderRadius: currentWordIndex === index ? '2px' : '0',
             transition: 'background-color 0.1s ease',
-            padding: '0',
+            padding: '0', // IMPORTANT: Never add padding here - it causes text jiggling during highlighting
           }}
         >
           {word}
