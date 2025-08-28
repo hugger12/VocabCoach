@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Volume2, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { AudioPlayer } from "./AudioPlayer";
@@ -385,13 +385,14 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     );
   }
 
-  // Header component for all screens except home
-  const StudyHeader = () => (
+  // Memoized header component to prevent flashing when word highlighting changes
+  const StudyHeader = memo(() => (
     <header className="flex items-center justify-between p-6">
       <img 
         src={huggerLogo} 
         alt="Hugger Digital" 
         className="w-[100px] h-[100px] object-contain"
+        style={{ willChange: 'auto' }} // Prevent unnecessary repaints
       />
       <h1 className="text-2xl font-bold text-foreground">WordWizard</h1>
       <button
@@ -402,7 +403,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
         <X className="w-6 h-6" />
       </button>
     </header>
-  );
+  ));
 
   // Student Landing Modal - Frame 2
   if (currentStep === 'landing') {
