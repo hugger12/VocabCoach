@@ -384,7 +384,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let dueSchedules = schedulerService.getWordsForToday(currentWeekSchedules, limit);
       
-      // If no words are due today, include all words from active week for initial learning
+      // If we have very few words due (less than 3), expand to include more words for better practice
+      if (dueSchedules.length < 3 && currentWeekSchedules.length > dueSchedules.length) {
+        // Add more words from active week that are in box 1-4 (still learning or need reinforcement)
+        const additionalWords = currentWeekSchedules
+          .filter(schedule => schedule.box <= 4 && !dueSchedules.find(d => d.wordId === schedule.wordId))
+          .slice(0, Math.min(12, (limit || 12) - dueSchedules.length));
+        
+        dueSchedules = [...dueSchedules, ...additionalWords];
+      }
+      
+      // If still no words, include all words from active week for initial learning
       if (dueSchedules.length === 0) {
         // Get all words from active week that are in box 1-3 (still learning)
         dueSchedules = currentWeekSchedules.filter(schedule => schedule.box <= 3).slice(0, limit || 12);
