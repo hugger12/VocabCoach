@@ -1235,7 +1235,37 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                   
                   {result.type === 'passage' && (
                     <div className="mb-6">
-                      <p className="text-brown-600 mb-2 font-medium">Reading Passage Blank #{result.blankNumber}</p>
+                      <p className="text-brown-600 mb-3 font-medium">Reading Passage Blank #{result.blankNumber}</p>
+                      {/* Show the passage text with the specific blank highlighted */}
+                      <div className="bg-tan-100 border border-tan-200 rounded-lg p-4">
+                        <h4 className="text-sm font-semibold text-brown-700 mb-2">Reading Passage:</h4>
+                        <div className="text-brown-800 leading-relaxed">
+                          {passage && (
+                            <p className="text-base">
+                              {(() => {
+                                const blanks = passage.split('___');
+                                return blanks.map((part, index, array) => (
+                                  <span key={index}>
+                                    {part}
+                                    {index < array.length - 1 && (
+                                      <span 
+                                        className={cn(
+                                          "px-2 py-1 rounded font-semibold border",
+                                          index + 1 === result.blankNumber
+                                            ? "bg-yellow-200 border-yellow-400 text-brown-900"
+                                            : "bg-gray-100 border-gray-300 text-gray-600"
+                                        )}
+                                      >
+                                        {index + 1 === result.blankNumber ? `[${result.correctAnswer}]` : "___"}
+                                      </span>
+                                    )}
+                                  </span>
+                                ));
+                              })()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
 
