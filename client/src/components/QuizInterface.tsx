@@ -220,7 +220,7 @@ export function QuizInterface({ words, onClose, onComplete }: QuizInterfaceProps
     );
   }
 
-  if (questions.length === 0) {
+  if (clozeQuestions.length === 0 && !passageQuestion) {
     return (
       <div className="h-screen bg-background flex flex-col">
         <header className="flex items-center justify-between p-6">
