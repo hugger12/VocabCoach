@@ -27,18 +27,17 @@ export function DyslexicReader({
   }, [currentWordIndex, words]);
 
   return (
-    <div className={cn("leading-relaxed text-center", className)} style={{ minHeight: '3rem' }}>
+    <div className={cn("leading-relaxed text-center flex flex-wrap items-center justify-center gap-1", className)} style={{ minHeight: '3rem' }}>
       {words.map((word, index) => (
         <span
           key={`${text}-${index}`}
-          className="inline"
+          className="inline-block"
           style={{
             backgroundColor: currentWordIndex === index ? 'var(--highlight-yellow)' : 'transparent',
             color: currentWordIndex === index ? 'var(--highlight-text)' : 'inherit',
-            marginRight: '0.25rem', // Normal word spacing
             borderRadius: currentWordIndex === index ? '2px' : '0',
             transition: 'background-color 0.1s ease',
-            padding: '0', // No padding
+            padding: currentWordIndex === index ? '1px 2px' : '0',
           }}
         >
           {word}

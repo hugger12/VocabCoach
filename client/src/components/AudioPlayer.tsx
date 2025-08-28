@@ -52,6 +52,8 @@ export function AudioPlayer({
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      // Unregister from audio manager
+      audioManager.unregisterAudio(audioRef.current);
     }
     setIsPlaying(false);
     setIsLoading(false);
@@ -82,6 +84,18 @@ export function AudioPlayer({
     // Clear word timings
     wordTimingsRef.current = null;
   }, [text]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioManager.unregisterAudio(audioRef.current);
+      }
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const playAudio = useCallback(async () => {
     if (isPlaying) {
@@ -183,8 +197,8 @@ export function AudioPlayer({
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
       
-      // Don't register with audio manager - it's causing conflicts
-      // audioManager.registerAudio(audio);
+      // Register with audio manager to prevent overlap
+      audioManager.registerAudio(audio);
 
       audio.onplay = () => {
         console.log('Audio started playing:', type, text.substring(0, 50));
