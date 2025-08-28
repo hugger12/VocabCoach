@@ -202,6 +202,29 @@ export function StudentStudyInterface({ onClose }: StudentStudyInterfaceProps) {
     setCurrentStep('quiz');
   };
 
+  const getCurrentSentence = () => {
+    if (!currentWord?.sentences || currentWord.sentences.length === 0) {
+      return `Here is an example: The ${currentWord?.partOfSpeech} "${currentWord?.text}" means ${currentWord?.kidDefinition}.`;
+    }
+    return currentWord.sentences[currentSentenceIndex]?.text || "";
+  };
+
+  const goToPreviousSentence = () => {
+    if (currentSentenceIndex > 0) {
+      stopAllAudio();
+      setCurrentSentenceIndex(currentSentenceIndex - 1);
+      setCurrentHighlightedWord(-1);
+    }
+  };
+
+  const goToNextSentence = () => {
+    if (currentWord?.sentences && currentSentenceIndex < currentWord.sentences.length - 1) {
+      stopAllAudio();
+      setCurrentSentenceIndex(currentSentenceIndex + 1);
+      setCurrentHighlightedWord(-1);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -320,16 +343,23 @@ export function StudentStudyInterface({ onClose }: StudentStudyInterfaceProps) {
           </h2>
           
           {currentStep === 'word' && (
-            <div className="space-y-6">
-              <AudioPlayer 
-                text={currentWord?.text || ''} 
-                type="word"
-                className="mx-auto"
-                data-testid="play-word"
-              />
+            <div className="space-y-8 text-center">
+              <div className="space-y-6">
+                <AudioPlayer 
+                  text={currentWord?.text || ''} 
+                  type="word"
+                  className="mx-auto"
+                  data-testid="play-word"
+                />
+                <p className="text-lg text-muted-foreground">
+                  {currentWord?.partOfSpeech && `(${currentWord.partOfSpeech})`}
+                </p>
+              </div>
+              
               <button
                 onClick={handleNextStep}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-12 py-4 text-xl font-medium transition-all"
+                data-testid="learn-meaning"
               >
                 Learn Meaning
               </button>
@@ -337,54 +367,132 @@ export function StudentStudyInterface({ onClose }: StudentStudyInterfaceProps) {
           )}
 
           {currentStep === 'definition' && (
-            <div className="space-y-6 max-w-2xl">
-              <p className="text-xl text-muted-foreground mb-8">
-                {currentWord?.kidDefinition}
-              </p>
+            <div className="space-y-8 max-w-3xl">
+              {/* Definition Display */}
+              <div className="text-center space-y-6">
+                <p className="text-2xl font-medium text-foreground mb-8">
+                  {currentWord?.kidDefinition}
+                </p>
+                <AudioPlayer 
+                  text={currentWord?.kidDefinition || ''} 
+                  type="word"
+                  className="mx-auto"
+                  data-testid="play-definition"
+                />
+              </div>
+
+              {/* Multiple Choice Quiz */}
               {meaningChoices.length > 0 && !loadingChoices ? (
-                <div className="grid gap-4">
-                  {meaningChoices.map((choice, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setSelectedChoice(index)}
-                      className={cn(
-                        "p-4 rounded-lg text-left transition-all",
-                        selectedChoice === index
-                          ? choice.isCorrect
-                            ? "bg-green-100 border-green-500"
-                            : "bg-red-100 border-red-500"
-                          : "bg-card hover:bg-accent border-border"
-                      )}
-                    >
-                      {choice.text}
-                    </button>
-                  ))}
+                <div className="space-y-4">
+                  <p className="text-lg font-medium text-center text-foreground mb-6">
+                    Which definition matches "{currentWord?.text}"?
+                  </p>
+                  <div className="grid gap-3">
+                    {meaningChoices.map((choice, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          setSelectedChoice(index);
+                          // Record the attempt
+                          recordAttempt.mutate({
+                            wordId: currentWord?.id || '',
+                            mode: 'definition',
+                            success: choice.isCorrect,
+                            errorType: choice.isCorrect ? undefined : 'wrong_definition'
+                          });
+                          if (choice.isCorrect) {
+                            setCorrectAnswers(prev => prev + 1);
+                          }
+                        }}
+                        disabled={selectedChoice !== null}
+                        className={cn(
+                          "p-4 rounded-xl text-left transition-all border-2 text-base",
+                          selectedChoice === index
+                            ? choice.isCorrect
+                              ? "bg-green-50 border-green-500 text-green-800"
+                              : "bg-red-50 border-red-500 text-red-800"
+                            : selectedChoice !== null
+                            ? "bg-muted text-muted-foreground border-muted"
+                            : "bg-card hover:bg-accent border-border hover:border-primary"
+                        )}
+                        data-testid={`choice-${index}`}
+                      >
+                        {choice.text}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : (
-                <p>Loading choices...</p>
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
+                  <p className="text-muted-foreground">Loading choices...</p>
+                </div>
               )}
               
               {selectedChoice !== null && (
-                <button
-                  onClick={handleNextStep}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
-                >
-                  Continue
-                </button>
+                <div className="text-center pt-6">
+                  <button
+                    onClick={handleNextStep}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-12 py-4 text-xl font-medium transition-all"
+                    data-testid="continue-to-sentence"
+                  >
+                    See Example
+                  </button>
+                </div>
               )}
             </div>
           )}
 
           {currentStep === 'sentence' && (
-            <div className="space-y-6">
-              <p className="text-lg text-muted-foreground">
-                {currentWord?.sentences?.[currentSentenceIndex]?.text || "Example sentence"}
-              </p>
+            <div className="space-y-8 max-w-4xl text-center">
+              <div className="space-y-6">
+                <p className="text-xl text-foreground leading-relaxed">
+                  {getCurrentSentence()}
+                </p>
+                
+                {currentWord?.sentences?.[currentSentenceIndex] && (
+                  <div className="space-y-4">
+                    <DyslexicReader
+                      text={currentWord.sentences[currentSentenceIndex].text}
+                      currentWordIndex={currentHighlightedWord}
+                    />
+                    
+                    {/* Sentence Navigation */}
+                    {currentWord?.sentences && currentWord.sentences.length > 1 && (
+                      <div className="flex items-center justify-center gap-4">
+                        <button
+                          onClick={goToPreviousSentence}
+                          disabled={currentSentenceIndex === 0}
+                          className="p-2 rounded-full bg-secondary text-secondary-foreground disabled:opacity-50"
+                          data-testid="previous-sentence"
+                        >
+                          <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        
+                        <span className="text-sm text-muted-foreground">
+                          {currentSentenceIndex + 1} of {currentWord.sentences.length}
+                        </span>
+                        
+                        <button
+                          onClick={goToNextSentence}
+                          disabled={currentSentenceIndex === currentWord.sentences.length - 1}
+                          className="p-2 rounded-full bg-secondary text-secondary-foreground disabled:opacity-50"
+                          data-testid="next-sentence"
+                        >
+                          <ChevronRight className="w-5 h-5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
               <button
                 onClick={handleNextStep}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-12 py-4 text-xl font-medium transition-all"
+                data-testid="next-word"
               >
-                {currentIndex + 1 < sessionWords.length ? "Next Word" : "Finish"}
+                {currentIndex + 1 < sessionWords.length ? "Next Word" : "Finish Practice"}
               </button>
             </div>
           )}
