@@ -14,7 +14,7 @@ export function Landing() {
             className="w-[120px] h-[120px] object-contain mx-auto mb-8"
           />
           <h1 className="text-4xl font-bold text-foreground mb-4 dyslexia-text-2xl">WordWizard</h1>
-          <p className="text-xl text-muted-foreground dyslexia-text-lg">Dyslexia-friendly vocabulary learning</p>
+          <p className="text-xl text-muted-foreground dyslexia-text-lg">Smart vocabulary learning for every student</p>
         </div>
 
         {/* Mode Selection */}
@@ -64,7 +64,7 @@ export function Landing() {
         {/* Footer */}
         <div className="text-center mt-16">
           <p className="text-sm text-muted-foreground dyslexia-text-base">
-            Built for 2e learners with dyslexia-friendly design principles
+            Designed for effective learning with accessible, engaging features
           </p>
         </div>
       </div>
