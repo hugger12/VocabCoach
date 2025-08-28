@@ -15,6 +15,12 @@ Preferred communication style: Simple, everyday language.
 
 # System Architecture
 
+## Authentication Flow
+- **Instructor Path**: Landing page → Replit Auth login → Instructor dashboard
+- **Student Path**: Landing page → PIN entry → Student interface
+- **Session Management**: Instructors use Replit Auth sessions, students use localStorage for session persistence
+- **Route Protection**: Instructor routes require authentication, student routes use PIN validation
+
 ## Frontend Architecture
 - **Framework**: React with TypeScript using Vite for development and build tooling
 - **UI Library**: Shadcn/UI components built on Radix UI primitives for accessibility
@@ -33,14 +39,20 @@ Preferred communication style: Simple, everyday language.
 ## Data Storage Solutions
 - **Database**: PostgreSQL (Neon Database serverless) with Drizzle ORM - IMPLEMENTED
 - **Schema Management**: Type-safe schema definitions with Zod validation
-- **Data Models**: Words, sentences, audio cache, attempts, schedule, and settings tables
-- **Persistence**: All data now persists across server restarts using DatabaseStorage class
-- **Status**: Successfully migrated from in-memory to persistent database storage
+- **Multi-User Schema**: Users, students, words, sentences, audio cache, attempts, schedule tables with proper relationships
+- **Data Models**: 
+  - Users (instructors/parents) with Replit Auth integration
+  - Students with PIN authentication and instructor relationships
+  - Words scoped to instructors, attempts and schedules scoped to students
+- **Persistence**: All data persists across sessions with proper user isolation
+- **Status**: Multi-user authentication system successfully implemented
 
 ## Authentication and Authorization
-- **Session Management**: Express sessions with PostgreSQL session store
-- **Access Control**: Simple PIN-based parent dashboard access
-- **Security**: No user registration system - single learner focus
+- **Instructor Authentication**: Replit Auth (OpenID Connect) with PostgreSQL session store
+- **Student Authentication**: Simple 4-digit PIN system managed by instructors
+- **Multi-User Architecture**: Instructors can manage multiple students, each with individual progress tracking
+- **Data Isolation**: Student progress and attempts are isolated per student, words are scoped to instructors
+- **COPPA Compliance**: School exception model - instructors consent for students under 13, with parent override rights
 
 ## External Service Integrations
 - **Text-to-Speech**: Primary integration with ElevenLabs API for high-quality child-friendly voice synthesis, with OpenAI TTS as fallback

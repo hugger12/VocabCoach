@@ -1,7 +1,47 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Authentication and user management tables
+// Session storage table (required for Replit Auth)
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)],
+);
+
+// Users table (instructors, parents, tutors)
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").unique(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
+  role: text("role").notNull().default("instructor"), // "instructor" | "parent" | "admin"
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Students table (children managed by instructors/parents)
+export const students = pgTable("students", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  firstName: varchar("first_name").notNull(),
+  lastName: varchar("last_name"),
+  displayName: varchar("display_name"), // What they see on screen
+  pin: varchar("pin", { length: 4 }), // Simple 4-digit PIN for login
+  instructorId: varchar("instructor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  grade: varchar("grade"), // Grade level for content adaptation
+  birthMonth: integer("birth_month"), // For COPPA compliance (no full birthday)
+  birthYear: integer("birth_year"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 export const words = pgTable("words", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -13,6 +53,7 @@ export const words = pgTable("words", {
   morphemes: text("morphemes").array(),
   ipa: text("ipa"),
   weekId: varchar("week_id").notNull(),
+  instructorId: varchar("instructor_id").references(() => users.id, { onDelete: "cascade" }), // Words belong to instructor (nullable for migration)
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -39,6 +80,7 @@ export const audioCache = pgTable("audio_cache", {
 
 export const attempts = pgTable("attempts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  studentId: varchar("student_id").references(() => students.id, { onDelete: "cascade" }), // Attempts belong to student (nullable for migration)
   wordId: varchar("word_id").notNull().references(() => words.id, { onDelete: "cascade" }),
   mode: text("mode").notNull(), // "meaning" | "spelling" | "pronunciation"
   success: boolean("success"),
@@ -49,6 +91,7 @@ export const attempts = pgTable("attempts", {
 
 export const schedule = pgTable("schedule", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  studentId: varchar("student_id").references(() => students.id, { onDelete: "cascade" }), // Schedule per student (nullable for migration)
   wordId: varchar("word_id").notNull().references(() => words.id, { onDelete: "cascade" }),
   box: integer("box").notNull().default(1), // Leitner box 1-5
   nextDueAt: timestamp("next_due_at").notNull(),
@@ -98,6 +141,7 @@ export const passageBlanks = pgTable("passage_blanks", {
 // Quiz attempts for new format
 export const quizAttempts = pgTable("quiz_attempts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  studentId: varchar("student_id").references(() => students.id, { onDelete: "cascade" }), // Quiz attempts per student (nullable for migration)
   wordId: varchar("word_id").notNull().references(() => words.id, { onDelete: "cascade" }),
   quizType: text("quiz_type").notNull(), // 'cloze' or 'passage'
   questionId: varchar("question_id"), // References clozeQuestions.id or passageBlanks.id
@@ -108,6 +152,18 @@ export const quizAttempts = pgTable("quiz_attempts", {
 });
 
 // Insert schemas
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStudentSchema = createInsertSchema(students).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertWordSchema = createInsertSchema(words).omit({
   id: true,
   createdAt: true,
@@ -156,6 +212,11 @@ export const insertQuizAttemptSchema = createInsertSchema(quizAttempts).omit({
 });
 
 // Types
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpsertUser = typeof users.$inferInsert; // For Replit Auth compatibility
+export type Student = typeof students.$inferSelect;
+export type InsertStudent = z.infer<typeof insertStudentSchema>;
 export type Word = typeof words.$inferSelect;
 export type InsertWord = z.infer<typeof insertWordSchema>;
 export type Sentence = typeof sentences.$inferSelect;

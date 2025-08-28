@@ -1,4 +1,9 @@
 import { 
+  type User,
+  type InsertUser,
+  type UpsertUser,
+  type Student,
+  type InsertStudent,
   type Word, 
   type InsertWord, 
   type Sentence, 
@@ -16,6 +21,8 @@ import {
   type InsertPassageQuestion,
   type PassageBlank,
   type InsertPassageBlank,
+  users,
+  students,
   words,
   sentences,
   audioCache as audioCacheTable,
@@ -27,14 +34,26 @@ import {
   passageBlanks
 } from "@shared/schema.js";
 import { randomUUID } from "crypto";
-import { eq, desc } from "drizzle-orm";
-import { db } from "./db.js";
+import { eq, desc, and } from "drizzle-orm";
+import { db } from "./db";
 
 export interface IStorage {
-  // Words
+  // User operations (required for Replit Auth)
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
+  
+  // Student operations
+  getStudent(id: string): Promise<Student | undefined>;
+  getStudentsByInstructor(instructorId: string): Promise<Student[]>;
+  getStudentByPin(pin: string, instructorId: string): Promise<Student | undefined>;
+  createStudent(student: InsertStudent): Promise<Student>;
+  updateStudent(id: string, updates: Partial<Student>): Promise<Student>;
+  deleteStudent(id: string): Promise<void>;
+
+  // Words (now instructor-scoped)
   getWord(id: string): Promise<Word | undefined>;
-  getWords(weekId?: string): Promise<Word[]>;
-  getWordsWithProgress(weekId?: string): Promise<WordWithProgress[]>;
+  getWords(weekId?: string, instructorId?: string): Promise<Word[]>;
+  getWordsWithProgress(weekId?: string, instructorId?: string, studentId?: string): Promise<WordWithProgress[]>;
   createWord(word: InsertWord): Promise<Word>;
   updateWord(id: string, updates: Partial<Word>): Promise<Word>;
   deleteWord(id: string): Promise<void>;
@@ -49,14 +68,14 @@ export interface IStorage {
   createAudioCache(audio: Omit<AudioCache, 'id' | 'createdAt'>): Promise<AudioCache>;
   deleteAudioCache(id: string): Promise<void>;
 
-  // Attempts
-  getAttempts(wordId: string): Promise<Attempt[]>;
+  // Attempts (now student-scoped)
+  getAttempts(wordId: string, studentId?: string): Promise<Attempt[]>;
   createAttempt(attempt: InsertAttempt): Promise<Attempt>;
-  getAttemptStats(wordId: string): Promise<{ successRate: number; totalAttempts: number }>;
+  getAttemptStats(wordId: string, studentId?: string): Promise<{ successRate: number; totalAttempts: number }>;
 
-  // Schedule
-  getSchedule(wordId: string): Promise<Schedule | undefined>;
-  getAllSchedules(): Promise<Schedule[]>;
+  // Schedule (now student-scoped)
+  getSchedule(wordId: string, studentId?: string): Promise<Schedule | undefined>;
+  getAllSchedules(studentId?: string): Promise<Schedule[]>;
   createSchedule(schedule: InsertSchedule): Promise<Schedule>;
   updateSchedule(id: string, updates: Partial<Schedule>): Promise<Schedule>;
   deleteSchedule(id: string): Promise<void>;
@@ -84,6 +103,70 @@ export class DatabaseStorage implements IStorage {
 
   constructor() {
     this.currentWeekId = this.generateWeekId();
+  }
+
+  // User operations (required for Replit Auth)
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
+  }
+
+  // Student operations
+  async getStudent(id: string): Promise<Student | undefined> {
+    const [student] = await db.select().from(students).where(eq(students.id, id));
+    return student;
+  }
+
+  async getStudentsByInstructor(instructorId: string): Promise<Student[]> {
+    return await db.select().from(students).where(eq(students.instructorId, instructorId));
+  }
+
+  async getStudentByPin(pin: string, instructorId: string): Promise<Student | undefined> {
+    const [student] = await db
+      .select()
+      .from(students)
+      .where(and(eq(students.pin, pin), eq(students.instructorId, instructorId)));
+    return student;
+  }
+
+  async createStudent(student: InsertStudent): Promise<Student> {
+    const [created] = await db
+      .insert(students)
+      .values(student)
+      .returning();
+    return created;
+  }
+
+  async updateStudent(id: string, updates: Partial<Student>): Promise<Student> {
+    const [student] = await db
+      .update(students)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(students.id, id))
+      .returning();
+    
+    if (!student) {
+      throw new Error(`Student with id ${id} not found`);
+    }
+    return student;
+  }
+
+  async deleteStudent(id: string): Promise<void> {
+    await db.delete(students).where(eq(students.id, id));
   }
 
   private generateWeekId(): string {
@@ -135,20 +218,35 @@ export class DatabaseStorage implements IStorage {
     return word;
   }
 
-  async getWords(weekId?: string): Promise<Word[]> {
-    if (!weekId) {
+  async getWords(weekId?: string, instructorId?: string): Promise<Word[]> {
+    if (!weekId && !instructorId) {
       return await db.select().from(words).orderBy(words.createdAt);
     }
-    return await db.select().from(words).where(eq(words.weekId, weekId)).orderBy(words.createdAt);
+    
+    if (weekId && instructorId) {
+      return await db.select().from(words)
+        .where(and(eq(words.weekId, weekId), eq(words.instructorId, instructorId)))
+        .orderBy(words.createdAt);
+    }
+    
+    if (weekId) {
+      return await db.select().from(words).where(eq(words.weekId, weekId)).orderBy(words.createdAt);
+    }
+    
+    if (instructorId) {
+      return await db.select().from(words).where(eq(words.instructorId, instructorId)).orderBy(words.createdAt);
+    }
+    
+    return [];
   }
 
-  async getWordsWithProgress(weekId?: string): Promise<WordWithProgress[]> {
-    const wordsList = await this.getWords(weekId);
+  async getWordsWithProgress(weekId?: string, instructorId?: string, studentId?: string): Promise<WordWithProgress[]> {
+    const wordsList = await this.getWords(weekId, instructorId);
     const wordsWithProgress: WordWithProgress[] = [];
 
     for (const word of wordsList) {
-      const scheduleData = await this.getSchedule(word.id);
-      const attemptsData = await this.getAttempts(word.id);
+      const scheduleData = await this.getSchedule(word.id, studentId);
+      const attemptsData = await this.getAttempts(word.id, studentId);
       const sentencesData = await this.getSentences(word.id);
       const audioCacheData = await db.select().from(audioCacheTable).where(eq(audioCacheTable.wordId, word.id));
 
@@ -236,8 +334,12 @@ export class DatabaseStorage implements IStorage {
     await db.delete(audioCacheTable).where(eq(audioCacheTable.id, id));
   }
 
-  // Attempts
-  async getAttempts(wordId: string): Promise<Attempt[]> {
+  // Attempts (now student-scoped)
+  async getAttempts(wordId: string, studentId?: string): Promise<Attempt[]> {
+    if (studentId) {
+      return await db.select().from(attempts)
+        .where(and(eq(attempts.wordId, wordId), eq(attempts.studentId, studentId)));
+    }
     return await db.select().from(attempts).where(eq(attempts.wordId, wordId));
   }
 
@@ -249,21 +351,29 @@ export class DatabaseStorage implements IStorage {
     return attempt;
   }
 
-  async getAttemptStats(wordId: string): Promise<{ successRate: number; totalAttempts: number }> {
-    const wordAttempts = await this.getAttempts(wordId);
+  async getAttemptStats(wordId: string, studentId?: string): Promise<{ successRate: number; totalAttempts: number }> {
+    const wordAttempts = await this.getAttempts(wordId, studentId);
     const totalAttempts = wordAttempts.length;
     const successfulAttempts = wordAttempts.filter(attempt => attempt.success).length;
     const successRate = totalAttempts > 0 ? successfulAttempts / totalAttempts : 0;
     return { successRate, totalAttempts };
   }
 
-  // Schedule
-  async getSchedule(wordId: string): Promise<Schedule | undefined> {
+  // Schedule (now student-scoped)
+  async getSchedule(wordId: string, studentId?: string): Promise<Schedule | undefined> {
+    if (studentId) {
+      const [scheduleData] = await db.select().from(schedule)
+        .where(and(eq(schedule.wordId, wordId), eq(schedule.studentId, studentId)));
+      return scheduleData;
+    }
     const [scheduleData] = await db.select().from(schedule).where(eq(schedule.wordId, wordId));
     return scheduleData;
   }
 
-  async getAllSchedules(): Promise<Schedule[]> {
+  async getAllSchedules(studentId?: string): Promise<Schedule[]> {
+    if (studentId) {
+      return await db.select().from(schedule).where(eq(schedule.studentId, studentId));
+    }
     return await db.select().from(schedule);
   }
 

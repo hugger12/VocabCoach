@@ -4,19 +4,107 @@ import { storage } from "./storage.js";
 import { aiService } from "./services/ai.js";
 import { ttsService } from "./services/tts.js";
 import { schedulerService } from "./services/scheduler.js";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 import { insertWordSchema, insertAttemptSchema, simpleWordInputSchema } from "@shared/schema.js";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Auth middleware
+  await setupAuth(app);
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Student management routes
+  app.get('/api/students', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const students = await storage.getStudentsByInstructor(userId);
+      res.json(students);
+    } catch (error) {
+      console.error("Error fetching students:", error);
+      res.status(500).json({ message: "Failed to fetch students" });
+    }
+  });
+
+  app.post('/api/students', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { firstName, lastName, displayName, grade, birthMonth, birthYear } = req.body;
+      
+      if (!firstName) {
+        return res.status(400).json({ message: "First name is required" });
+      }
+
+      // Generate a unique 4-digit PIN
+      let pin: string;
+      let existingStudent;
+      do {
+        pin = Math.floor(1000 + Math.random() * 9000).toString();
+        existingStudent = await storage.getStudentByPin(pin, userId);
+      } while (existingStudent);
+
+      const student = await storage.createStudent({
+        firstName,
+        lastName,
+        displayName: displayName || firstName,
+        pin,
+        instructorId: userId,
+        grade,
+        birthMonth,
+        birthYear,
+        isActive: true,
+      });
+
+      res.json(student);
+    } catch (error) {
+      console.error("Error creating student:", error);
+      res.status(500).json({ message: "Failed to create student" });
+    }
+  });
+
+  // Student authentication route (PIN-based login)
+  app.post('/api/student-login', async (req, res) => {
+    try {
+      const { pin, instructorId } = req.body;
+      
+      if (!pin || !instructorId) {
+        return res.status(400).json({ message: "PIN and instructor ID are required" });
+      }
+
+      const student = await storage.getStudentByPin(pin, instructorId);
+      
+      if (!student || !student.isActive) {
+        return res.status(401).json({ message: "Invalid PIN or inactive student" });
+      }
+
+      // In a simple implementation, we just return the student
+      // In production, you might want to create a separate session system
+      res.json({ student, success: true });
+    } catch (error) {
+      console.error("Error during student login:", error);
+      res.status(500).json({ message: "Failed to authenticate student" });
+    }
+  });
   
-  // Words API
-  app.get("/api/words", async (req, res) => {
+  // Words API (instructor-scoped)
+  app.get("/api/words", isAuthenticated, async (req: any, res) => {
     try {
       const weekId = req.query.week as string;
+      const studentId = req.query.student as string;
+      const userId = req.user.claims.sub;
       
-      // For parent dashboard, don't filter by week - show all words
-      // The frontend can filter if needed
-      const words = await storage.getWordsWithProgress();
+      // Get words for this instructor, optionally filtered by week and student
+      const words = await storage.getWordsWithProgress(weekId, userId, studentId);
       res.json(words);
     } catch (error) {
       console.error("Error fetching words:", error);
@@ -24,10 +112,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Student words API (no auth required - uses student ID)
+  app.get("/api/student/:studentId/words", async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      const weekId = req.query.week as string;
+      
+      // Get student to find their instructor
+      const student = await storage.getStudent(studentId);
+      if (!student || !student.isActive) {
+        return res.status(404).json({ message: "Student not found or inactive" });
+      }
+
+      // Get words for the student's instructor
+      const words = await storage.getWordsWithProgress(weekId, student.instructorId, studentId);
+      res.json(words);
+    } catch (error) {
+      console.error("Error fetching student words:", error);
+      res.status(500).json({ message: "Failed to fetch words" });
+    }
+  });
+
   // Manual word entry with teacher definition
-  app.post("/api/words/manual", async (req, res) => {
+  app.post("/api/words/manual", isAuthenticated, async (req: any, res) => {
     try {
       const { text, definition, weekId } = req.body;
+      const userId = req.user.claims.sub;
       
       if (!text || !definition) {
         return res.status(400).json({ message: "Word text and definition are required" });
@@ -47,6 +157,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         kidDefinition: definition.trim(), // Use teacher's definition directly
         teacherDefinition: definition.trim(),
         weekId: weekId || await storage.getCurrentWeek(),
+        instructorId: userId, // Associate word with instructor
         syllables: morphology.syllables,
         morphemes: morphology.morphemes,
         ipa: null, // Optional field
