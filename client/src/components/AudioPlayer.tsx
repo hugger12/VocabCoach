@@ -322,11 +322,11 @@ export function AudioPlayer({
       {isLoading ? (
         <div className="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent" />
       ) : isPlaying ? (
-        <div className="flex items-center justify-center w-full h-full text-2xl">⏸</div>
+        <Pause className="w-6 h-6" />
       ) : hasError ? (
-        <div className="flex items-center justify-center w-full h-full text-lg">❌</div>
+        <VolumeX className="w-6 h-6" />
       ) : (
-        children || <div className="flex items-center justify-center w-full h-full text-2xl">▶</div>
+        children || <Play className="w-6 h-6" />
       )}
     </button>
   );

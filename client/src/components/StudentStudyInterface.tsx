@@ -371,7 +371,7 @@ export function StudentStudyInterface({ onClose }: StudentStudyInterfaceProps) {
               {/* Definition Display */}
               <div className="text-center space-y-6">
                 <p className="text-2xl font-medium text-foreground mb-8">
-                  {currentWord?.kidDefinition}
+                  {currentWord?.kidDefinition || 'Loading definition...'}
                 </p>
                 <AudioPlayer 
                   text={currentWord?.kidDefinition || ''} 
