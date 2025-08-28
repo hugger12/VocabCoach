@@ -1207,7 +1207,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               {results.detailedResults.map((result) => (
                 <div 
                   key={result.questionNumber}
-                  className="border-2 border-tan-200 bg-tan-50 rounded-2xl p-6 shadow-sm"
+                  className="border-2 border-tan-200 bg-card rounded-2xl p-6 shadow-sm"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <h3 className="text-lg font-semibold text-brown-900">
