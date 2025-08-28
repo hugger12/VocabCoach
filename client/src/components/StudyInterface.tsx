@@ -19,7 +19,7 @@ interface MeaningChoice {
   isCorrect: boolean;
 }
 
-type StudyStep = 'landing' | 'word' | 'definition' | 'sentence' | 'quiz' | 'feedback';
+type StudyStep = 'landing' | 'word' | 'definition' | 'sentence' | 'session-complete' | 'quiz' | 'feedback';
 
 // Separate memoized header component to prevent logo flashing
 const StudyHeader = memo(({ onClose }: { onClose: () => void }) => (
@@ -220,6 +220,20 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       // Session complete - show final score and invalidate cache for next session
       setSessionComplete(true);
       queryClient.invalidateQueries({ queryKey: ["/api/study/session"] });
+    }
+  };
+
+  const handleNextWord = () => {
+    if (currentIndex < totalWords - 1) {
+      // Go to next word
+      setCurrentIndex(currentIndex + 1);
+      setCurrentStep('word');
+      setSelectedChoice(null);
+      setCurrentSentenceIndex(0);
+      setCurrentHighlightedWord(-1);
+    } else {
+      // Session complete - show completion screen
+      setCurrentStep('session-complete');
     }
   };
 
@@ -627,13 +641,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             >
               Sentences
             </button>
-            <button
-              onClick={() => handleStepNavigation('quiz')}
-              className="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-6 py-3 text-lg font-medium transition-all"
-              data-testid="quiz-button"
-            >
-              Quiz
-            </button>
+
           </div>
         </main>
 
@@ -834,14 +842,54 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           </div>
           
           <button
-            onClick={() => handleStepNavigation('quiz')}
+            onClick={handleNextWord}
             className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all inline-block"
-            data-testid="next-to-quiz"
+            data-testid="next-word-button"
           >
-            Continue
+            {currentIndex >= totalWords - 1 ? 'Complete Session' : 'Next Word'}
           </button>
           </div>
           <ProgressDots />
+        </div>
+      </div>
+    );
+  }
+
+  // Session Complete Screen - Show after all words studied
+  if (currentStep === 'session-complete') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <StudyHeader onClose={handleCloseSession} />
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="text-center max-w-2xl">
+            <h1 className="text-4xl font-bold text-foreground mb-8">
+              Great Work!
+            </h1>
+            <p className="text-xl text-muted-foreground mb-12">
+              You've completed studying all {totalWords} vocabulary words for this week.
+            </p>
+            
+            <div className="flex flex-col gap-4 mb-8">
+              <button
+                onClick={() => handleStepNavigation('quiz')}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                data-testid="take-quiz-button"
+              >
+                Take Weekly Quiz
+              </button>
+              <button
+                onClick={handleCloseSession}
+                className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                data-testid="finish-session-button"
+              >
+                Finish for Now
+              </button>
+            </div>
+            
+            <p className="text-sm text-muted-foreground">
+              The quiz contains {totalWords} questions covering all the words you just studied.
+            </p>
+          </div>
         </div>
       </div>
     );
