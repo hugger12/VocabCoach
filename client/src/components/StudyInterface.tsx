@@ -681,22 +681,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     );
   }
 
-  // Progress dots component
-  const ProgressDots = () => (
-    <div className="flex justify-center space-x-2 mb-8">
-      {Array.from({ length: 4 }, (_, i) => (
-        <div
-          key={i}
-          className={cn(
-            "w-3 h-3 rounded-full",
-            i === (['word', 'definition', 'sentence', 'quiz'].indexOf(currentStep)) 
-              ? "bg-primary" 
-              : "bg-muted"
-          )}
-        />
-      ))}
-    </div>
-  );
+
 
   // Step 1: Word Introduction - matches your Screenshot 2
   if (currentStep === 'word') {
@@ -729,7 +714,6 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             Continue
           </button>
           </div>
-          <ProgressDots />
         </div>
       </div>
     );
@@ -769,7 +753,6 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             Continue
           </button>
           </div>
-          <ProgressDots />
         </div>
       </div>
     );
@@ -849,7 +832,6 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             {currentIndex >= totalWords - 1 ? 'Complete Session' : 'Next Word'}
           </button>
           </div>
-          <ProgressDots />
         </div>
       </div>
     );
@@ -1075,7 +1057,6 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               </div>
             )}
           </div>
-          <ProgressDots />
         </div>
       </div>
     );
@@ -1102,7 +1083,6 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             }
           </p>
           </div>
-          <ProgressDots />
         </div>
       </div>
     );
