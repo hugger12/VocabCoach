@@ -4,8 +4,8 @@ import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
 
 export function Landing() {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto max-w-4xl p-6">
+    <div className="h-screen bg-background overflow-auto">
+      <div className="container mx-auto max-w-4xl p-6 h-full flex flex-col">
         {/* Header */}
         <div className="text-center py-12">
           <img 

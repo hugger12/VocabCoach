@@ -49,11 +49,27 @@
     @apply border-border;
   }
   
-  body {
+  html, body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: var(--font-dyslexia);
     font-size: var(--text-dyslexia-base);
     line-height: var(--line-height-dyslexia);
+    height: 100vh;
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+  }
+  
+  #root {
+    min-height: 100vh;
+    height: 100vh;
+    background-color: hsl(var(--background));
+    overflow: hidden; /* Prevent root-level scrolling issues */
+  }
+  
+  /* Ensure all main page containers handle their own scrolling */
+  .page-container {
+    height: 100vh;
+    overflow-y: auto;
+    background-color: hsl(var(--background));
   }
 
   /* Dyslexia-friendly typography */

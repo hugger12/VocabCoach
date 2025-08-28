@@ -66,8 +66,8 @@ export function StudentLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto max-w-md p-6">
+    <div className="h-screen bg-background overflow-auto">
+      <div className="container mx-auto max-w-md p-6 h-full flex flex-col">
         {/* Header */}
         <div className="text-center py-12">
           <img 

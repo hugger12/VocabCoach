@@ -66,7 +66,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+      <div className="h-screen bg-background flex flex-col items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading your words...</p>
@@ -77,7 +77,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+      <div className="h-screen bg-background flex flex-col items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 mb-4">Error loading study session</p>
           <button
@@ -93,7 +93,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
 
   if (sessionComplete) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="h-screen bg-background flex flex-col">
         <StudyHeader onClose={onClose} />
         <div className="flex-1 flex flex-col items-center justify-center px-6">
           <div className="text-center">
@@ -116,7 +116,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
 
   // Main word display - shows everything on one screen like original
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col">
       <StudyHeader onClose={onClose} />
       
       <main className="flex-1 flex flex-col items-center justify-center px-6">

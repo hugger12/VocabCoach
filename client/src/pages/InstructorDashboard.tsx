@@ -12,7 +12,7 @@ export function InstructorDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen bg-background overflow-auto">
       {/* Header matching WordWizard style */}
       <header className="flex items-center justify-between p-6 border-b border-border">
         <div className="flex items-center gap-4">
