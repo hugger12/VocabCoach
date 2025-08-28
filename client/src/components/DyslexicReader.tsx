@@ -37,7 +37,7 @@ export function DyslexicReader({
             color: currentWordIndex === index ? 'var(--highlight-text)' : 'inherit',
             borderRadius: currentWordIndex === index ? '2px' : '0',
             transition: 'background-color 0.1s ease',
-            padding: currentWordIndex === index ? '1px 2px' : '0',
+            padding: '0',
           }}
         >
           {word}
