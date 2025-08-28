@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { AudioPlayer } from "./AudioPlayer";
+import { DyslexicReader } from "./DyslexicReader";
 import { stopAllAudio } from "@/lib/audioManager";
 import type { WordWithProgress, StudySession } from "@shared/schema";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
@@ -34,6 +35,9 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   const [sessionComplete, setSessionComplete] = useState(false);
   const [sessionWords, setSessionWords] = useState<WordWithProgress[]>([]);
   const [totalSessionWords, setTotalSessionWords] = useState(0);
+  const [currentWordHighlightIndex, setCurrentWordHighlightIndex] = useState(-1);
+  const [currentSentenceHighlightIndex, setCurrentSentenceHighlightIndex] = useState(-1);
+  const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
 
   // Fetch study session
   const { data: session, isLoading, error } = useQuery<StudySession>({
@@ -56,10 +60,43 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     };
   }, []);
 
-  // Stop audio when currentIndex changes (word changes)
+  // Stop audio and reset highlighting when currentIndex changes (word changes)
   useEffect(() => {
     stopAllAudio();
+    setCurrentWordHighlightIndex(-1);
+    setCurrentSentenceHighlightIndex(-1);
+    setActiveSentenceIndex(-1);
   }, [currentIndex]);
+
+  const handleDefinitionPlay = () => {
+    stopAllAudio(); // Stop any other audio first
+    setCurrentSentenceHighlightIndex(-1);
+    setActiveSentenceIndex(-1);
+  };
+
+  const handleDefinitionWordHighlight = (wordIndex: number) => {
+    setCurrentWordHighlightIndex(wordIndex);
+  };
+
+  const handleDefinitionEnded = () => {
+    setCurrentWordHighlightIndex(-1);
+  };
+
+  const handleSentencePlay = (sentenceIndex: number) => {
+    stopAllAudio(); // Stop any other audio first
+    setCurrentWordHighlightIndex(-1);
+    setActiveSentenceIndex(sentenceIndex);
+    setCurrentSentenceHighlightIndex(-1);
+  };
+
+  const handleSentenceWordHighlight = (wordIndex: number) => {
+    setCurrentSentenceHighlightIndex(wordIndex);
+  };
+
+  const handleSentenceEnded = () => {
+    setCurrentSentenceHighlightIndex(-1);
+    setActiveSentenceIndex(-1);
+  };
 
   const currentWord = sessionWords[currentIndex];
   const totalWords = totalSessionWords || sessionWords.length || 0;
@@ -114,64 +151,72 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     );
   }
 
-  // Main word display - shows everything on one screen like original
+  // Main word display with compact layout and word highlighting
   return (
     <div className="h-screen bg-background flex flex-col">
       <StudyHeader onClose={onClose} />
       
-      <main className="flex-1 flex flex-col items-center justify-center px-6">
-        <div className="text-center flex-1 flex flex-col justify-center max-w-2xl">
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8 overflow-auto">
+        <div className="text-center max-w-4xl w-full">
           
           {/* Word Display */}
-          <h2 className="text-6xl font-bold text-foreground mb-8">
+          <h2 className="text-6xl font-bold text-foreground mb-6">
             {currentWord?.text}
           </h2>
           
-          {/* Definition */}
-          <p className="text-2xl text-foreground mb-12 leading-relaxed">
-            {currentWord?.kidDefinition}
-          </p>
-          
-          {/* Audio Player for Definition */}
-          <AudioPlayer
-            text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
-            type="sentence"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-20 h-20 flex items-center justify-center shadow-lg transition-all mx-auto mb-8 border-0 outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-            wordId={currentWord?.id}
-            data-testid="play-definition"
-          />
+          {/* Definition with word highlighting */}
+          <div className="mb-8">
+            <DyslexicReader
+              text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
+              currentWordIndex={currentWordHighlightIndex}
+              className="text-2xl text-foreground mb-6 leading-relaxed"
+            />
+            <AudioPlayer
+              text={`The word ${currentWord?.text} means ${currentWord?.kidDefinition}`}
+              type="sentence"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-20 h-20 flex items-center justify-center shadow-lg transition-all mx-auto border-0 outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              wordId={currentWord?.id}
+              onPlay={handleDefinitionPlay}
+              onWordHighlight={handleDefinitionWordHighlight}
+              onEnded={handleDefinitionEnded}
+              data-testid="play-definition"
+            />
+          </div>
 
-          {/* Sentences Section */}
+          {/* Compact Sentences Section */}
           {currentWord?.sentences && currentWord.sentences.length > 0 && (
-            <div className="mb-12 w-full">
-              <h3 className="text-xl font-bold text-foreground mb-6 text-center">
-                Listen to sentences with "{currentWord.text}":
-              </h3>
-              <div className="space-y-4">
-                {currentWord.sentences.map((sentence, index) => (
-                  <div key={sentence.id} className="bg-card border border-border rounded-xl p-6">
-                    <p className="text-lg text-foreground mb-4 leading-relaxed">
-                      {sentence.text}
-                    </p>
+            <div className="mb-8 space-y-4">
+              {currentWord.sentences.map((sentence, index) => (
+                <div key={sentence.id} className="bg-card border border-border rounded-lg p-4">
+                  <div className="flex items-center gap-4">
                     <AudioPlayer
                       text={sentence.text}
                       type="sentence"
-                      className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all mx-auto border-0 outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
+                      className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all flex-shrink-0 border-0 outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
                       sentenceId={sentence.id}
+                      onPlay={() => handleSentencePlay(index)}
+                      onWordHighlight={handleSentenceWordHighlight}
+                      onEnded={handleSentenceEnded}
                       data-testid={`play-sentence-${index}`}
                     />
+                    <div className="flex-1 text-left">
+                      <DyslexicReader
+                        text={sentence.text}
+                        currentWordIndex={activeSentenceIndex === index ? currentSentenceHighlightIndex : -1}
+                        className="text-lg text-foreground leading-relaxed"
+                      />
+                    </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Navigation */}
-          <div className="flex items-center justify-center gap-8 mb-8">
+          {/* Navigation - Always visible at bottom */}
+          <div className="flex items-center justify-center gap-8 mb-4">
             <button
               onClick={() => {
                 if (currentIndex > 0) {
-                  stopAllAudio(); // Stop any playing audio
                   setCurrentIndex(currentIndex - 1);
                 }
               }}
@@ -184,7 +229,6 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
             
             <button
               onClick={() => {
-                stopAllAudio(); // Stop any playing audio
                 if (currentIndex + 1 < sessionWords.length) {
                   setCurrentIndex(currentIndex + 1);
                 } else {
