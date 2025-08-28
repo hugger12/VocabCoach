@@ -108,11 +108,7 @@ export function AudioPlayer({
     setIsLoading(true);
     setHasError(false);
     
-    // Call onPlay first to let parent stop other audio
-    onPlay?.();
-    
-    // Small delay to ensure other audio has stopped
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Don't call onPlay here - we'll call it after audio is ready to play
 
     try {
       console.log("AudioPlayer starting playback for:", { type, wordId, sentenceId, text: text.substring(0, 50) });
@@ -196,9 +192,6 @@ export function AudioPlayer({
 
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
-      
-      // Register with audio manager to prevent overlap
-      audioManager.registerAudio(audio);
 
       audio.onplay = () => {
         console.log('Audio started playing:', type, text.substring(0, 50));
@@ -223,6 +216,9 @@ export function AudioPlayer({
           highlightTimeoutRef.current = null;
         }
         onWordHighlight?.(-1);
+        
+        // Unregister when audio ends naturally
+        audioManager.unregisterAudio(audio);
       };
 
       audio.onerror = (event) => {
@@ -232,9 +228,20 @@ export function AudioPlayer({
         setIsLoading(false);
         setHasError(true);
         onError?.("Failed to play audio");
+        
+        // Unregister on error
+        audioManager.unregisterAudio(audio);
       };
 
       console.log("Attempting to play audio...");
+      
+      // Stop all other audio first, then register this audio
+      audioManager.stopAllAudio();
+      audioManager.registerAudio(audio);
+      
+      // Call onPlay to notify parent
+      onPlay?.();
+      
       const playPromise = audio.play();
       console.log("Audio.play() promise created");
       await playPromise;

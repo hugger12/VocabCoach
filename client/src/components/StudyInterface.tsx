@@ -68,11 +68,11 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   }, [currentIndex]);
 
   const handleDefinitionPlay = () => {
-    // Stop any other audio and reset sentence highlighting when definition plays
-    console.log('Definition play clicked - stopping all audio first');
-    stopAllAudio();
+    // Reset sentence highlighting when definition plays
+    console.log('Definition play clicked - resetting sentence highlighting');
     setCurrentSentenceHighlightIndex(-1);
     setActiveSentenceIndex(-1);
+    // Audio stopping will be handled by the AudioPlayer's onPlay callback
   };
 
   const handleDefinitionWordHighlight = (wordIndex: number) => {
@@ -85,12 +85,12 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   };
 
   const handleSentencePlay = (sentenceIndex: number) => {
-    // Stop any other audio and reset definition highlighting when sentence plays
-    console.log(`Sentence ${sentenceIndex} play clicked - stopping all audio first`);
-    stopAllAudio();
+    // Reset definition highlighting when sentence plays
+    console.log(`Sentence ${sentenceIndex} play clicked - resetting definition highlighting`);
     setCurrentWordHighlightIndex(-1);
     setActiveSentenceIndex(sentenceIndex);
     setCurrentSentenceHighlightIndex(-1);
+    // Audio stopping will be handled by the AudioPlayer's onPlay callback
   };
 
   const handleSentenceWordHighlight = (wordIndex: number) => {

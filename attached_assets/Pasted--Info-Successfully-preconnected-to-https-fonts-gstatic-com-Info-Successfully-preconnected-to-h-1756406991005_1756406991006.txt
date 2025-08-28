@@ -1,0 +1,74 @@
+[Info] Successfully preconnected to https://fonts.gstatic.com/
+[Info] Successfully preconnected to https://fonts.googleapis.com/
+[Info] Successfully preconnected to https://fonts.googleapis.com/
+[Info] Successfully preconnected to https://fonts.gstatic.com/
+[Debug] [vite] connecting... (client, line 495)
+[Debug] [vite] connected. (client, line 618)
+[Error] Failed to load resource: the server responded with a status of 401 (Unauthorized) (user, line 0)
+[Log] DyslexicReader - highlighting word: – -1 – undefined (DyslexicReader.tsx, line 33)
+[Log] DyslexicReader - highlighting word: – -1 – undefined (DyslexicReader.tsx, line 33, x8)
+[Log] Definition play clicked - stopping all audio first (StudyInterface.tsx, line 108)
+[Log] Stopping 0 tracked audio elements (audioManager.ts, line 16)
+[Log] Found 0 audio elements in DOM (audioManager.ts, line 25)
+[Log] AudioPlayer starting playback for: – {type: "sentence", wordId: "68a7a68d-e4a4-4012-8e49-889970da9328", sentenceId: undefined, …} (AudioPlayer.tsx, line 96)
+{type: "sentence", wordId: "68a7a68d-e4a4-4012-8e49-889970da9328", sentenceId: undefined, text: "The word dismiss means (v) to send away or permit "}Object
+[Log] No cached audio, generating new audio for: – "sentence_normal_The_word_dismiss_means__v__to_send_away_or_permit_to_leave__to_remove_from_a_job__to_stop_thinking_about__Our_teacher_will_n…" (AudioPlayer.tsx, line 100)
+"sentence_normal_The_word_dismiss_means__v__to_send_away_or_permit_to_leave__to_remove_from_a_job__to_stop_thinking_about__Our_teacher_will_not_dismiss_the_class_until_we_are_all_quiet___SYNONYMS__to_reject__fire__drop__discharge_ANTONYMS__to_hire__hold__consider__employ"
+[Log] Requesting audio from: – "/api/audio/generate" – "with body:" – {text: "The word dismiss means (verb) to send away or perm…scharge ANTONYMS: to hire, hold, consider, employ", type: "sentence", wordId: "68a7a68d-e4a4-4012-8e49-889970da9328", …} (AudioPlayer.tsx, line 109)
+{text: "The word dismiss means (verb) to send away or perm…scharge ANTONYMS: to hire, hold, consider, employ", type: "sentence", wordId: "68a7a68d-e4a4-4012-8e49-889970da9328", sentenceId: undefined}Object
+[Log] Audio API response status: – 200 – "OK" (AudioPlayer.tsx, line 117)
+[Log] Received audio with word timings: – [{word: "The", startTimeMs: 0, endTimeMs: 255}, {word: "word", startTimeMs: 313, endTimeMs: 488}, {word: "dismiss", startTimeMs: 534, endTimeMs: 917}, …] (45) (AudioPlayer.tsx, line 126)
+[{word: "The", startTimeMs: 0, endTimeMs: 255}, {word: "word", startTimeMs: 313, endTimeMs: 488}, {word: "dismiss", startTimeMs: 534, endTimeMs: 917}, {word: "means", startTimeMs: 975, endTimeMs: 1231}, {word: "(verb)", startTimeMs: 1254, endTimeMs: 1776}, {word: "to", startTimeMs: 1846, endTimeMs: 1962}, {word: "send", startTimeMs: 2032, endTimeMs: 2218}, {word: "away", startTimeMs: 2264, endTimeMs: 2485}, {word: "or", startTimeMs: 2554, endTimeMs: 2647}, {word: "permit", startTimeMs: 2717, endTimeMs: 2984}, …]Array (45)
+[Log] Audio with timings cached with URL: – "blob:https://63c23892-536e-4dbc-b8e4-958c02e2f8f8-00-2d94bjtq36wiw.kirk.replit.dev/d19178f2-d246-4b10-b450-9b157ed4fec0" (AudioPlayer.tsx, line 131)
+[Log] Stored word timings for highlighting: – [{word: "The", startTimeMs: 0, endTimeMs: 255}, {word: "word", startTimeMs: 313, endTimeMs: 488}, {word: "dismiss", startTimeMs: 534, endTimeMs: 917}, …] (45) (AudioPlayer.tsx, line 134)
+[{word: "The", startTimeMs: 0, endTimeMs: 255}, {word: "word", startTimeMs: 313, endTimeMs: 488}, {word: "dismiss", startTimeMs: 534, endTimeMs: 917}, {word: "means", startTimeMs: 975, endTimeMs: 1231}, {word: "(verb)", startTimeMs: 1254, endTimeMs: 1776}, {word: "to", startTimeMs: 1846, endTimeMs: 1962}, {word: "send", startTimeMs: 2032, endTimeMs: 2218}, {word: "away", startTimeMs: 2264, endTimeMs: 2485}, {word: "or", startTimeMs: 2554, endTimeMs: 2647}, {word: "permit", startTimeMs: 2717, endTimeMs: 2984}, …]Array (45)
+[Log] Attempting to play audio... (AudioPlayer.tsx, line 179)
+[Log] Audio.play() promise created (AudioPlayer.tsx, line 181)
+[Log] Audio started playing: – "sentence" – "The word dismiss means (v) to send away or permit " (AudioPlayer.tsx, line 153)
+[Log] Definition play clicked - stopping all audio first (StudyInterface.tsx, line 108)
+[Log] Stopping 1 tracked audio elements (audioManager.ts, line 16)
+[Log] Stopping tracked audio [object HTMLAudioElement] (audioManager.ts, line 19)
+[Log] Found 0 audio elements in DOM (audioManager.ts, line 25)
+[Log] Starting ElevenLabs word highlighting with 45 precise timings (AudioPlayer.tsx, line 212)
+[Error] Audio playback error: – AbortError: The operation was aborted.
+AbortError: The operation was aborted.
+	(anonymous function) (AudioPlayer.tsx:185)
+[Error] Audio details - type: – "sentence" – "wordId:" – "68a7a68d-e4a4-4012-8e49-889970da9328" – "sentenceId:" – undefined – "text:" – "The word dismiss means (v) to send away or permit to leave; to remove from a job; to stop thinking a"
+	(anonymous function) (AudioPlayer.tsx:186)
+[Log] Sentence 0 play clicked - stopping all audio first (StudyInterface.tsx, line 121)
+[Log] Stopping 0 tracked audio elements (audioManager.ts, line 16)
+[Log] Found 0 audio elements in DOM (audioManager.ts, line 25)
+[Log] AudioPlayer starting playback for: (AudioPlayer.tsx, line 96)
+Object
+
+sentenceId: "d4feab63-d596-473d-a344-833603ca1142"
+
+text: "The coach decided to dismiss the player from the t"
+
+type: "sentence"
+
+wordId: undefined
+
+Object Prototype
+[Log] No cached audio, generating new audio for: – "sentence_normal_The_coach_decided_to_dismiss_the_player_from_the_team_" (AudioPlayer.tsx, line 100)
+[Log] Requesting audio from: – "/api/audio/generate" – "with body:" – {text: "The coach decided to dismiss the player from the team.", type: "sentence", wordId: undefined, …} (AudioPlayer.tsx, line 109)
+{text: "The coach decided to dismiss the player from the team.", type: "sentence", wordId: undefined, sentenceId: "d4feab63-d596-473d-a344-833603ca1142"}Object
+[Log] Audio API response status: – 200 – "OK" (AudioPlayer.tsx, line 117)
+[Log] Received audio with word timings: – [{word: "The", startTimeMs: 0, endTimeMs: 232}, {word: "coach", startTimeMs: 302, endTimeMs: 534}, {word: "decided", startTimeMs: 580, endTimeMs: 952}, …] (10) (AudioPlayer.tsx, line 126)
+[{word: "The", startTimeMs: 0, endTimeMs: 232}, {word: "coach", startTimeMs: 302, endTimeMs: 534}, {word: "decided", startTimeMs: 580, endTimeMs: 952}, {word: "to", startTimeMs: 987, endTimeMs: 1033}, {word: "dismiss", startTimeMs: 1091, endTimeMs: 1428}, {word: "the", startTimeMs: 1463, endTimeMs: 1533}, {word: "player", startTimeMs: 1556, endTimeMs: 1800}, {word: "from", startTimeMs: 1834, endTimeMs: 1962}, {word: "the", startTimeMs: 2009, endTimeMs: 2078}, {word: "team.", startTimeMs: 2113, endTimeMs: 2694}]Array (10)
+[Log] Audio with timings cached with URL: – "blob:https://63c23892-536e-4dbc-b8e4-958c02e2f8f8-00-2d94bjtq36wiw.kirk.replit.dev/a24d8df2-eb21-43d2-955e-40b60fc9a37b" (AudioPlayer.tsx, line 131)
+[Log] Stored word timings for highlighting: – [{word: "The", startTimeMs: 0, endTimeMs: 232}, {word: "coach", startTimeMs: 302, endTimeMs: 534}, {word: "decided", startTimeMs: 580, endTimeMs: 952}, …] (10) (AudioPlayer.tsx, line 134)
+[{word: "The", startTimeMs: 0, endTimeMs: 232}, {word: "coach", startTimeMs: 302, endTimeMs: 534}, {word: "decided", startTimeMs: 580, endTimeMs: 952}, {word: "to", startTimeMs: 987, endTimeMs: 1033}, {word: "dismiss", startTimeMs: 1091, endTimeMs: 1428}, {word: "the", startTimeMs: 1463, endTimeMs: 1533}, {word: "player", startTimeMs: 1556, endTimeMs: 1800}, {word: "from", startTimeMs: 1834, endTimeMs: 1962}, {word: "the", startTimeMs: 2009, endTimeMs: 2078}, {word: "team.", startTimeMs: 2113, endTimeMs: 2694}]Array (10)
+[Log] Attempting to play audio... (AudioPlayer.tsx, line 179)
+[Log] Audio.play() promise created (AudioPlayer.tsx, line 181)
+[Log] Audio started playing: – "sentence" – "The coach decided to dismiss the player from the t" (AudioPlayer.tsx, line 153)
+[Log] Sentence 0 play clicked - stopping all audio first (StudyInterface.tsx, line 121)
+[Log] Stopping 1 tracked audio elements (audioManager.ts, line 16)
+[Log] Stopping tracked audio [object HTMLAudioElement] (audioManager.ts, line 19)
+[Log] Found 0 audio elements in DOM (audioManager.ts, line 25)
+[Log] Starting ElevenLabs word highlighting with 10 precise timings (AudioPlayer.tsx, line 212)
+[Error] Audio playback error: – AbortError: The operation was aborted.
+AbortError: The operation was aborted.
+	(anonymous function) (AudioPlayer.tsx:185)
+[Error] Audio details - type: – "sentence" – "wordId:" – undefined – "sentenceId:" – "d4feab63-d596-473d-a344-833603ca1142" – "text:" – "The coach decided to dismiss the player from the team."
+	(anonymous function) (AudioPlayer.tsx:186)
