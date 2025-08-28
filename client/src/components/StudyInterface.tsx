@@ -281,7 +281,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   };
 
   // Generate quiz content using AI and actual weekly words
-  const generateQuizContent = async () => {
+  const generateQuizContent_UNUSED = async () => {
     try {
       setQuizLoading(true);
       
@@ -326,7 +326,11 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
         if (passageResponse.ok) {
           const passageData = await passageResponse.json();
-          setPassage(passageData.passage || "");
+          // Handle passage data properly - it might be an object with text property
+          const passageText = typeof passageData.passage === 'string' 
+            ? passageData.passage 
+            : passageData.passage?.text || passageData.passage?.content || "";
+          setPassage(passageText);
           setPassageQuestions(passageData.questions || []);
         }
       }
@@ -434,7 +438,11 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
         if (passageResponse.ok) {
           const passageData = await passageResponse.json();
-          setPassage(passageData.passage || "");
+          // Handle passage data properly - it might be an object with text property
+          const passageText = typeof passageData.passage === 'string' 
+            ? passageData.passage 
+            : passageData.passage?.text || passageData.passage?.content || "";
+          setPassage(passageText);
           setPassageQuestions(passageData.questions || []);
         }
       }
@@ -952,7 +960,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
           <StudyHeader onClose={handleCloseSession} />
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center py-16">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto mb-4"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
               <p className="text-xl text-foreground/60">Generating your quiz...</p>
             </div>
           </div>
@@ -1018,7 +1026,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                     {currentQuestion.passage && (
                       <div className="bg-card border rounded-lg p-6 mb-6">
                         <div className="prose prose-lg max-w-none">
-                          <p className="text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: currentQuestion.passage }} />
+                          <p className="text-lg leading-relaxed">
+                            {passage}
+                          </p>
                         </div>
                       </div>
                     )}
