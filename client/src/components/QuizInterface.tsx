@@ -56,9 +56,12 @@ export function QuizInterface({ words, onClose, onComplete }: QuizInterfaceProps
     try {
       setIsLoading(true);
       
-      // Split words into two groups: first 6 for cloze, next 6 for passage
-      const clozeWords = words.slice(0, 6);
-      const passageWords = words.slice(6, 12);
+      // Randomize word order each time to prevent memorization patterns
+      const shuffledWords = [...words].sort(() => Math.random() - 0.5);
+      
+      // Split shuffled words into two groups: first 6 for cloze, next 6 for passage
+      const clozeWords = shuffledWords.slice(0, 6);
+      const passageWords = shuffledWords.slice(6, 12);
       
       // Generate both cloze and passage questions
       const [clozeResponse, passageResponse] = await Promise.all([
