@@ -37,12 +37,14 @@ export function QuizInterface({ words, onClose, onComplete }: QuizInterfaceProps
   const [isLoading, setIsLoading] = useState(true);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<{ [key: number]: string }>({});
+  const [selectedAnswer, setSelectedAnswer] = useState<string>("");
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [showResult, setShowResult] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [currentSection, setCurrentSection] = useState<'cloze' | 'passage'>('cloze');
-  const [passageAnswers, setPassageAnswers] = useState<{ [key: number]: string }>({});
+  const [clozeQuestions, setClozeQuestions] = useState<ClozeQuizQuestion[]>([]);
+  const [passageQuestion, setPassageQuestion] = useState<PassageQuizQuestion | null>(null);
+  const [currentPassageBlankIndex, setCurrentPassageBlankIndex] = useState(0);
   const { toast } = useToast();
 
   // Generate comprehensive quiz when component mounts
@@ -99,32 +101,30 @@ export function QuizInterface({ words, onClose, onComplete }: QuizInterfaceProps
       
       const allQuestions: QuizQuestion[] = [];
       
-      // Add cloze questions (1-6)
+      // Store cloze questions (1-6)
       if (clozeData.questions) {
-        clozeData.questions.forEach((q: any, index: number) => {
-          allQuestions.push({
-            ...q,
-            questionType: 'cloze',
-            questionNumber: index + 1,
-            choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
-          });
-        });
+        const clozeQs = clozeData.questions.map((q: any, index: number) => ({
+          ...q,
+          questionType: 'cloze' as const,
+          questionNumber: index + 1,
+          choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
+        }));
+        setClozeQuestions(clozeQs);
       }
       
-      // Add passage question (7-12)
+      // Store passage question (7-12)
       if (passageData.passage && passageData.blanks) {
-        allQuestions.push({
-          questionType: 'passage',
+        const passageQ = {
+          questionType: 'passage' as const,
           passage: passageData.passage,
           blanks: passageData.blanks.map((blank: any, index: number) => ({
             ...blank,
             questionNumber: 7 + index,
             choices: [blank.correctAnswer, ...blank.distractors].sort(() => Math.random() - 0.5)
           }))
-        });
+        };
+        setPassageQuestion(passageQ);
       }
-      
-      setQuestions(allQuestions);
     } catch (error) {
       console.error("Error generating comprehensive quiz:", error);
       toast({
@@ -137,84 +137,77 @@ export function QuizInterface({ words, onClose, onComplete }: QuizInterfaceProps
     }
   };
 
-  const handleClozeAnswerSelect = (questionNumber: number, answer: string) => {
-    setSelectedAnswers(prev => ({ ...prev, [questionNumber]: answer }));
+  const handleAnswerSelect = (answer: string) => {
+    setSelectedAnswer(answer);
   };
 
-  const handlePassageAnswerSelect = (blankNumber: number, answer: string) => {
-    setPassageAnswers(prev => ({ ...prev, [blankNumber]: answer }));
-  };
+  const handleSubmitAnswer = () => {
+    if (!selectedAnswer) return;
 
-  const handleSubmitSection = () => {
-    const currentQuestion = questions[currentQuestionIndex];
-    
-    if (currentQuestion.questionType === 'cloze') {
-      // Submit cloze questions (1-6)
-      const clozeQuestions = questions.filter(q => q.questionType === 'cloze') as ClozeQuizQuestion[];
-      
-      clozeQuestions.forEach((question) => {
-        const selectedAnswer = selectedAnswers[question.questionNumber];
-        if (selectedAnswer) {
-          const attempt: QuizAttempt = {
-            questionId: question.id,
-            questionNumber: question.questionNumber,
-            selectedAnswer,
-            correctAnswer: question.correctAnswer,
-            isCorrect: selectedAnswer === question.correctAnswer,
-          };
-          setAttempts(prev => [...prev, attempt]);
-        }
-      });
-      
-      // Move to passage section
-      setCurrentSection('passage');
-      setCurrentQuestionIndex(questions.findIndex(q => q.questionType === 'passage'));
-      setShowResult(false);
-      
-    } else if (currentQuestion.questionType === 'passage') {
-      // Submit passage questions (7-12)
-      const passageQuestion = currentQuestion;
-      
-      passageQuestion.blanks.forEach((blank) => {
-        const selectedAnswer = passageAnswers[blank.blankNumber];
-        if (selectedAnswer) {
-          const attempt: QuizAttempt = {
-            questionId: blank.id,
-            questionNumber: blank.questionNumber,
-            selectedAnswer,
-            correctAnswer: blank.correctAnswer,
-            isCorrect: selectedAnswer === blank.correctAnswer,
-          };
-          setAttempts(prev => [...prev, attempt]);
-        }
-      });
-      
-      // Quiz complete
-      setIsComplete(true);
-      setTimeout(() => {
-        const totalQuestions = 12;
-        const correctAnswers = attempts.filter(a => a.isCorrect).length + 
-                             Object.values(passageAnswers).filter((answer, index) => 
-                               answer === passageQuestion.blanks[index]?.correctAnswer).length;
-        const score = Math.round((correctAnswers / totalQuestions) * 100);
-        onComplete?.(score);
-      }, 100);
-    }
-  };
-
-  const isCurrentSectionComplete = () => {
     if (currentSection === 'cloze') {
-      const clozeQuestions = questions.filter(q => q.questionType === 'cloze') as ClozeQuizQuestion[];
-      return clozeQuestions.every(q => selectedAnswers[q.questionNumber]);
-    } else {
-      const passageQuestion = questions.find(q => q.questionType === 'passage') as PassageQuizQuestion;
-      return passageQuestion ? passageQuestion.blanks.every(b => passageAnswers[b.blankNumber]) : false;
+      const currentQuestion = clozeQuestions[currentQuestionIndex];
+      const attempt: QuizAttempt = {
+        questionId: currentQuestion.id,
+        questionNumber: currentQuestion.questionNumber,
+        selectedAnswer,
+        correctAnswer: currentQuestion.correctAnswer,
+        isCorrect: selectedAnswer === currentQuestion.correctAnswer,
+      };
+      setAttempts(prev => [...prev, attempt]);
+      setShowResult(true);
+    } else if (currentSection === 'passage' && passageQuestion) {
+      const currentBlank = passageQuestion.blanks[currentPassageBlankIndex];
+      const attempt: QuizAttempt = {
+        questionId: currentBlank.id,
+        questionNumber: currentBlank.questionNumber,
+        selectedAnswer,
+        correctAnswer: currentBlank.correctAnswer,
+        isCorrect: selectedAnswer === currentBlank.correctAnswer,
+      };
+      setAttempts(prev => [...prev, attempt]);
+      setShowResult(true);
     }
   };
 
-  const clozeQuestions = questions.filter(q => q.questionType === 'cloze') as ClozeQuizQuestion[];
-  const passageQuestion = questions.find(q => q.questionType === 'passage') as PassageQuizQuestion;
-  const progress = currentSection === 'cloze' ? 25 : 75; // Rough progress indicator
+  const handleNextQuestion = () => {
+    if (currentSection === 'cloze') {
+      if (currentQuestionIndex < clozeQuestions.length - 1) {
+        // Next cloze question
+        setCurrentQuestionIndex(currentQuestionIndex + 1);
+        setSelectedAnswer("");
+        setShowResult(false);
+      } else {
+        // Move to passage section
+        setCurrentSection('passage');
+        setCurrentQuestionIndex(0);
+        setCurrentPassageBlankIndex(0);
+        setSelectedAnswer("");
+        setShowResult(false);
+      }
+    } else if (currentSection === 'passage' && passageQuestion) {
+      if (currentPassageBlankIndex < passageQuestion.blanks.length - 1) {
+        // Next passage blank
+        setCurrentPassageBlankIndex(currentPassageBlankIndex + 1);
+        setSelectedAnswer("");
+        setShowResult(false);
+      } else {
+        // Quiz complete
+        setIsComplete(true);
+        const score = Math.round((attempts.filter(a => a.isCorrect).length + 1) / 12 * 100);
+        onComplete?.(score);
+      }
+    }
+  };
+
+  // Calculate progress based on current position
+  const totalQuestions = 12;
+  let currentQuestionNum = 0;
+  if (currentSection === 'cloze') {
+    currentQuestionNum = currentQuestionIndex + 1;
+  } else {
+    currentQuestionNum = 6 + currentPassageBlankIndex + 1;
+  }
+  const progress = (currentQuestionNum / totalQuestions) * 100;
 
   if (isLoading) {
     return (
@@ -332,188 +325,209 @@ export function QuizInterface({ words, onClose, onComplete }: QuizInterfaceProps
     );
   }
 
-  // Render Section 1: Cloze Questions (1-6)
-  if (currentSection === 'cloze') {
-    return (
-      <div className="h-screen bg-background flex flex-col">
-        <header className="flex items-center justify-between p-6">
-          <img 
-            src={huggerLogo} 
-            alt="Hugger Digital" 
-            className="w-[100px] h-[100px] object-contain"
+  // Get current question based on section and index
+  const getCurrentQuestion = () => {
+    if (currentSection === 'cloze' && clozeQuestions.length > 0) {
+      return clozeQuestions[currentQuestionIndex];
+    } else if (currentSection === 'passage' && passageQuestion) {
+      return passageQuestion.blanks[currentPassageBlankIndex];
+    }
+    return null;
+  };
+
+  const currentQuestion = getCurrentQuestion();
+
+  // Main quiz display - one question at a time
+  return (
+    <div className="h-screen bg-background flex flex-col">
+      <header className="flex items-center justify-between p-6">
+        <img 
+          src={huggerLogo} 
+          alt="Hugger Digital" 
+          className="w-[100px] h-[100px] object-contain"
+        />
+        <h1 className="text-2xl font-bold text-foreground">Quiz</h1>
+        <button
+          onClick={onClose}
+          className="p-2 text-foreground hover:text-muted-foreground transition-colors"
+          data-testid="close-quiz"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </header>
+
+      {/* Progress bar */}
+      <div className="px-6 pb-4">
+        <div className="w-full bg-muted rounded-full h-2">
+          <div 
+            className="bg-primary h-2 rounded-full transition-all duration-300"
+            style={{ width: `${progress}%` }}
           />
-          <h1 className="text-2xl font-bold text-foreground">Quiz - Section 1</h1>
-          <button
-            onClick={onClose}
-            className="p-2 text-foreground hover:text-muted-foreground transition-colors"
-            data-testid="close-quiz"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </header>
-
-        <div className="px-6 pb-4">
-          <div className="w-full bg-muted rounded-full h-2">
-            <div className="bg-primary h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
-          </div>
-          <p className="text-center text-sm text-muted-foreground mt-2 dyslexia-text-base">
-            Section 1: Questions 1-6 (Sentence Completion)
-          </p>
         </div>
+        <p className="text-center text-sm text-muted-foreground mt-2 dyslexia-text-base">
+          Question {currentQuestionNum} of {totalQuestions}
+        </p>
+      </div>
 
-        <main className="flex-1 flex flex-col px-6 py-8 overflow-auto">
-          <div className="max-w-4xl w-full mx-auto">
-            <div className="mb-6 text-center">
-              <h2 className="text-2xl font-bold text-foreground mb-4 dyslexia-text-xl">
-                Choose the best word to complete each pair of sentences
-              </h2>
-            </div>
-
-            <div className="space-y-8">
-              {clozeQuestions.map((question) => (
-                <div key={question.id} className="bg-card border border-border rounded-lg p-6">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-foreground mb-4 dyslexia-text-base">
-                      Question {question.questionNumber}
-                    </h3>
-                    <div className="space-y-3">
-                      <p className="text-lg text-foreground leading-relaxed dyslexia-text-base">
-                        {question.sentence1}
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+        <div className="max-w-4xl w-full text-center">
+          {currentQuestion && (
+            <>
+              {/* Section 1: Cloze Questions */}
+              {currentSection === 'cloze' && (
+                <>
+                  <div className="mb-8">
+                    <h2 className="text-2xl font-bold text-foreground mb-6 dyslexia-text-xl">
+                      Fill in the blank with the correct word:
+                    </h2>
+                    
+                    <div className="bg-card border border-border rounded-lg p-6 mb-6">
+                      <p className="text-xl text-foreground mb-4 leading-relaxed dyslexia-text-lg">
+                        {(currentQuestion as ClozeQuizQuestion).sentence1}
                       </p>
-                      <p className="text-lg text-foreground leading-relaxed dyslexia-text-base">
-                        {question.sentence2}
+                      <p className="text-xl text-foreground leading-relaxed dyslexia-text-lg">
+                        {(currentQuestion as ClozeQuizQuestion).sentence2}
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {question.choices.map((choice, index) => (
+                  {/* Answer choices */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    {(currentQuestion as ClozeQuizQuestion).choices.map((choice, index) => (
                       <button
                         key={index}
-                        onClick={() => handleClozeAnswerSelect(question.questionNumber, choice)}
-                        className={`p-3 border-2 rounded-lg transition-all text-base font-medium dyslexia-text-base text-left ${
-                          selectedAnswers[question.questionNumber] === choice
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-background hover:border-primary hover:bg-primary/5"
+                        onClick={() => handleAnswerSelect(choice)}
+                        disabled={showResult}
+                        className={`p-4 border-2 rounded-lg transition-all text-lg font-medium dyslexia-text-base ${
+                          selectedAnswer === choice
+                            ? showResult
+                              ? choice === (currentQuestion as ClozeQuizQuestion).correctAnswer
+                                ? "border-green-500 bg-green-50 text-green-700"
+                                : "border-red-500 bg-red-50 text-red-700"
+                              : "border-primary bg-primary/10 text-primary"
+                            : showResult && choice === (currentQuestion as ClozeQuizQuestion).correctAnswer
+                            ? "border-green-500 bg-green-50 text-green-700"
+                            : "border-border bg-card hover:border-primary hover:bg-primary/5"
                         }`}
-                        data-testid={`cloze-choice-${question.questionNumber}-${index}`}
+                        data-testid={`answer-choice-${index}`}
                       >
                         {choice}
+                        {showResult && choice === (currentQuestion as ClozeQuizQuestion).correctAnswer && (
+                          <CheckCircle className="inline ml-2 w-5 h-5" />
+                        )}
+                        {showResult && selectedAnswer === choice && choice !== (currentQuestion as ClozeQuizQuestion).correctAnswer && (
+                          <XCircle className="inline ml-2 w-5 h-5" />
+                        )}
                       </button>
                     ))}
                   </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex justify-center mt-8">
-              <Button
-                onClick={handleSubmitSection}
-                disabled={!isCurrentSectionComplete()}
-                className="bg-secondary hover:bg-secondary/90 text-secondary-foreground px-8 py-4 text-lg dyslexia-text-base"
-                data-testid="submit-cloze-section"
-              >
-                Continue to Section 2 <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Render Section 2: Passage Questions (7-12)
-  if (currentSection === 'passage' && passageQuestion) {
-    return (
-      <div className="h-screen bg-background flex flex-col">
-        <header className="flex items-center justify-between p-6">
-          <img 
-            src={huggerLogo} 
-            alt="Hugger Digital" 
-            className="w-[100px] h-[100px] object-contain"
-          />
-          <h1 className="text-2xl font-bold text-foreground">Quiz - Section 2</h1>
-          <button
-            onClick={onClose}
-            className="p-2 text-foreground hover:text-muted-foreground transition-colors"
-            data-testid="close-quiz"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </header>
-
-        <div className="px-6 pb-4">
-          <div className="w-full bg-muted rounded-full h-2">
-            <div className="bg-primary h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
-          </div>
-          <p className="text-center text-sm text-muted-foreground mt-2 dyslexia-text-base">
-            Section 2: Questions 7-12 (Reading Passage)
-          </p>
-        </div>
-
-        <main className="flex-1 flex flex-col px-6 py-8 overflow-auto">
-          <div className="max-w-4xl w-full mx-auto">
-            <div className="mb-6 text-center">
-              <h2 className="text-2xl font-bold text-foreground mb-4 dyslexia-text-xl">
-                Read the passage and choose the best word for each blank
-              </h2>
-            </div>
-
-            {/* Passage Text */}
-            <div className="bg-card border border-border rounded-lg p-6 mb-8">
-              {passageQuestion.passage.title && (
-                <h3 className="text-xl font-bold text-foreground mb-4 text-center dyslexia-text-lg">
-                  {passageQuestion.passage.title}
-                </h3>
+                </>
               )}
-              <div className="text-lg text-foreground leading-relaxed dyslexia-text-base whitespace-pre-line">
-                {passageQuestion.passage.passageText}
-              </div>
-            </div>
 
-            {/* Blanks */}
-            <div className="space-y-6">
-              {passageQuestion.blanks.map((blank) => (
-                <div key={blank.id} className="bg-card border border-border rounded-lg p-6">
-                  <h3 className="text-lg font-semibold text-foreground mb-4 dyslexia-text-base">
-                    Question {blank.questionNumber}: Choose the word for blank ({blank.blankNumber})
-                  </h3>
+              {/* Section 2: Passage Questions */}
+              {currentSection === 'passage' && passageQuestion && (
+                <>
+                  <div className="mb-8">
+                    <h2 className="text-2xl font-bold text-foreground mb-6 dyslexia-text-xl">
+                      Choose the best word for the passage:
+                    </h2>
+                    
+                    {/* Show passage with current blank highlighted */}
+                    <div className="bg-card border border-border rounded-lg p-6 mb-6">
+                      {passageQuestion.passage.title && (
+                        <h3 className="text-xl font-bold text-foreground mb-4 dyslexia-text-lg">
+                          {passageQuestion.passage.title}
+                        </h3>
+                      )}
+                      <div className="text-lg text-foreground leading-relaxed dyslexia-text-base whitespace-pre-line">
+                        {passageQuestion.passage.passageText}
+                      </div>
+                    </div>
+                    
+                    <p className="text-lg text-muted-foreground dyslexia-text-base mb-4">
+                      Question {(currentQuestion as any).questionNumber}: Choose the word for blank ({(currentQuestion as any).blankNumber})
+                    </p>
+                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {blank.choices.map((choice, index) => (
+                  {/* Answer choices */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    {(currentQuestion as any).choices.map((choice: string, index: number) => (
                       <button
                         key={index}
-                        onClick={() => handlePassageAnswerSelect(blank.blankNumber, choice)}
-                        className={`p-3 border-2 rounded-lg transition-all text-base font-medium dyslexia-text-base text-left ${
-                          passageAnswers[blank.blankNumber] === choice
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-background hover:border-primary hover:bg-primary/5"
+                        onClick={() => handleAnswerSelect(choice)}
+                        disabled={showResult}
+                        className={`p-4 border-2 rounded-lg transition-all text-lg font-medium dyslexia-text-base ${
+                          selectedAnswer === choice
+                            ? showResult
+                              ? choice === (currentQuestion as any).correctAnswer
+                                ? "border-green-500 bg-green-50 text-green-700"
+                                : "border-red-500 bg-red-50 text-red-700"
+                              : "border-primary bg-primary/10 text-primary"
+                            : showResult && choice === (currentQuestion as any).correctAnswer
+                            ? "border-green-500 bg-green-50 text-green-700"
+                            : "border-border bg-card hover:border-primary hover:bg-primary/5"
                         }`}
-                        data-testid={`passage-choice-${blank.blankNumber}-${index}`}
+                        data-testid={`answer-choice-${index}`}
                       >
                         {choice}
+                        {showResult && choice === (currentQuestion as any).correctAnswer && (
+                          <CheckCircle className="inline ml-2 w-5 h-5" />
+                        )}
+                        {showResult && selectedAnswer === choice && choice !== (currentQuestion as any).correctAnswer && (
+                          <XCircle className="inline ml-2 w-5 h-5" />
+                        )}
                       </button>
                     ))}
                   </div>
+                </>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex justify-center gap-4">
+                {!showResult ? (
+                  <Button
+                    onClick={handleSubmitAnswer}
+                    disabled={!selectedAnswer}
+                    className="bg-secondary hover:bg-secondary/90 text-secondary-foreground px-8 py-4 text-lg dyslexia-text-base"
+                    data-testid="submit-answer"
+                  >
+                    Submit Answer
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleNextQuestion}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-4 text-lg dyslexia-text-base"
+                    data-testid="next-question"
+                  >
+                    {currentQuestionNum < totalQuestions ? (
+                      <>
+                        Next Question <ArrowRight className="ml-2 w-5 h-5" />
+                      </>
+                    ) : (
+                      "Finish Quiz"
+                    )}
+                  </Button>
+                )}
+              </div>
+
+              {/* Result feedback */}
+              {showResult && (
+                <div className="mt-6 p-4 rounded-lg">
+                  {selectedAnswer === (currentQuestion as any).correctAnswer ? (
+                    <p className="text-green-600 text-lg font-medium dyslexia-text-base">
+                      ✓ Correct! Well done!
+                    </p>
+                  ) : (
+                    <p className="text-red-600 text-lg font-medium dyslexia-text-base">
+                      ✗ The correct answer is "{(currentQuestion as any).correctAnswer}"
+                    </p>
+                  )}
                 </div>
-              ))}
-            </div>
-
-            <div className="flex justify-center mt-8">
-              <Button
-                onClick={handleSubmitSection}
-                disabled={!isCurrentSectionComplete()}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-4 text-lg dyslexia-text-base"
-                data-testid="submit-passage-section"
-              >
-                Finish Quiz
-              </Button>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  return null;
+              )}
+            </>
+          )}
+        </div>
+      </main>
+    </div>
+  );
 }
