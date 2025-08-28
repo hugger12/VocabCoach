@@ -1207,12 +1207,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               {results.detailedResults.map((result) => (
                 <div 
                   key={result.questionNumber}
-                  className={cn(
-                    "border-2 rounded-2xl p-6 shadow-sm",
-                    result.isCorrect 
-                      ? "border-green-200 bg-green-50/50" 
-                      : "border-red-200 bg-red-50/50"
-                  )}
+                  className="border-2 border-tan-200 bg-tan-100 rounded-2xl p-6 shadow-sm"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <h3 className="text-lg font-semibold text-brown-900">
@@ -1248,18 +1243,13 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <p className="text-sm font-semibold text-brown-700 mb-2">Your Answer:</p>
-                      <p className={cn(
-                        "font-semibold text-lg px-3 py-2 rounded-lg",
-                        result.isCorrect 
-                          ? "text-green-700 bg-green-100/50" 
-                          : "text-red-700 bg-red-100/50"
-                      )}>
+                      <p className="font-semibold text-lg text-brown-900 bg-white px-3 py-2 rounded-lg border border-tan-200">
                         {result.userAnswer || "No answer selected"}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-brown-700 mb-2">Correct Answer:</p>
-                      <p className="font-semibold text-lg text-green-700 bg-green-100/50 px-3 py-2 rounded-lg">
+                      <p className="font-semibold text-lg text-brown-900 bg-white px-3 py-2 rounded-lg border border-tan-200">
                         {result.correctAnswer}
                       </p>
                     </div>
