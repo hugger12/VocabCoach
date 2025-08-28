@@ -1,0 +1,164 @@
+import { useState, useEffect } from "react";
+import { StudyInterface } from "@/components/StudyInterface";
+import { Button } from "@/components/ui/button";
+import { LogOut, ArrowLeft } from "lucide-react";
+import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
+
+interface StudentData {
+  id: string;
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  pin: string;
+  instructorId: string;
+  grade?: number;
+  isActive: boolean;
+}
+
+export function StudentInterface() {
+  const [student, setStudent] = useState<StudentData | null>(null);
+  const [showStudy, setShowStudy] = useState(false);
+
+  useEffect(() => {
+    // Get student data from localStorage
+    const savedStudent = localStorage.getItem("currentStudent");
+    if (savedStudent) {
+      try {
+        setStudent(JSON.parse(savedStudent));
+      } catch (error) {
+        console.error("Error parsing student data:", error);
+        // Redirect back to login if data is corrupted
+        window.location.href = "/student-login";
+      }
+    } else {
+      // No student data, redirect to login
+      window.location.href = "/student-login";
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("currentStudent");
+    window.location.href = "/";
+  };
+
+  const handleStartStudy = () => {
+    setShowStudy(true);
+  };
+
+  const handleCloseStudy = () => {
+    setShowStudy(false);
+  };
+
+  if (!student) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (showStudy) {
+    return <StudyInterface onOpenParentDashboard={handleCloseStudy} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="flex items-center justify-between p-6 border-b border-border">
+        <div className="flex items-center gap-4">
+          <img 
+            src={huggerLogo} 
+            alt="Hugger Digital" 
+            className="w-[100px] h-[100px] object-contain"
+          />
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">WordWizard</h1>
+            <p className="text-muted-foreground dyslexia-text-base">
+              Welcome, {student.displayName || student.firstName}!
+            </p>
+          </div>
+        </div>
+        
+        <Button
+          onClick={handleLogout}
+          variant="outline"
+          className="tap-target border-border text-foreground hover:bg-accent"
+          data-testid="button-student-logout"
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          Sign Out
+        </Button>
+      </header>
+
+      <div className="container mx-auto max-w-4xl p-6">
+        {/* Welcome Section */}
+        <div className="text-center py-12">
+          <h2 className="text-3xl font-bold text-foreground mb-4 dyslexia-text-2xl">
+            Ready to Learn?
+          </h2>
+          <p className="text-xl text-muted-foreground mb-8 dyslexia-text-lg">
+            Let's practice your vocabulary words!
+          </p>
+          
+          <div className="bg-card border border-border rounded-xl p-8 max-w-md mx-auto">
+            <div className="mb-6">
+              <p className="text-sm text-muted-foreground mb-2">Logged in as:</p>
+              <p className="text-lg font-bold text-foreground dyslexia-text-lg">
+                {student.displayName || `${student.firstName} ${student.lastName}`}
+              </p>
+              {student.grade && (
+                <p className="text-sm text-muted-foreground">Grade {student.grade}</p>
+              )}
+            </div>
+            
+            <Button
+              onClick={handleStartStudy}
+              className="w-full h-14 tap-target bg-primary text-primary-foreground hover:bg-primary/90 dyslexia-text-lg"
+              data-testid="button-start-study"
+            >
+              Start Learning
+            </Button>
+          </div>
+        </div>
+
+        {/* Instructions */}
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-card border border-border rounded-xl p-6">
+            <h3 className="text-lg font-bold text-foreground mb-4 dyslexia-text-lg">
+              How to Use WordWizard
+            </h3>
+            <div className="space-y-3 text-muted-foreground dyslexia-text-base">
+              <div className="flex items-start gap-3">
+                <div className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
+                  1
+                </div>
+                <p>Listen to each word carefully</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
+                  2
+                </div>
+                <p>Learn what each word means</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
+                  3
+                </div>
+                <p>Practice with fun sentences</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
+                  4
+                </div>
+                <p>Take quizzes to test your knowledge</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

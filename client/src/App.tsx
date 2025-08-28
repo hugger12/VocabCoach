@@ -11,6 +11,7 @@ import { InstructorDashboard } from "@/pages/InstructorDashboard";
 import { Students } from "@/pages/instructor/Students";
 import { Words } from "@/pages/instructor/Words";
 import { Progress } from "@/pages/instructor/Progress";
+import { StudentInterface } from "@/pages/StudentInterface";
 import Home from "@/pages/home";
 import NotFound from "@/pages/not-found";
 
@@ -43,7 +44,8 @@ function Router() {
         <>
           <Route path="/" component={Landing} />
           <Route path="/student-login" component={StudentLogin} />
-          <Route path="/student/*" component={Home} />
+          <Route path="/student" component={StudentInterface} />
+          <Route path="/student/*" component={StudentInterface} />
           <Route component={NotFound} />
         </>
       )}
