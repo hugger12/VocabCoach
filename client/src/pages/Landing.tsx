@@ -11,7 +11,7 @@ export function Landing() {
           <img 
             src={huggerLogo} 
             alt="Hugger Digital" 
-            className="w-[120px] h-[120px] object-contain mx-auto mb-8"
+            className="w-[200px] h-[200px] object-contain mx-auto mb-8"
           />
           <h1 className="text-4xl font-bold text-foreground mb-4 dyslexia-text-2xl">WordWizard</h1>
           <p className="text-xl text-muted-foreground dyslexia-text-lg">Smart vocabulary learning for every student</p>
