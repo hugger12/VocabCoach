@@ -301,13 +301,7 @@ export function StudentStudyInterface({ onClose }: StudentStudyInterfaceProps) {
 
           {/* Progress indicator */}
           <div className="text-center text-muted-foreground">
-            <p className="mb-2">Word {currentIndex + 1} of {totalWords}</p>
-            <div className="w-64 bg-muted rounded-full h-2">
-              <div 
-                className="bg-primary h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progressPercentage}%` }}
-              />
-            </div>
+            <p>Word {currentIndex + 1} of {totalWords}</p>
           </div>
         </main>
       </div>
