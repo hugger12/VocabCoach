@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Volume2, VolumeX, RotateCcw, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAudioCache } from "@/hooks/use-audio-cache";
@@ -52,10 +52,11 @@ export function AudioPlayer({
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
-      setIsPlaying(false);
-      setIsLoading(false);
-      setHasError(false);
     }
+    setIsPlaying(false);
+    setIsLoading(false);
+    setHasError(false);
+    
     // Clear word highlighting timeout
     if (highlightTimeoutRef.current) {
       clearTimeout(highlightTimeoutRef.current);
@@ -66,6 +67,11 @@ export function AudioPlayer({
     // Reset highlighting
     onWordHighlight?.(-1);
   }, [onWordHighlight]);
+
+  // Reset state when text changes (new word/sentence)
+  useEffect(() => {
+    stopCurrentAudio();
+  }, [text, stopCurrentAudio]);
 
   const playAudio = useCallback(async () => {
     if (isPlaying) {
