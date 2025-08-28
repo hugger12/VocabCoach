@@ -1120,26 +1120,191 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     );
   }
 
-  // Step 5: Feedback
+  // Step 5: Quiz Results with Detailed Feedback
   if (currentStep === 'feedback') {
-    const isCorrect = selectedChoice !== null && meaningChoices[selectedChoice]?.isCorrect;
+    // Calculate results
+    const calculateQuizResults = () => {
+      let correctCount = 0;
+      const detailedResults = [];
+      
+      // Process cloze questions
+      for (let i = 0; i < clozeQuestions.length; i++) {
+        const questionNumber = i + 1;
+        const question = clozeQuestions[i];
+        const userAnswer = quizAnswers[questionNumber];
+        const isCorrect = userAnswer === question.correctAnswer;
+        
+        if (isCorrect) correctCount++;
+        
+        detailedResults.push({
+          questionNumber,
+          type: 'cloze',
+          question: question,
+          userAnswer,
+          correctAnswer: question.correctAnswer,
+          isCorrect,
+          sentence1: question.sentence1,
+          sentence2: question.sentence2,
+          choices: question.choices
+        });
+      }
+      
+      // Process passage questions
+      for (let i = 0; i < passageQuestions.length; i++) {
+        const questionNumber = clozeQuestions.length + i + 1;
+        const blank = passageQuestions[i];
+        const userAnswer = quizAnswers[questionNumber];
+        const isCorrect = userAnswer === blank.correctAnswer;
+        
+        if (isCorrect) correctCount++;
+        
+        detailedResults.push({
+          questionNumber,
+          type: 'passage',
+          question: blank,
+          userAnswer,
+          correctAnswer: blank.correctAnswer,
+          isCorrect,
+          blankNumber: blank.blankNumber,
+          choices: blank.choices
+        });
+      }
+      
+      return { correctCount, totalQuestions: totalQuizQuestions, detailedResults };
+    };
+
+    const results = calculateQuizResults();
+    const percentage = Math.round((results.correctCount / results.totalQuestions) * 100);
+    const passed = percentage >= 70; // 70% passing grade
+    
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <StudyHeader onClose={handleCloseSession} />
-        <div className="flex-1 flex flex-col items-center justify-center px-6">
-          <div className="text-center flex-1 flex flex-col justify-center">
-          <div className={cn("text-6xl mb-8", isCorrect ? "text-green-600" : "text-red-500")}>
-            {isCorrect ? "✓" : "✗"}
-          </div>
-          <h3 className="text-3xl font-bold mb-6 text-foreground">
-            {isCorrect ? "Correct!" : "Try Again"}
-          </h3>
-          <p className="text-xl text-muted-foreground mb-8">
-            {isCorrect ? 
-              `Great work!` :
-              `The correct answer was: ${meaningChoices.find(c => c.isCorrect)?.text}`
-            }
-          </p>
+        <div className="flex-1 px-6 py-8 overflow-y-auto">
+          <div className="max-w-4xl mx-auto">
+            {/* Overall Results Header */}
+            <div className="text-center mb-8">
+              <div className={cn("text-6xl mb-4", passed ? "text-green-600" : "text-red-500")}>
+                {passed ? "✓" : "✗"}
+              </div>
+              <h1 className="text-3xl font-bold text-foreground mb-2">
+                Quiz {passed ? "Complete!" : "Results"}
+              </h1>
+              <div className="text-xl text-foreground/80 mb-4">
+                Score: {results.correctCount} of {results.totalQuestions} ({percentage}%)
+              </div>
+              {!passed && (
+                <p className="text-lg text-muted-foreground mb-6">
+                  Review the questions below to see what you missed, then try again!
+                </p>
+              )}
+            </div>
+
+            {/* Detailed Question Review */}
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-foreground mb-4">Question Review</h2>
+              
+              {results.detailedResults.map((result) => (
+                <div 
+                  key={result.questionNumber}
+                  className={cn(
+                    "border rounded-lg p-6",
+                    result.isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                  )}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-foreground">
+                      Question {result.questionNumber}
+                    </h3>
+                    <div className={cn(
+                      "px-3 py-1 rounded-full text-sm font-medium",
+                      result.isCorrect 
+                        ? "bg-green-100 text-green-800" 
+                        : "bg-red-100 text-red-800"
+                    )}>
+                      {result.isCorrect ? "Correct" : "Incorrect"}
+                    </div>
+                  </div>
+
+                  {/* Question Content */}
+                  {result.type === 'cloze' && (
+                    <div className="mb-4">
+                      <p className="text-foreground/80 mb-2">
+                        {result.sentence1}<br />
+                        {result.sentence2}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {result.type === 'passage' && (
+                    <div className="mb-4">
+                      <p className="text-sm text-foreground/60 mb-2">Reading Passage Blank #{result.blankNumber}</p>
+                    </div>
+                  )}
+
+                  {/* Answer Comparison */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-foreground/70 mb-1">Your Answer:</p>
+                      <p className={cn(
+                        "font-medium",
+                        result.isCorrect ? "text-green-600" : "text-red-600"
+                      )}>
+                        {result.userAnswer || "No answer selected"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground/70 mb-1">Correct Answer:</p>
+                      <p className="font-medium text-green-600">
+                        {result.correctAnswer}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Show all choices for reference */}
+                  {result.choices && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <p className="text-sm font-medium text-foreground/70 mb-2">All Choices:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {result.choices.map((choice) => (
+                          <span 
+                            key={choice}
+                            className={cn(
+                              "px-2 py-1 rounded text-sm",
+                              choice === result.correctAnswer 
+                                ? "bg-green-100 text-green-800 font-medium"
+                                : choice === result.userAnswer && !result.isCorrect
+                                ? "bg-red-100 text-red-800"
+                                : "bg-gray-100 text-gray-600"
+                            )}
+                          >
+                            {choice}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-4 mt-8 items-center">
+              <button
+                onClick={() => handleStepNavigation('quiz')}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                data-testid="retake-quiz-button"
+              >
+                Take Quiz Again
+              </button>
+              <button
+                onClick={() => setCurrentStep('landing')}
+                className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                data-testid="finish-quiz-button"
+              >
+                Back to Home
+              </button>
+            </div>
           </div>
         </div>
       </div>
