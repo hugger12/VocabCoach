@@ -326,10 +326,100 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   // Generate quiz content when quiz step is reached
   useEffect(() => {
-    if (currentStep === 'quiz' && sessionWords.length > 0 && clozeQuestions.length === 0) {
-      generateQuizContent();
+    if (currentStep === 'quiz' && clozeQuestions.length === 0) {
+      // For quiz, we need all weekly words, not just the session words
+      fetchQuizSession();
     }
-  }, [currentStep, sessionWords.length]);
+  }, [currentStep]);
+
+  // Fetch all weekly words for quiz (separate from regular study session)
+  const fetchQuizSession = async () => {
+    try {
+      const response = await fetch("/api/study/session?quiz=true");
+      if (response.ok) {
+        const quizSession = await response.json();
+        if (quizSession.words && quizSession.words.length > 0) {
+          // Generate quiz content directly with fetched words
+          await generateQuizContentWithWords(quizSession.words);
+        } else {
+          console.log("No words available for quiz");
+          setTotalQuizQuestions(0);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching quiz session:", error);
+      setTotalQuizQuestions(0);
+    }
+  };
+
+  // Generate quiz content with specific words array
+  const generateQuizContentWithWords = async (words: any[]) => {
+    try {
+      setQuizLoading(true);
+      
+      // Determine how many questions we can make based on available words
+      const availableWords = words.length;
+      if (availableWords === 0) {
+        setTotalQuizQuestions(0);
+        return;
+      }
+
+      // Use available words for cloze questions (up to 6)
+      const wordsForCloze = words.slice(0, Math.min(6, availableWords));
+      const clozeCount = wordsForCloze.length;
+      
+      // Use remaining words for passage questions if we have enough
+      const wordsForPassage = words.slice(6, Math.min(12, availableWords));
+      const passageCount = wordsForPassage.length;
+      
+      setTotalQuizQuestions(clozeCount + passageCount);
+
+      // Generate cloze questions (Section 1)
+      if (clozeCount > 0) {
+        const clozeResponse = await fetch("/api/quiz/cloze/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ words: wordsForCloze }),
+        });
+
+        if (clozeResponse.ok) {
+          const clozeData = await clozeResponse.json();
+          setClozeQuestions(clozeData.questions || []);
+        }
+      }
+
+      // Generate passage quiz (Section 2) - only if we have enough words
+      if (passageCount >= 6) {
+        const passageResponse = await fetch("/api/quiz/passage/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ words: wordsForPassage }),
+        });
+
+        if (passageResponse.ok) {
+          const passageData = await passageResponse.json();
+          setPassage(passageData.passage || "");
+          setPassageQuestions(passageData.questions || []);
+        }
+      }
+
+    } catch (error) {
+      console.error("Error generating quiz content:", error);
+      // Set to basic quiz if AI fails
+      setTotalQuizQuestions(1);
+      setClozeQuestions([
+        {
+          id: 1,
+          sentence1: "The grass was crushed in the _______.",
+          sentence2: "The crowd began to _______ toward the exit.",
+          choices: ['counsel', 'stampede', 'haul', 'pledge'],
+          correctAnswer: 'stampede'
+        }
+      ]);
+    } finally {
+      setQuizLoading(false);
+    }
+  };
 
   const handleStartSession = () => {
     setSessionStarted(true);

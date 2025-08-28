@@ -327,6 +327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/study/session", async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+      const quizMode = req.query.quiz === 'true'; // Check if this is for quiz (need all words)
       const currentWeek = await storage.getCurrentWeek();
       
       // Get words from current week only
@@ -354,6 +355,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // For quiz mode, include ALL words from the week regardless of schedule
+      if (quizMode) {
+        const words = activeWeek === "all" ? 
+          await storage.getWordsWithProgress() : 
+          await storage.getWordsWithProgress(activeWeek);
+        
+        const session = {
+          words: words,
+          currentIndex: 0,
+          totalWords: words.length,
+          sessionStarted: new Date(),
+        };
+        
+        console.log(`Created quiz session with ${session.words.length} words from ${activeWeek}`);
+        res.json(session);
+        return;
+      }
+      
+      // Regular study mode - use spaced repetition scheduling
       const currentWeekWordIds = currentWeekWords.map(word => word.id);
       
       // Get all schedules and filter to active words only
