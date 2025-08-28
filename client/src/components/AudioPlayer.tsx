@@ -205,7 +205,9 @@ export function AudioPlayer({
         onError?.("Failed to play audio");
       };
 
+      console.log("Attempting to play audio...");
       await audio.play();
+      console.log("Audio.play() call succeeded");
     } catch (error) {
       console.error("Audio playback error:", error);
       console.error("Audio details - type:", type, "wordId:", wordId, "sentenceId:", sentenceId, "text:", text.substring(0, 100));

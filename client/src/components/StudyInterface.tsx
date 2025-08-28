@@ -75,6 +75,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   };
 
   const handleDefinitionWordHighlight = (wordIndex: number) => {
+    console.log("Definition word highlight:", wordIndex);
     setCurrentWordHighlightIndex(wordIndex);
   };
 
@@ -90,6 +91,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   };
 
   const handleSentenceWordHighlight = (wordIndex: number) => {
+    console.log("Sentence word highlight:", wordIndex);
     setCurrentSentenceHighlightIndex(wordIndex);
   };
 

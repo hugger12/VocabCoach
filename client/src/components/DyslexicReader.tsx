@@ -31,12 +31,14 @@ export function DyslexicReader({
       {words.map((word, index) => (
         <span
           key={`${text}-${index}`}
-          className="inline-block mx-1 px-3 py-1"
+          className="inline"
           style={{
             backgroundColor: currentWordIndex === index ? 'var(--highlight-yellow)' : 'transparent',
             color: currentWordIndex === index ? 'var(--highlight-text)' : 'inherit',
-            transition: 'none', // Disable all transitions
-            transform: 'none', // Disable transforms
+            padding: currentWordIndex === index ? '2px 4px' : '0',
+            marginRight: '0.25rem',
+            transition: 'none',
+            transform: 'none',
           }}
         >
           {word}
