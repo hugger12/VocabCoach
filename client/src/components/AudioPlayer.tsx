@@ -17,6 +17,7 @@ interface AudioPlayerProps {
   onPlay?: () => void;
   onEnded?: () => void;
   onError?: (error: string) => void;
+  onWordHighlight?: (wordIndex: number) => void;
   "data-testid"?: string;
 }
 
@@ -32,12 +33,14 @@ export function AudioPlayer({
   onPlay,
   onEnded,
   onError,
+  onWordHighlight,
   "data-testid": testId,
 }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { getCachedAudio, cacheAudio } = useAudioCache();
 
   const generateCacheKey = useCallback((text: string, type: string, speed: string) => {
@@ -52,7 +55,14 @@ export function AudioPlayer({
       setIsLoading(false);
       setHasError(false);
     }
-  }, []);
+    // Clear word highlighting timeout
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = null;
+    }
+    // Reset highlighting
+    onWordHighlight?.(-1);
+  }, [onWordHighlight]);
 
   const playAudio = useCallback(async () => {
     if (isPlaying) {
@@ -133,12 +143,24 @@ export function AudioPlayer({
         setIsPlaying(true);
         setIsLoading(false);
         onPlay?.();
+        
+        // Start word highlighting for sentences only
+        if (type === "sentence" && onWordHighlight) {
+          startWordHighlighting(audio);
+        }
       };
 
       audio.onended = () => {
         console.log('Audio ended:', type, text.substring(0, 50));
         setIsPlaying(false);
         onEnded?.();
+        
+        // Clear highlighting when audio ends
+        if (highlightTimeoutRef.current) {
+          clearTimeout(highlightTimeoutRef.current);
+          highlightTimeoutRef.current = null;
+        }
+        onWordHighlight?.(-1);
       };
 
       audio.onerror = (event) => {
@@ -172,7 +194,34 @@ export function AudioPlayer({
     onPlay,
     onEnded,
     onError,
+    onWordHighlight,
   ]);
+
+  // Word highlighting function for sentences
+  const startWordHighlighting = useCallback((audio: HTMLAudioElement) => {
+    if (type !== "sentence" || !onWordHighlight) return;
+    
+    // Split text into words
+    const words = text.split(/\s+/).filter(word => word.length > 0);
+    if (words.length === 0) return;
+    
+    // Estimate timing - assume roughly 150-200 words per minute for TTS
+    const estimatedDuration = audio.duration || (words.length * 0.4); // fallback: 0.4 seconds per word
+    const timePerWord = estimatedDuration / words.length;
+    
+    console.log(`Starting word highlighting: ${words.length} words, ${estimatedDuration}s duration, ${timePerWord}s per word`);
+    
+    // Highlight each word with estimated timing
+    words.forEach((word, index) => {
+      const delay = index * timePerWord * 1000; // convert to milliseconds
+      
+      highlightTimeoutRef.current = setTimeout(() => {
+        if (audio.paused || audio.ended) return; // Don't highlight if audio stopped
+        console.log(`Highlighting word ${index}: ${word}`);
+        onWordHighlight(index);
+      }, delay);
+    });
+  }, [text, type, onWordHighlight]);
 
   const getIcon = () => {
     if (hasError) return <VolumeX className="w-5 h-5" />;

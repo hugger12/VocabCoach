@@ -618,6 +618,12 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               data-testid="play-sentence"
               wordId={currentWord?.id}
               sentenceId={currentWord?.sentences?.[currentSentenceIndex]?.id}
+              onWordHighlight={(wordIndex) => {
+                setCurrentHighlightedWord(wordIndex);
+              }}
+              onEnded={() => {
+                setCurrentHighlightedWord(-1);
+              }}
             >
               <div className="flex items-center justify-center w-full h-full text-2xl">▶</div>
             </AudioPlayer>
