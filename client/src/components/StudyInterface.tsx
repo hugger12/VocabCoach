@@ -60,9 +60,8 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     };
   }, []);
 
-  // Stop audio and reset highlighting when currentIndex changes (word changes)
+  // Reset highlighting when currentIndex changes (word changes) - don't stop audio here
   useEffect(() => {
-    stopAllAudio();
     setCurrentWordHighlightIndex(-1);
     setCurrentSentenceHighlightIndex(-1);
     setActiveSentenceIndex(-1);

@@ -68,10 +68,20 @@ export function AudioPlayer({
     onWordHighlight?.(-1);
   }, [onWordHighlight]);
 
-  // Reset state when text changes (new word/sentence)
+  // Reset state when text changes (new word/sentence) but don't stop current audio
   useEffect(() => {
-    stopCurrentAudio();
-  }, [text, stopCurrentAudio]);
+    setIsPlaying(false);
+    setIsLoading(false);
+    setHasError(false);
+    
+    // Clear word highlighting timeout
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = null;
+    }
+    // Clear word timings
+    wordTimingsRef.current = null;
+  }, [text]);
 
   const playAudio = useCallback(async () => {
     if (isPlaying) {
@@ -167,13 +177,14 @@ export function AudioPlayer({
       // Play the audio
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.currentTime = 0;
       }
 
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
       
-      // Register audio with global manager for tracking
-      audioManager.registerAudio(audio);
+      // Don't register with audio manager - it's causing conflicts
+      // audioManager.registerAudio(audio);
 
       audio.onplay = () => {
         console.log('Audio started playing:', type, text.substring(0, 50));
@@ -210,8 +221,10 @@ export function AudioPlayer({
       };
 
       console.log("Attempting to play audio...");
-      await audio.play();
-      console.log("Audio.play() call succeeded");
+      const playPromise = audio.play();
+      console.log("Audio.play() promise created");
+      await playPromise;
+      console.log("Audio.play() promise resolved successfully");
     } catch (error) {
       console.error("Audio playback error:", error);
       console.error("Audio details - type:", type, "wordId:", wordId, "sentenceId:", sentenceId, "text:", text.substring(0, 100));
