@@ -1,75 +1,69 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen, Users, UserCheck } from "lucide-react";
-import logoImage from "@assets/Hugger-Digital_logo_1755580645400.png";
+import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
 
 export function Landing() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-50 p-4">
-      <div className="container mx-auto max-w-4xl">
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto max-w-4xl p-6">
         {/* Header */}
-        <div className="text-center py-8">
+        <div className="text-center py-12">
           <img 
-            src={logoImage} 
+            src={huggerLogo} 
             alt="Hugger Digital" 
-            className="h-16 mx-auto mb-6"
+            className="w-[120px] h-[120px] object-contain mx-auto mb-8"
           />
-          <h1 className="text-4xl font-bold text-brown-800 mb-2">WordWizard</h1>
-          <p className="text-lg text-brown-600">Dyslexia-friendly vocabulary learning</p>
+          <h1 className="text-4xl font-bold text-foreground mb-4 dyslexia-text-2xl">WordWizard</h1>
+          <p className="text-xl text-muted-foreground dyslexia-text-lg">Dyslexia-friendly vocabulary learning</p>
         </div>
 
         {/* Mode Selection */}
-        <div className="grid md:grid-cols-2 gap-8 max-w-2xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-12 max-w-3xl mx-auto">
           {/* Instructor Mode */}
-          <Card className="hover:shadow-lg transition-shadow border-brown-200">
-            <CardHeader className="text-center">
-              <div className="mx-auto mb-4 p-3 bg-brown-100 rounded-full w-fit">
-                <Users className="h-8 w-8 text-brown-600" />
-              </div>
-              <CardTitle className="text-xl text-brown-800">Instructor</CardTitle>
-              <CardDescription className="text-brown-600">
-                Create student accounts, manage words, track progress
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-center">
-              <Button 
-                onClick={() => window.location.href = '/api/login'}
-                className="w-full bg-brown-600 hover:bg-brown-700 text-white"
-                data-testid="button-instructor-login"
-              >
-                <UserCheck className="mr-2 h-4 w-4" />
-                Sign In as Instructor
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="bg-card border border-border rounded-xl p-8 hover:shadow-lg transition-shadow text-center">
+            <div className="mx-auto mb-6 p-4 bg-accent rounded-xl w-fit">
+              <Users className="h-10 w-10 text-foreground" />
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-3 dyslexia-text-xl">Instructor</h2>
+            <p className="text-muted-foreground mb-8 dyslexia-text-base">
+              Create student accounts, manage words, track progress
+            </p>
+            <Button 
+              onClick={() => window.location.href = '/api/login'}
+              className="w-full h-14 tap-target bg-primary text-primary-foreground hover:bg-primary/90 dyslexia-text-base"
+              data-testid="button-instructor-login"
+            >
+              <UserCheck className="mr-3 h-5 w-5" />
+              Sign In as Instructor
+            </Button>
+          </div>
 
           {/* Student Mode */}
-          <Card className="hover:shadow-lg transition-shadow border-brown-200">
-            <CardHeader className="text-center">
-              <div className="mx-auto mb-4 p-3 bg-brown-100 rounded-full w-fit">
-                <BookOpen className="h-8 w-8 text-brown-600" />
-              </div>
-              <CardTitle className="text-xl text-brown-800">Student</CardTitle>
-              <CardDescription className="text-brown-600">
-                Practice vocabulary words and take quizzes
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-center">
-              <Button 
-                onClick={() => window.location.href = '/student-login'}
-                className="w-full bg-green-600 hover:bg-green-700 text-white"
-                data-testid="button-student-login"
-              >
-                <BookOpen className="mr-2 h-4 w-4" />
-                Enter as Student
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="bg-card border border-border rounded-xl p-8 hover:shadow-lg transition-shadow text-center">
+            <div className="mx-auto mb-6 p-4 bg-accent rounded-xl w-fit">
+              <BookOpen className="h-10 w-10 text-foreground" />
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-3 dyslexia-text-xl">Student</h2>
+            <p className="text-muted-foreground mb-8 dyslexia-text-base">
+              Practice vocabulary words and take quizzes
+            </p>
+            <Button 
+              onClick={() => window.location.href = '/student-login'}
+              className="w-full h-14 tap-target bg-secondary text-secondary-foreground hover:bg-secondary/90 dyslexia-text-base"
+              data-testid="button-student-login"
+            >
+              <BookOpen className="mr-3 h-5 w-5" />
+              Enter as Student
+            </Button>
+            <p className="text-xs text-muted-foreground mt-4">
+              Test PIN: <span className="font-mono font-semibold">1234</span>
+            </p>
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-12 text-brown-500">
-          <p className="text-sm">
+        <div className="text-center mt-16">
+          <p className="text-sm text-muted-foreground dyslexia-text-base">
             Built for 2e learners with dyslexia-friendly design principles
           </p>
         </div>

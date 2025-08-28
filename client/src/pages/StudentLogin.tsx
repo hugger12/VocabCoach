@@ -25,12 +25,11 @@ export function StudentLogin() {
 
     setIsLoading(true);
     try {
-      // For now, we'll use a default instructor ID
-      // In a real implementation, you might have a school code or instructor selection
+      // Student login with PIN only
       const response = await fetch("/api/student-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin, instructorId: "default" }),
+        body: JSON.stringify({ pin }),
       });
 
       const data = await response.json();
@@ -67,24 +66,24 @@ export function StudentLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4">
-      <div className="container mx-auto max-w-md">
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto max-w-md p-6">
         {/* Header */}
-        <div className="text-center py-8">
+        <div className="text-center py-12">
           <img 
             src={logoImage} 
             alt="Hugger Digital" 
-            className="h-16 mx-auto mb-6"
+            className="w-[100px] h-[100px] object-contain mx-auto mb-8"
           />
-          <h1 className="text-3xl font-bold text-green-800 mb-2">Student Login</h1>
-          <p className="text-lg text-green-600">Enter your 4-digit PIN</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2 dyslexia-text-2xl">Student Login</h1>
+          <p className="text-lg text-muted-foreground dyslexia-text-lg">Enter your 4-digit PIN</p>
         </div>
 
         {/* PIN Entry */}
-        <Card className="border-green-200">
+        <Card className="bg-card border-border">
           <CardHeader className="text-center">
-            <CardTitle className="text-xl text-green-800">Welcome Back!</CardTitle>
-            <CardDescription className="text-green-600">
+            <CardTitle className="text-xl text-foreground dyslexia-text-xl">Welcome Back!</CardTitle>
+            <CardDescription className="text-muted-foreground dyslexia-text-base">
               Ask your teacher for your PIN if you forgot it
             </CardDescription>
           </CardHeader>
@@ -98,7 +97,7 @@ export function StudentLogin() {
                 onChange={handlePinChange}
                 onKeyPress={handleKeyPress}
                 placeholder="0000"
-                className="text-center text-2xl font-mono tracking-widest h-16 border-green-300"
+                className="text-center text-2xl font-mono tracking-widest h-16 border-border bg-background"
                 maxLength={4}
                 data-testid="input-student-pin"
               />
@@ -107,7 +106,7 @@ export function StudentLogin() {
             <Button
               onClick={handleLogin}
               disabled={pin.length !== 4 || isLoading}
-              className="w-full bg-green-600 hover:bg-green-700 text-white h-12"
+              className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 h-12 tap-target dyslexia-text-base"
               data-testid="button-student-submit"
             >
               <LogIn className="mr-2 h-5 w-5" />
@@ -117,7 +116,7 @@ export function StudentLogin() {
             <Link href="/">
               <Button 
                 variant="ghost" 
-                className="w-full text-green-600 hover:text-green-800"
+                className="w-full text-muted-foreground hover:text-foreground tap-target dyslexia-text-base"
                 data-testid="button-back-home"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -128,10 +127,14 @@ export function StudentLogin() {
         </Card>
 
         {/* Help Text */}
-        <div className="text-center mt-8 text-green-600">
-          <p className="text-sm">
+        <div className="text-center mt-8">
+          <p className="text-sm text-muted-foreground dyslexia-text-base mb-4">
             Need help? Ask your teacher or parent for your PIN.
           </p>
+          <div className="bg-card border border-border rounded-lg p-4">
+            <p className="text-xs text-muted-foreground mb-2">For testing, try PIN:</p>
+            <p className="font-mono text-lg font-bold text-foreground">1234</p>
+          </div>
         </div>
       </div>
     </div>

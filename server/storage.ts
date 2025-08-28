@@ -45,7 +45,7 @@ export interface IStorage {
   // Student operations
   getStudent(id: string): Promise<Student | undefined>;
   getStudentsByInstructor(instructorId: string): Promise<Student[]>;
-  getStudentByPin(pin: string, instructorId: string): Promise<Student | undefined>;
+  getStudentByPin(pin: string, instructorId?: string): Promise<Student | undefined>;
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: string, updates: Partial<Student>): Promise<Student>;
   deleteStudent(id: string): Promise<void>;
@@ -136,12 +136,21 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(students).where(eq(students.instructorId, instructorId));
   }
 
-  async getStudentByPin(pin: string, instructorId: string): Promise<Student | undefined> {
-    const [student] = await db
-      .select()
-      .from(students)
-      .where(and(eq(students.pin, pin), eq(students.instructorId, instructorId)));
-    return student;
+  async getStudentByPin(pin: string, instructorId?: string): Promise<Student | undefined> {
+    if (instructorId) {
+      const [student] = await db
+        .select()
+        .from(students)
+        .where(and(eq(students.pin, pin), eq(students.instructorId, instructorId)));
+      return student;
+    } else {
+      // Find student by PIN across all instructors
+      const [student] = await db
+        .select()
+        .from(students)
+        .where(eq(students.pin, pin));
+      return student;
+    }
   }
 
   async createStudent(student: InsertStudent): Promise<Student> {
