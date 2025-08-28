@@ -180,40 +180,7 @@ export function StudentInterface() {
           </div>
         </div>
 
-        {/* Instructions */}
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-card border border-border rounded-xl p-6">
-            <h3 className="text-lg font-bold text-foreground mb-4 dyslexia-text-lg">
-              How to Use WordWizard
-            </h3>
-            <div className="space-y-3 text-muted-foreground dyslexia-text-base">
-              <div className="flex items-start gap-3">
-                <div className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
-                  1
-                </div>
-                <p>Listen to each word carefully</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
-                  2
-                </div>
-                <p>Learn what each word means</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
-                  3
-                </div>
-                <p>Practice with fun sentences</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">
-                  4
-                </div>
-                <p>Take quizzes to test your knowledge</p>
-              </div>
-            </div>
-          </div>
-        </div>
+
       </div>
     </div>
   );
