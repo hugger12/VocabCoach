@@ -97,8 +97,8 @@ export function AudioPlayer({
     // Call onPlay first to let parent stop other audio
     onPlay?.();
     
-    // Small delay to let other audio stop
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Small delay to ensure other audio has stopped
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
       console.log("AudioPlayer starting playback for:", { type, wordId, sentenceId, text: text.substring(0, 50) });

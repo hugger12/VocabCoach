@@ -31,14 +31,14 @@ export function DyslexicReader({
       {words.map((word, index) => (
         <span
           key={`${text}-${index}`}
-          className="inline-block mr-1"
+          className="inline"
           style={{
             backgroundColor: currentWordIndex === index ? 'var(--highlight-yellow)' : 'transparent',
             color: currentWordIndex === index ? 'var(--highlight-text)' : 'inherit',
-            padding: '2px 4px', // Fixed padding so layout doesn't shift
-            borderRadius: '3px',
+            marginRight: '0.25rem', // Normal word spacing
+            borderRadius: currentWordIndex === index ? '2px' : '0',
             transition: 'background-color 0.1s ease',
-            transform: 'none',
+            padding: '0', // No padding
           }}
         >
           {word}

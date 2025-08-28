@@ -69,6 +69,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
 
   const handleDefinitionPlay = () => {
     // Stop any other audio and reset sentence highlighting when definition plays
+    console.log('Definition play clicked - stopping all audio first');
     stopAllAudio();
     setCurrentSentenceHighlightIndex(-1);
     setActiveSentenceIndex(-1);
@@ -85,6 +86,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
 
   const handleSentencePlay = (sentenceIndex: number) => {
     // Stop any other audio and reset definition highlighting when sentence plays
+    console.log(`Sentence ${sentenceIndex} play clicked - stopping all audio first`);
     stopAllAudio();
     setCurrentWordHighlightIndex(-1);
     setActiveSentenceIndex(sentenceIndex);

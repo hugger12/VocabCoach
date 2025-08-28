@@ -17,17 +17,23 @@ class AudioManager {
 
   // Stop all registered audio playback
   stopAllAudio() {
+    console.log(`Stopping ${this.audioElements.size} tracked audio elements`);
+    
     // Stop all tracked audio elements
-    this.audioElements.forEach(audio => {
+    this.audioElements.forEach((audio, index) => {
       if (!audio.paused) {
+        console.log(`Stopping tracked audio ${index}`);
         audio.pause();
         audio.currentTime = 0;
       }
     });
 
     // Also stop any untracked audio elements in the DOM
-    document.querySelectorAll('audio').forEach(audio => {
+    const domAudios = document.querySelectorAll('audio');
+    console.log(`Found ${domAudios.length} audio elements in DOM`);
+    domAudios.forEach((audio, index) => {
       if (!audio.paused) {
+        console.log(`Stopping DOM audio ${index}`);
         audio.pause();
         audio.currentTime = 0;
       }
@@ -35,6 +41,7 @@ class AudioManager {
 
     // Stop speech synthesis (this might trigger error events, but components should handle gracefully)
     if (speechSynthesis.speaking) {
+      console.log('Stopping speech synthesis');
       speechSynthesis.cancel();
     }
 
