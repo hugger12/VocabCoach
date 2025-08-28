@@ -353,6 +353,8 @@ Requirements:
 - Sentences should provide enough context to determine the correct answer
 - Distractors should be the same part of speech but clearly wrong in context
 - Avoid proper nouns, slang, violence, politics
+- VARIETY: Use creative, varied sentence contexts and themes (nature, school, daily life, etc.)
+- RANDOMIZATION: Ensure distractors are randomly selected from similar words, not predictable patterns
 
 Example format:
 Sentence 1: "The grass was crushed in the _______."
@@ -381,6 +383,7 @@ Respond with JSON in this format:
           }
         ],
         response_format: { type: "json_object" },
+        temperature: 0.8, // Higher temperature for more creative variety in quiz generation
       });
 
       const result = JSON.parse(response.choices[0].message.content || "{}");
@@ -426,6 +429,8 @@ Requirements:
 - Each blank should have clear context clues
 - Distractors should be the same part of speech but contextually wrong
 - Avoid proper nouns, violence, politics, controversial topics
+- VARIETY: Use diverse topics (nature, adventure, science, daily life, etc.) and fresh story angles
+- RANDOMIZATION: Ensure each passage is unique with different themes, settings, and contexts
 
 Respond with JSON in this format:
 {
@@ -453,6 +458,7 @@ Respond with JSON in this format:
           }
         ],
         response_format: { type: "json_object" },
+        temperature: 0.8, // Higher temperature for more creative variety in quiz generation
       });
 
       const result = JSON.parse(response.choices[0].message.content || "{}");

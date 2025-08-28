@@ -355,7 +355,15 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   // Generate quiz content when quiz step is reached
   useEffect(() => {
-    if (currentStep === 'quiz' && clozeQuestions.length === 0) {
+    if (currentStep === 'quiz') {
+      // ALWAYS regenerate quiz content for fresh randomization
+      console.log("Generating fresh randomized quiz content...");
+      // Clear existing quiz state
+      setClozeQuestions([]);
+      setPassageQuestions([]);
+      setPassage("");
+      setQuizAnswers({});
+      setCurrentQuizQuestion(1);
       // Set loading immediately when entering quiz step
       setQuizLoading(true);
       // For quiz, we need all weekly words, not just the session words
@@ -404,12 +412,16 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
         return;
       }
 
+      // RANDOMIZE words each time to ensure fresh quiz content
+      const shuffledWords = [...words].sort(() => Math.random() - 0.5);
+      console.log(`Shuffled ${shuffledWords.length} words for randomized quiz generation`);
+
       // Use available words for cloze questions (up to 6)
-      const wordsForCloze = words.slice(0, Math.min(6, availableWords));
+      const wordsForCloze = shuffledWords.slice(0, Math.min(6, availableWords));
       const clozeCount = wordsForCloze.length;
       
       // Use remaining words for passage questions if we have enough
-      const wordsForPassage = words.slice(6, Math.min(12, availableWords));
+      const wordsForPassage = shuffledWords.slice(6, Math.min(12, availableWords));
       const passageCount = wordsForPassage.length;
       
       setTotalQuizQuestions(clozeCount + passageCount);
