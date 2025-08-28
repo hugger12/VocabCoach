@@ -54,15 +54,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [sessionStarted, setSessionStarted] = useState(false);
   const [currentStep, setCurrentStep] = useState<StudyStep>('landing');
   
-  // Check if this is a student session and auto-start
-  useEffect(() => {
-    const currentStudent = localStorage.getItem("currentStudent");
-    if (currentStudent && !sessionStarted) {
-      // Student is logged in, auto-start the session
-      setSessionStarted(true);
-      setCurrentStep('landing');
-    }
-  }, [sessionStarted]);
+
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [currentHighlightedWord, setCurrentHighlightedWord] = useState(-1);
   const [sessionComplete, setSessionComplete] = useState(false);
