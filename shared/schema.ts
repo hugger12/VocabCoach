@@ -64,6 +64,49 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Cloze quiz questions (Section 1: dual sentences with same word)
+export const clozeQuestions = pgTable("cloze_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  wordId: varchar("word_id").notNull().references(() => words.id, { onDelete: "cascade" }),
+  sentence1: text("sentence1").notNull(), // First sentence with blank
+  sentence2: text("sentence2").notNull(), // Second sentence with blank
+  correctAnswer: text("correct_answer").notNull(), // The target word
+  distractors: text("distractors").array().notNull(), // 3 wrong answers
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Passage quiz questions (Section 2: reading passage with multiple blanks)
+export const passageQuestions = pgTable("passage_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  weekId: varchar("week_id").notNull(), // Links to a week of vocabulary
+  passageText: text("passage_text").notNull(), // The reading passage with numbered blanks
+  title: text("title"), // Optional passage title
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Individual blanks within passage questions
+export const passageBlanks = pgTable("passage_blanks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  passageId: varchar("passage_id").notNull().references(() => passageQuestions.id, { onDelete: "cascade" }),
+  blankNumber: integer("blank_number").notNull(), // 7, 8, 9, 10, 11, 12 etc.
+  wordId: varchar("word_id").notNull().references(() => words.id, { onDelete: "cascade" }),
+  correctAnswer: text("correct_answer").notNull(), // The target word
+  distractors: text("distractors").array().notNull(), // 3 wrong answers
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Quiz attempts for new format
+export const quizAttempts = pgTable("quiz_attempts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  wordId: varchar("word_id").notNull().references(() => words.id, { onDelete: "cascade" }),
+  quizType: text("quiz_type").notNull(), // 'cloze' or 'passage'
+  questionId: varchar("question_id"), // References clozeQuestions.id or passageBlanks.id
+  selectedAnswer: text("selected_answer").notNull(),
+  isCorrect: boolean("is_correct").notNull(),
+  responseTimeMs: integer("response_time_ms"),
+  attemptedAt: timestamp("attempted_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertWordSchema = createInsertSchema(words).omit({
   id: true,
@@ -92,6 +135,26 @@ export const insertScheduleSchema = createInsertSchema(schedule).omit({
   updatedAt: true,
 });
 
+export const insertClozeQuestionSchema = createInsertSchema(clozeQuestions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPassageQuestionSchema = createInsertSchema(passageQuestions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPassageBlankSchema = createInsertSchema(passageBlanks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertQuizAttemptSchema = createInsertSchema(quizAttempts).omit({
+  id: true,
+  attemptedAt: true,
+});
+
 // Types
 export type Word = typeof words.$inferSelect;
 export type InsertWord = z.infer<typeof insertWordSchema>;
@@ -103,6 +166,14 @@ export type InsertAttempt = z.infer<typeof insertAttemptSchema>;
 export type Schedule = typeof schedule.$inferSelect;
 export type InsertSchedule = z.infer<typeof insertScheduleSchema>;
 export type Settings = typeof settings.$inferSelect;
+export type ClozeQuestion = typeof clozeQuestions.$inferSelect;
+export type InsertClozeQuestion = z.infer<typeof insertClozeQuestionSchema>;
+export type PassageQuestion = typeof passageQuestions.$inferSelect;
+export type InsertPassageQuestion = z.infer<typeof insertPassageQuestionSchema>;
+export type PassageBlank = typeof passageBlanks.$inferSelect;
+export type InsertPassageBlank = z.infer<typeof insertPassageBlankSchema>;
+export type QuizAttempt = typeof quizAttempts.$inferSelect;
+export type InsertQuizAttempt = z.infer<typeof insertQuizAttemptSchema>;
 
 // Extended types for frontend
 export interface WordWithProgress extends Word {
@@ -117,4 +188,23 @@ export interface StudySession {
   currentIndex: number;
   totalWords: number;
   sessionStarted: Date;
+}
+
+// Quiz-related interfaces
+export interface ClozeQuizSession {
+  questions: (ClozeQuestion & { choices: string[] })[];
+  currentIndex: number;
+  totalQuestions: number;
+}
+
+export interface PassageQuizSession {
+  passage: PassageQuestion;
+  blanks: (PassageBlank & { choices: string[] })[];
+  currentBlankIndex: number;
+  totalBlanks: number;
+}
+
+export interface QuizChoice {
+  text: string;
+  isCorrect: boolean;
 }

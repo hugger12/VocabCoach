@@ -334,6 +334,139 @@ Respond with JSON:
       throw new Error("Failed to generate TTS audio");
     }
   }
+  // Generate cloze quiz questions (dual sentences with same word)
+  async generateClozeQuestion(word: string, partOfSpeech: string, definition: string): Promise<{
+    sentence1: string;
+    sentence2: string;
+    correctAnswer: string;
+    distractors: string[];
+  }> {
+    try {
+      const prompt = `Create a cloze quiz question for the word "${word}" (${partOfSpeech}: ${definition}).
+
+Generate two different sentences that both use the same word "${word}" with a blank where the word should go. 
+Also provide 3 incorrect answer choices (distractors) that are plausible but wrong.
+
+Requirements:
+- Age-appropriate for 9-year-olds (CEFR B1-B2 level)
+- Each sentence should be 8-15 words long
+- Sentences should provide enough context to determine the correct answer
+- Distractors should be the same part of speech but clearly wrong in context
+- Avoid proper nouns, slang, violence, politics
+
+Example format:
+Sentence 1: "The grass was crushed in the _______."
+Sentence 2: "The crowd began to _______ toward the exit."
+Correct: stampede
+Distractors: counsel, haul, pledge
+
+Respond with JSON in this format:
+{
+  "sentence1": "first sentence with blank as _______",
+  "sentence2": "second sentence with blank as _______", 
+  "correctAnswer": "${word}",
+  "distractors": ["distractor1", "distractor2", "distractor3"]
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert in creating vocabulary assessments for children with dyslexia. Focus on clear context clues and appropriate difficulty."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || "{}");
+      
+      return {
+        sentence1: result.sentence1,
+        sentence2: result.sentence2,
+        correctAnswer: result.correctAnswer,
+        distractors: result.distractors || []
+      };
+    } catch (error) {
+      console.error("Error generating cloze question:", error);
+      throw new Error("Failed to generate cloze question");
+    }
+  }
+
+  // Generate passage quiz with multiple blanks
+  async generatePassageQuiz(words: { text: string; partOfSpeech: string; kidDefinition: string }[]): Promise<{
+    passageText: string;
+    title?: string;
+    blanks: {
+      blankNumber: number;
+      correctAnswer: string;
+      wordId: string;
+      distractors: string[];
+    }[];
+  }> {
+    try {
+      const wordsList = words.map((w, i) => `${i + 7}. ${w.text} (${w.partOfSpeech}: ${w.kidDefinition})`).join('\n');
+      
+      const prompt = `Create a reading passage quiz using these 6 vocabulary words, numbered 7-12:
+
+${wordsList}
+
+Create a coherent, engaging passage (100-150 words) appropriate for 9-year-olds with numbered blanks (7) through (12). 
+Each blank should use one of the vocabulary words. The passage should provide enough context for students to determine the correct word.
+
+For each blank, also provide 3 incorrect answer choices (distractors) that are plausible but wrong.
+
+Requirements:
+- Age-appropriate topic and language (CEFR B1-B2 level)
+- Coherent narrative or informational text
+- Each blank should have clear context clues
+- Distractors should be the same part of speech but contextually wrong
+- Avoid proper nouns, violence, politics, controversial topics
+
+Respond with JSON in this format:
+{
+  "title": "optional passage title",
+  "passageText": "Your passage text with numbered blanks like __(7)__ for sleeping problems...",
+  "blanks": [
+    {
+      "blankNumber": 7,
+      "correctAnswer": "hardship", 
+      "distractors": ["pledge", "haul", "counsel"]
+    }
+  ]
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert in creating reading comprehension assessments for children with dyslexia. Focus on clear, engaging passages with strong context clues."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || "{}");
+      
+      return {
+        passageText: result.passageText,
+        title: result.title,
+        blanks: result.blanks || []
+      };
+    } catch (error) {
+      console.error("Error generating passage quiz:", error);
+      throw new Error("Failed to generate passage quiz");
+    }
+  }
 }
 
 export const aiService = new AIService();

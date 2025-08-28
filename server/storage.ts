@@ -10,12 +10,21 @@ import {
   type InsertSchedule,
   type Settings,
   type WordWithProgress,
+  type ClozeQuestion,
+  type InsertClozeQuestion,
+  type PassageQuestion,
+  type InsertPassageQuestion,
+  type PassageBlank,
+  type InsertPassageBlank,
   words,
   sentences,
   audioCache as audioCacheTable,
   attempts,
   schedule,
-  settings
+  settings,
+  clozeQuestions,
+  passageQuestions,
+  passageBlanks
 } from "@shared/schema.js";
 import { randomUUID } from "crypto";
 import { eq, desc } from "drizzle-orm";
@@ -56,6 +65,14 @@ export interface IStorage {
   getSetting(key: string): Promise<Settings | undefined>;
   setSetting(key: string, value: string): Promise<Settings>;
   getSettings(): Promise<Settings[]>;
+
+  // Quiz functionality
+  getWordsByWeek(weekId: string): Promise<Word[]>;
+  createClozeQuestion(question: InsertClozeQuestion): Promise<ClozeQuestion>;
+  getClozeQuestionsByWeek(weekId: string): Promise<ClozeQuestion[]>;
+  createPassageQuestion(passage: InsertPassageQuestion): Promise<PassageQuestion>;
+  createPassageBlank(blank: InsertPassageBlank): Promise<PassageBlank>;
+  getPassageQuestionByWeek(weekId: string): Promise<{ passage: PassageQuestion; blanks: PassageBlank[] } | null>;
 
   // Utility
   getCurrentWeek(): Promise<string>;
@@ -302,6 +319,69 @@ export class DatabaseStorage implements IStorage {
 
   async getSettings(): Promise<Settings[]> {
     return await db.select().from(settings);
+  }
+
+  // Quiz functionality
+  async getWordsByWeek(weekId: string): Promise<Word[]> {
+    return await db.select().from(words).where(eq(words.weekId, weekId));
+  }
+
+  async createClozeQuestion(question: InsertClozeQuestion): Promise<ClozeQuestion> {
+    const [savedQuestion] = await db
+      .insert(clozeQuestions)
+      .values(question)
+      .returning();
+    return savedQuestion;
+  }
+
+  async getClozeQuestionsByWeek(weekId: string): Promise<ClozeQuestion[]> {
+    return await db
+      .select({
+        id: clozeQuestions.id,
+        wordId: clozeQuestions.wordId,
+        sentence1: clozeQuestions.sentence1,
+        sentence2: clozeQuestions.sentence2,
+        correctAnswer: clozeQuestions.correctAnswer,
+        distractors: clozeQuestions.distractors,
+        createdAt: clozeQuestions.createdAt,
+      })
+      .from(clozeQuestions)
+      .innerJoin(words, eq(words.id, clozeQuestions.wordId))
+      .where(eq(words.weekId, weekId));
+  }
+
+  async createPassageQuestion(passage: InsertPassageQuestion): Promise<PassageQuestion> {
+    const [savedPassage] = await db
+      .insert(passageQuestions)
+      .values(passage)
+      .returning();
+    return savedPassage;
+  }
+
+  async createPassageBlank(blank: InsertPassageBlank): Promise<PassageBlank> {
+    const [savedBlank] = await db
+      .insert(passageBlanks)
+      .values(blank)
+      .returning();
+    return savedBlank;
+  }
+
+  async getPassageQuestionByWeek(weekId: string): Promise<{ passage: PassageQuestion; blanks: PassageBlank[] } | null> {
+    const [passage] = await db
+      .select()
+      .from(passageQuestions)
+      .where(eq(passageQuestions.weekId, weekId));
+    
+    if (!passage) {
+      return null;
+    }
+
+    const blanks = await db
+      .select()
+      .from(passageBlanks)
+      .where(eq(passageBlanks.passageId, passage.id));
+
+    return { passage, blanks };
   }
 
   // Utility

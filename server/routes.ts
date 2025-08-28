@@ -532,7 +532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Quiz distractor generation API
+  // Quiz distractor generation API (legacy)
   app.post("/api/quiz/distractors", async (req, res) => {
     try {
       const { word, definition, partOfSpeech } = req.body;
@@ -547,6 +547,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating quiz distractors:", error);
       res.status(500).json({ message: "Failed to generate quiz distractors" });
+    }
+  });
+
+  // Generate cloze quiz questions (Section 1: dual sentences)
+  app.post("/api/quiz/cloze/generate", async (req, res) => {
+    try {
+      const { words } = req.body; // Array of word objects with text, partOfSpeech, definition
+      
+      if (!words || !Array.isArray(words) || words.length === 0) {
+        return res.status(400).json({ message: "Words array is required" });
+      }
+
+      const clozeQuestions = [];
+      
+      for (const wordData of words) {
+        const { text, partOfSpeech, kidDefinition, id } = wordData;
+        
+        try {
+          const question = await aiService.generateClozeQuestion(text, partOfSpeech, kidDefinition);
+          
+          // Save to database
+          const savedQuestion = await storage.createClozeQuestion({
+            wordId: id,
+            sentence1: question.sentence1,
+            sentence2: question.sentence2,
+            correctAnswer: question.correctAnswer,
+            distractors: question.distractors,
+          });
+          
+          clozeQuestions.push({
+            ...savedQuestion,
+            choices: [question.correctAnswer, ...question.distractors].sort(() => Math.random() - 0.5)
+          });
+        } catch (error) {
+          console.error(`Error generating cloze question for word ${text}:`, error);
+          // Continue with other words
+        }
+      }
+      
+      res.json({ questions: clozeQuestions });
+    } catch (error) {
+      console.error("Error generating cloze quiz:", error);
+      res.status(500).json({ message: "Failed to generate cloze quiz" });
+    }
+  });
+
+  // Generate passage quiz (Section 2: reading passage with blanks)
+  app.post("/api/quiz/passage/generate", async (req, res) => {
+    try {
+      const { words, weekId } = req.body; // Array of 6 words for blanks 7-12
+      
+      if (!words || !Array.isArray(words) || words.length !== 6) {
+        return res.status(400).json({ message: "Exactly 6 words are required for passage quiz" });
+      }
+
+      // Generate the passage with AI
+      const passageData = await aiService.generatePassageQuiz(words);
+      
+      // Save passage to database
+      const savedPassage = await storage.createPassageQuestion({
+        weekId: weekId || await storage.getCurrentWeek(),
+        passageText: passageData.passageText,
+        title: passageData.title,
+      });
+      
+      // Save blanks
+      const blanks = [];
+      for (let i = 0; i < passageData.blanks.length; i++) {
+        const blankData = passageData.blanks[i];
+        const wordData = words[i];
+        
+        const savedBlank = await storage.createPassageBlank({
+          passageId: savedPassage.id,
+          blankNumber: blankData.blankNumber,
+          wordId: wordData.id,
+          correctAnswer: blankData.correctAnswer,
+          distractors: blankData.distractors,
+        });
+        
+        blanks.push({
+          ...savedBlank,
+          choices: [blankData.correctAnswer, ...blankData.distractors].sort(() => Math.random() - 0.5)
+        });
+      }
+      
+      res.json({
+        passage: savedPassage,
+        blanks: blanks
+      });
+    } catch (error) {
+      console.error("Error generating passage quiz:", error);
+      res.status(500).json({ message: "Failed to generate passage quiz" });
+    }
+  });
+
+  // Get quiz data for a week (both cloze and passage questions)
+  app.get("/api/quiz/:weekId", async (req, res) => {
+    try {
+      const { weekId } = req.params;
+      
+      // Get words for the week
+      const words = await storage.getWordsByWeek(weekId);
+      
+      if (words.length === 0) {
+        return res.status(404).json({ message: "No words found for this week" });
+      }
+      
+      // Get cloze questions for first 6 words (questions 1-6)
+      const clozeQuestions = await storage.getClozeQuestionsByWeek(weekId);
+      
+      // Get passage questions for next 6 words (questions 7-12)  
+      const passageData = await storage.getPassageQuestionByWeek(weekId);
+      
+      res.json({
+        clozeQuestions: clozeQuestions.map(q => ({
+          ...q,
+          choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
+        })),
+        passageData: passageData ? {
+          passage: passageData.passage,
+          blanks: passageData.blanks.map(b => ({
+            ...b,
+            choices: [b.correctAnswer, ...b.distractors].sort(() => Math.random() - 0.5)
+          }))
+        } : null
+      });
+    } catch (error) {
+      console.error("Error fetching quiz data:", error);
+      res.status(500).json({ message: "Failed to fetch quiz data" });
     }
   });
 

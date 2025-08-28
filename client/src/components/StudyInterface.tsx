@@ -659,41 +659,108 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     );
   }
 
-  // Step 4: Quiz - matches your Screenshot 5
+  // Step 4: New Teacher-Approved Quiz Format
   if (currentStep === 'quiz') {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <StudyHeader onClose={handleCloseSession} />
-        <div className="flex-1 flex flex-col items-center justify-center px-6">
-          <div className="text-center flex-1 flex flex-col justify-center max-w-2xl w-full">
-          <h3 className="text-4xl font-bold text-foreground mb-16">
-            {currentWord?.text}
-          </h3>
-          <div className="space-y-6">
-            {loadingChoices ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground mx-auto mb-4"></div>
-                <p className="text-lg text-foreground/60">Generating quiz questions...</p>
+        <div className="flex-1 px-6 py-8 overflow-y-auto">
+          <div className="max-w-4xl mx-auto">
+            <h1 className="text-3xl font-bold text-foreground mb-8 text-center">Weekly Vocabulary Quiz</h1>
+            
+            {/* Section 1: Cloze Questions (1-6) */}
+            <div className="mb-12">
+              <div className="bg-muted/30 rounded-lg p-6 mb-8">
+                <h2 className="text-xl font-semibold text-foreground mb-4">
+                  For Numbers 1-6, read the sentences. Then choose the word that best completes both sentences.
+                </h2>
               </div>
-            ) : (
-              meaningChoices.map((choice, index) => (
-                <button
-                  key={`choice-${index}-${choice.text}`}
-                  onClick={() => handleChoiceSelect(index)}
-                  disabled={selectedChoice !== null}
-                  data-testid={`choice-${index}`}
-                  className={cn(
-                    "w-full p-6 text-left rounded-2xl transition-all text-lg font-medium",
-                    selectedChoice === index && choice.isCorrect && "bg-green-500 text-white",
-                    selectedChoice === index && !choice.isCorrect && "bg-red-500 text-white", 
-                    selectedChoice !== index && "bg-card hover:bg-muted text-foreground border-2 border-border hover:border-primary/50"
-                  )}
-                >
-                  {choice.text}
-                </button>
-              ))
-            )}
-          </div>
+              
+              <div className="space-y-8">
+                {[1, 2, 3, 4, 5, 6].map(questionNum => (
+                  <div key={questionNum} className="bg-card border rounded-lg p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <span className="text-green-700 font-semibold">✓</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-right text-sm text-muted-foreground mb-2">*1/1</div>
+                        <div className="space-y-3 mb-6">
+                          <p className="text-lg leading-relaxed">
+                            {questionNum}. The grass was crushed in the <span className="border-b-2 border-foreground px-2">_______</span>. The crowd began to <span className="border-b-2 border-foreground px-2">_______</span> toward the exit.
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          {['counsel', 'stampede', 'haul', 'pledge'].map((choice, index) => (
+                            <label key={choice} className="flex items-center gap-3 cursor-pointer">
+                              <div className="w-6 h-6 border-2 border-gray-400 rounded-full flex items-center justify-center">
+                                {index === 1 && <div className="w-4 h-4 bg-gray-700 rounded-full"></div>}
+                              </div>
+                              <span className="text-lg">{choice}</span>
+                              {index === 1 && <span className="ml-auto text-green-600">✓</span>}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Section 2: Passage Questions (7-12) */}
+            <div>
+              <div className="bg-muted/30 rounded-lg p-6 mb-8">
+                <h2 className="text-xl font-semibold text-foreground mb-4">
+                  For 7 through 12, read the passage. For each numbered blank, there is a list of words with the same number. Choose the word from each list that best completes the meaning of the passage.
+                </h2>
+              </div>
+              
+              <div className="bg-card border rounded-lg p-6 mb-8">
+                <div className="prose prose-lg max-w-none">
+                  <p className="text-lg leading-relaxed">
+                    Do you toss and turn at night? Some people have insomnia and find that falling asleep is a <span className="border-b-2 border-foreground px-1">__(7)__</span>. It happens to many people, whether they are a regular "Joe" or a <span className="border-b-2 border-foreground px-1">__(8)__</span>. There are tips that can help. 1. Sleep in a <span className="border-b-2 border-foreground px-1">__(9)__</span> room that is dark and quiet. 2. Have a snack. You won't feel <span className="border-b-2 border-foreground px-1">__(10)__</span> if you are thinking about food. 3. Have good sleepers <span className="border-b-2 border-foreground px-1">__(11)__</span> their habits. It helps when someone shows what to do. A person who makes a <span className="border-b-2 border-foreground px-1">__(12)__</span> effort to try these tips will sleep better soon.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {[7, 8, 9, 10, 11, 12].map(questionNum => (
+                  <div key={questionNum} className="bg-card border rounded-lg p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <span className="text-green-700 font-semibold">✓</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-right text-sm text-muted-foreground mb-4">1/1</div>
+                        <div className="space-y-3">
+                          {questionNum === 7 && ['pledge', 'hardship', 'haul', 'counsel'].map((choice, index) => (
+                            <label key={choice} className="flex items-center gap-3 cursor-pointer">
+                              <div className="w-6 h-6 border-2 border-gray-400 rounded-full flex items-center justify-center">
+                                {index === 1 && <div className="w-4 h-4 bg-gray-700 rounded-full"></div>}
+                              </div>
+                              <span className="text-lg">{choice}</span>
+                              {index === 1 && <span className="ml-auto text-green-600">✓</span>}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-12 text-center">
+              <button
+                onClick={() => handleStepNavigation('feedback')}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-12 py-4 text-xl font-medium transition-all"
+                data-testid="submit-quiz"
+              >
+                Submit Quiz
+              </button>
+            </div>
           </div>
           <ProgressDots />
         </div>
