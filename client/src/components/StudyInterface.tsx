@@ -67,11 +67,20 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     enabled: sessionStarted && !sessionComplete && currentStep !== 'quiz',
   });
 
-  // Store session words when first loaded
+  // Store session words when first loaded and check if all words have been reviewed
   useEffect(() => {
     if (session?.words && sessionWords.length === 0) {
       setSessionWords([...session.words]);
       setTotalSessionWords(session.totalWords);
+      
+      // Check if all words have been reviewed (have attempts recorded)
+      // If user has practiced all words before, show quiz option immediately
+      const hasReviewedAllWords = session.words.length > 0 && 
+        session.words.every(word => word.attempts && word.attempts.length > 0);
+      
+      if (hasReviewedAllWords) {
+        setAllWordsReviewed(true);
+      }
     }
   }, [session?.words, sessionWords.length, session?.totalWords]);
 
