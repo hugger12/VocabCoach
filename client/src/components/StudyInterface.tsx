@@ -1178,23 +1178,23 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     const passed = percentage >= 70; // 70% passing grade
     
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-tan-50 flex flex-col">
         <StudyHeader onClose={handleCloseSession} />
-        <div className="flex-1 px-6 py-8 overflow-y-auto">
+        <div className="flex-1 px-6 py-8">
           <div className="max-w-4xl mx-auto">
             {/* Overall Results Header */}
             <div className="text-center mb-8">
-              <div className={cn("text-6xl mb-4", passed ? "text-green-600" : "text-red-500")}>
+              <div className={cn("text-6xl mb-4", passed ? "text-green-700" : "text-red-600")}>
                 {passed ? "✓" : "✗"}
               </div>
-              <h1 className="text-3xl font-bold text-foreground mb-2">
+              <h1 className="text-3xl font-bold text-brown-900 mb-2">
                 Quiz {passed ? "Complete!" : "Results"}
               </h1>
-              <div className="text-xl text-foreground/80 mb-4">
+              <div className="text-xl text-brown-700 mb-4">
                 Score: {results.correctCount} of {results.totalQuestions} ({percentage}%)
               </div>
               {!passed && (
-                <p className="text-lg text-muted-foreground mb-6">
+                <p className="text-lg text-brown-600 mb-6">
                   Review the questions below to see what you missed, then try again!
                 </p>
               )}
@@ -1202,25 +1202,27 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
             {/* Detailed Question Review */}
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-foreground mb-4">Question Review</h2>
+              <h2 className="text-2xl font-bold text-brown-900 mb-4">Question Review</h2>
               
               {results.detailedResults.map((result) => (
                 <div 
                   key={result.questionNumber}
                   className={cn(
-                    "border rounded-lg p-6",
-                    result.isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                    "border-2 rounded-2xl p-6 shadow-sm",
+                    result.isCorrect 
+                      ? "border-green-200 bg-green-50/50" 
+                      : "border-red-200 bg-red-50/50"
                   )}
                 >
                   <div className="flex items-start justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-foreground">
+                    <h3 className="text-lg font-semibold text-brown-900">
                       Question {result.questionNumber}
                     </h3>
                     <div className={cn(
-                      "px-3 py-1 rounded-full text-sm font-medium",
+                      "px-4 py-2 rounded-full text-sm font-medium",
                       result.isCorrect 
-                        ? "bg-green-100 text-green-800" 
-                        : "bg-red-100 text-red-800"
+                        ? "bg-green-100 text-green-800 border border-green-200" 
+                        : "bg-red-100 text-red-800 border border-red-200"
                     )}>
                       {result.isCorrect ? "Correct" : "Incorrect"}
                     </div>
@@ -1228,8 +1230,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
                   {/* Question Content */}
                   {result.type === 'cloze' && (
-                    <div className="mb-4">
-                      <p className="text-foreground/80 mb-2">
+                    <div className="mb-6">
+                      <p className="text-brown-800 mb-2 leading-relaxed text-lg">
                         {result.sentence1}<br />
                         {result.sentence2}
                       </p>
@@ -1237,25 +1239,27 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                   )}
                   
                   {result.type === 'passage' && (
-                    <div className="mb-4">
-                      <p className="text-sm text-foreground/60 mb-2">Reading Passage Blank #{result.blankNumber}</p>
+                    <div className="mb-6">
+                      <p className="text-brown-600 mb-2 font-medium">Reading Passage Blank #{result.blankNumber}</p>
                     </div>
                   )}
 
                   {/* Answer Comparison */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <p className="text-sm font-medium text-foreground/70 mb-1">Your Answer:</p>
+                      <p className="text-sm font-semibold text-brown-700 mb-2">Your Answer:</p>
                       <p className={cn(
-                        "font-medium",
-                        result.isCorrect ? "text-green-600" : "text-red-600"
+                        "font-semibold text-lg px-3 py-2 rounded-lg",
+                        result.isCorrect 
+                          ? "text-green-700 bg-green-100/50" 
+                          : "text-red-700 bg-red-100/50"
                       )}>
                         {result.userAnswer || "No answer selected"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground/70 mb-1">Correct Answer:</p>
-                      <p className="font-medium text-green-600">
+                      <p className="text-sm font-semibold text-brown-700 mb-2">Correct Answer:</p>
+                      <p className="font-semibold text-lg text-green-700 bg-green-100/50 px-3 py-2 rounded-lg">
                         {result.correctAnswer}
                       </p>
                     </div>
@@ -1263,19 +1267,19 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
                   {/* Show all choices for reference */}
                   {result.choices && (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <p className="text-sm font-medium text-foreground/70 mb-2">All Choices:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {result.choices.map((choice) => (
+                    <div className="mt-6 pt-4 border-t-2 border-brown-100">
+                      <p className="text-sm font-semibold text-brown-700 mb-3">All Choices:</p>
+                      <div className="flex flex-wrap gap-3">
+                        {result.choices.map((choice: string) => (
                           <span 
                             key={choice}
                             className={cn(
-                              "px-2 py-1 rounded text-sm",
+                              "px-3 py-2 rounded-xl text-sm font-medium border",
                               choice === result.correctAnswer 
-                                ? "bg-green-100 text-green-800 font-medium"
+                                ? "bg-green-100 text-green-800 border-green-300 font-semibold"
                                 : choice === result.userAnswer && !result.isCorrect
-                                ? "bg-red-100 text-red-800"
-                                : "bg-gray-100 text-gray-600"
+                                ? "bg-red-100 text-red-800 border-red-300"
+                                : "bg-brown-50 text-brown-600 border-brown-200"
                             )}
                           >
                             {choice}
@@ -1289,17 +1293,17 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-col gap-4 mt-8 items-center">
+            <div className="flex flex-col gap-4 mt-12 items-center pb-8">
               <button
                 onClick={() => handleStepNavigation('quiz')}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                className="bg-brown-700 hover:bg-brown-800 text-white rounded-2xl px-12 py-4 text-xl font-medium transition-all shadow-lg hover:shadow-xl"
                 data-testid="retake-quiz-button"
               >
                 Take Quiz Again
               </button>
               <button
-                onClick={() => setCurrentStep('landing')}
-                className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
+                onClick={handleCloseSession}
+                className="bg-tan-200 hover:bg-tan-300 text-brown-800 rounded-2xl px-12 py-4 text-xl font-medium transition-all border-2 border-brown-200"
                 data-testid="finish-quiz-button"
               >
                 Back to Home
