@@ -21,6 +21,12 @@ Preferred communication style: Simple, everyday language.
 - **Session Management**: Instructors use Replit Auth sessions, students use localStorage for session persistence
 - **Route Protection**: Instructor routes require authentication, student routes use PIN validation
 
+## Component Architecture Refactoring (2025-08-28)
+- **Unified Study Interface**: Consolidated duplicate StudyInterface components into single clean implementation
+- **Removed Dead Code**: Eliminated unused SpeechSynthesisPlayer, SynchronizedAudioPlayer, ParentDashboard components
+- **Audio System**: Single robust AudioPlayer with proper state management and global audio stopping
+- **Simplified Student Flow**: Direct word → definition → audio → navigation without complex multi-step flows
+
 ## Frontend Architecture
 - **Framework**: React with TypeScript using Vite for development and build tooling
 - **UI Library**: Shadcn/UI components built on Radix UI primitives for accessibility

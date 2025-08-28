@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { StudentStudyInterface } from "@/components/StudentStudyInterface";
+import { StudyInterface } from "@/components/StudyInterface";
 import { Button } from "@/components/ui/button";
 import { LogOut, ArrowLeft } from "lucide-react";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
@@ -61,7 +61,7 @@ export function StudentInterface() {
   }
 
   if (showStudy) {
-    return <StudentStudyInterface onClose={handleCloseStudy} />;
+    return <StudyInterface onClose={handleCloseStudy} />;
   }
 
   return (

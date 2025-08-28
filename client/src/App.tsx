@@ -12,7 +12,7 @@ import { Students } from "@/pages/instructor/Students";
 import { Words } from "@/pages/instructor/Words";
 import { Progress } from "@/pages/instructor/Progress";
 import { StudentInterface } from "@/pages/StudentInterface";
-import Home from "@/pages/home";
+
 import NotFound from "@/pages/not-found";
 
 function Router() {
