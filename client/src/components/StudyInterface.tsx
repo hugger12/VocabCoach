@@ -68,7 +68,8 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   }, [currentIndex]);
 
   const handleDefinitionPlay = () => {
-    // Reset sentence highlighting when definition plays
+    // Stop any other audio and reset sentence highlighting when definition plays
+    stopAllAudio();
     setCurrentSentenceHighlightIndex(-1);
     setActiveSentenceIndex(-1);
   };
@@ -83,7 +84,8 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   };
 
   const handleSentencePlay = (sentenceIndex: number) => {
-    // Reset definition highlighting when sentence plays
+    // Stop any other audio and reset definition highlighting when sentence plays
+    stopAllAudio();
     setCurrentWordHighlightIndex(-1);
     setActiveSentenceIndex(sentenceIndex);
     setCurrentSentenceHighlightIndex(-1);
