@@ -59,6 +59,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [sessionWords, setSessionWords] = useState<WordWithProgress[]>([]);
   const [totalSessionWords, setTotalSessionWords] = useState(0);
+  const [allWordsReviewed, setAllWordsReviewed] = useState(false);
 
   // Fetch study session (disabled for quiz mode)
   const { data: session, isLoading, error } = useQuery<StudySession>({
@@ -232,7 +233,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       setCurrentSentenceIndex(0);
       setCurrentHighlightedWord(-1);
     } else {
-      // Session complete - show completion screen
+      // Session complete - show completion screen and mark all words as reviewed
+      setAllWordsReviewed(true);
       setCurrentStep('session-complete');
     }
   };
@@ -451,6 +453,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     setSelectedChoice(null);
     setCurrentStep('landing');
     setCurrentSentenceIndex(0);
+    setAllWordsReviewed(false);
   };
 
   const handleCloseSession = () => {
@@ -641,7 +644,15 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
             >
               Sentences
             </button>
-
+            {allWordsReviewed && (
+              <button
+                onClick={() => handleStepNavigation('quiz')}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg px-6 py-3 text-lg font-medium transition-all"
+                data-testid="quiz-button"
+              >
+                Take Quiz
+              </button>
+            )}
           </div>
         </main>
 
@@ -860,7 +871,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
                 Take Weekly Quiz
               </button>
               <button
-                onClick={handleCloseSession}
+                onClick={() => setCurrentStep('landing')}
                 className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all"
                 data-testid="finish-session-button"
               >
