@@ -60,9 +60,7 @@
   
   #root {
     min-height: 100vh;
-    height: 100vh;
     background-color: hsl(var(--background));
-    overflow: hidden; /* Prevent root-level scrolling issues */
   }
   
   /* Ensure all main page containers handle their own scrolling */
