@@ -17,7 +17,7 @@ interface StudentData {
 
 export function StudentInterface() {
   const [student, setStudent] = useState<StudentData | null>(null);
-  const [showStudy, setShowStudy] = useState(false);
+  const [showStudy, setShowStudy] = useState(true); // Start with study mode enabled
 
   useEffect(() => {
     // Get student data from localStorage
