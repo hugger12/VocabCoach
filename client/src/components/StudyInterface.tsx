@@ -105,6 +105,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   const [passageQuestions, setPassageQuestions] = useState<any[]>([]);
   const [passage, setPassage] = useState<string>("");
   const [quizLoading, setQuizLoading] = useState(false);
+  const [currentQuizQuestion, setCurrentQuizQuestion] = useState(1);
+  const [totalQuizQuestions, setTotalQuizQuestions] = useState(12);
 
   // Generate quiz choices when word changes
   useEffect(() => {
@@ -258,39 +260,56 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
     try {
       setQuizLoading(true);
       
-      // Use first 6 words for cloze questions
-      const wordsForCloze = sessionWords.slice(0, 6);
-      // Use words 7-12 for passage questions  
-      const wordsForPassage = sessionWords.slice(6, 12);
-
-      // Generate cloze questions (Section 1)
-      const clozeResponse = await fetch("/api/quiz/cloze/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ words: wordsForCloze }),
-      });
-
-      if (clozeResponse.ok) {
-        const clozeData = await clozeResponse.json();
-        setClozeQuestions(clozeData.questions || []);
+      // Determine how many questions we can make based on available words
+      const availableWords = sessionWords.length;
+      if (availableWords === 0) {
+        setTotalQuizQuestions(0);
+        return;
       }
 
-      // Generate passage quiz (Section 2)
-      const passageResponse = await fetch("/api/quiz/passage/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ words: wordsForPassage }),
-      });
+      // Use available words for cloze questions (up to 6)
+      const wordsForCloze = sessionWords.slice(0, Math.min(6, availableWords));
+      const clozeCount = wordsForCloze.length;
+      
+      // Use remaining words for passage questions if we have enough
+      const wordsForPassage = sessionWords.slice(6, Math.min(12, availableWords));
+      const passageCount = wordsForPassage.length;
+      
+      setTotalQuizQuestions(clozeCount + passageCount);
 
-      if (passageResponse.ok) {
-        const passageData = await passageResponse.json();
-        setPassage(passageData.passage || "");
-        setPassageQuestions(passageData.questions || []);
+      // Generate cloze questions (Section 1)
+      if (clozeCount > 0) {
+        const clozeResponse = await fetch("/api/quiz/cloze/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ words: wordsForCloze }),
+        });
+
+        if (clozeResponse.ok) {
+          const clozeData = await clozeResponse.json();
+          setClozeQuestions(clozeData.questions || []);
+        }
+      }
+
+      // Generate passage quiz (Section 2) - only if we have enough words
+      if (passageCount >= 6) {
+        const passageResponse = await fetch("/api/quiz/passage/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ words: wordsForPassage }),
+        });
+
+        if (passageResponse.ok) {
+          const passageData = await passageResponse.json();
+          setPassage(passageData.passage || "");
+          setPassageQuestions(passageData.questions || []);
+        }
       }
 
     } catch (error) {
       console.error("Error generating quiz content:", error);
-      // Fallback to basic static content if AI fails
+      // Set to basic quiz if AI fails
+      setTotalQuizQuestions(1);
       setClozeQuestions([
         {
           id: 1,
@@ -735,115 +754,181 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   // Step 4: New Teacher-Approved Quiz Format with AI-Generated Content
   if (currentStep === 'quiz') {
 
+    // Get current question data
+    const getCurrentQuestion = () => {
+      if (currentQuizQuestion <= clozeQuestions.length) {
+        // Cloze question (1-6)
+        const question = clozeQuestions[currentQuizQuestion - 1];
+        return {
+          type: 'cloze',
+          question,
+          instructions: "Read the sentences. Then choose the word that best completes both sentences."
+        };
+      } else {
+        // Passage question (7-12)
+        const passageIndex = currentQuizQuestion - clozeQuestions.length - 1;
+        const question = passageQuestions[passageIndex];
+        return {
+          type: 'passage',
+          question,
+          instructions: "Read the passage. Choose the word from the list that best completes the meaning of the passage.",
+          passage: passage
+        };
+      }
+    };
+
+    const currentQuestion = getCurrentQuestion();
+
+    const handleNextQuestion = () => {
+      if (currentQuizQuestion < totalQuizQuestions) {
+        setCurrentQuizQuestion(prev => prev + 1);
+      } else {
+        // Quiz complete, go to feedback
+        handleStepNavigation('feedback');
+      }
+    };
+
+    const handlePreviousQuestion = () => {
+      if (currentQuizQuestion > 1) {
+        setCurrentQuizQuestion(prev => prev - 1);
+      }
+    };
+
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <StudyHeader onClose={handleCloseSession} />
         <div className="flex-1 px-6 py-8 overflow-y-auto">
           <div className="max-w-4xl mx-auto">
-            <h1 className="text-3xl font-bold text-foreground mb-8 text-center">Weekly Vocabulary Quiz</h1>
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-bold text-foreground mb-4">Weekly Vocabulary Quiz</h1>
+              <div className="text-xl text-foreground/60">
+                Question {currentQuizQuestion} of {totalQuizQuestions}
+              </div>
+            </div>
             
             {quizLoading ? (
               <div className="text-center py-16">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto mb-4"></div>
                 <p className="text-xl text-foreground/60">Generating your quiz...</p>
               </div>
+            ) : totalQuizQuestions === 0 ? (
+              <div className="text-center py-16">
+                <p className="text-xl text-foreground/60">No words available for quiz. Please add vocabulary words first.</p>
+              </div>
             ) : (
-              <>
-                {/* Section 1: Cloze Questions (1-6) */}
-                <div className="mb-12">
-                  <div className="bg-muted/30 rounded-lg p-6 mb-8">
-                    <h2 className="text-xl font-semibold text-foreground mb-4">
-                      For Numbers 1-6, read the sentences. Then choose the word that best completes both sentences.
-                    </h2>
-                  </div>
-                  
-                  <div className="space-y-8">
-                    {clozeQuestions.map((question, index) => (
-                      <div key={index + 1} className="bg-card border rounded-lg p-6">
-                        <div className="space-y-4">
-                          <p className="text-lg leading-relaxed">
-                            {index + 1}. {question.sentence1} {question.sentence2}
-                          </p>
-                          
-                          <div className="space-y-3">
-                            {question.choices?.map((choice: string) => (
-                              <label 
-                                key={choice} 
-                                className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 p-2 rounded"
-                                onClick={() => handleAnswerSelect(index + 1, choice)}
-                              >
-                                <div className="w-6 h-6 border-2 border-gray-400 rounded-full flex items-center justify-center">
-                                  {quizAnswers[index + 1] === choice && <div className="w-4 h-4 bg-gray-700 rounded-full"></div>}
-                                </div>
-                                <span className="text-lg">{choice}</span>
-                                {quizAnswers[index + 1] === choice && <span className="ml-auto text-green-600">✓</span>}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              <div className="space-y-8">
+                {/* Instructions */}
+                <div className="bg-muted/30 rounded-lg p-6 text-center">
+                  <h2 className="text-xl font-semibold text-foreground">
+                    {currentQuestion?.instructions}
+                  </h2>
                 </div>
 
-                {/* Section 2: Passage Questions (7-12) */}
-                <div>
-                  <div className="bg-muted/30 rounded-lg p-6 mb-8">
-                    <h2 className="text-xl font-semibold text-foreground mb-4">
-                      For 7 through 12, read the passage. For each numbered blank, there is a list of words with the same number. Choose the word from each list that best completes the meaning of the passage.
-                    </h2>
-                  </div>
-                  
-                  {passage && (
-                    <div className="bg-card border rounded-lg p-6 mb-8">
-                      <div className="prose prose-lg max-w-none">
-                        <p className="text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: passage }} />
+                {/* Question Content */}
+                {currentQuestion?.type === 'cloze' && currentQuestion.question && (
+                  <div className="bg-card border rounded-lg p-8">
+                    <div className="space-y-6">
+                      <p className="text-lg leading-relaxed text-center">
+                        {currentQuestion.question.sentence1}<br />
+                        {currentQuestion.question.sentence2}
+                      </p>
+                      
+                      <div className="space-y-4">
+                        {currentQuestion.question.choices?.map((choice: string) => (
+                          <label 
+                            key={choice} 
+                            className="flex items-center gap-4 cursor-pointer hover:bg-muted/50 p-4 rounded-lg border transition-colors"
+                            onClick={() => handleAnswerSelect(currentQuizQuestion, choice)}
+                          >
+                            <div className="w-6 h-6 border-2 border-gray-400 rounded-full flex items-center justify-center flex-shrink-0">
+                              {quizAnswers[currentQuizQuestion] === choice && <div className="w-4 h-4 bg-gray-700 rounded-full"></div>}
+                            </div>
+                            <span className="text-lg">{choice}</span>
+                          </label>
+                        ))}
                       </div>
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  <div className="space-y-6">
-                    {passageQuestions.map((question, index) => (
-                      <div key={index + 7} className="bg-card border rounded-lg p-6">
-                        <div className="space-y-4">
-                          <p className="text-lg font-semibold text-foreground">{index + 7}.</p>
-                          <div className="space-y-3">
-                            {question.choices?.map((choice: string) => (
+                {currentQuestion?.type === 'passage' && (
+                  <>
+                    {/* Show passage first */}
+                    {currentQuestion.passage && (
+                      <div className="bg-card border rounded-lg p-6 mb-6">
+                        <div className="prose prose-lg max-w-none">
+                          <p className="text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: currentQuestion.passage }} />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Show current passage question */}
+                    {currentQuestion.question && (
+                      <div className="bg-card border rounded-lg p-8">
+                        <div className="space-y-6">
+                          <p className="text-lg font-semibold text-foreground text-center">
+                            {currentQuizQuestion}.
+                          </p>
+                          
+                          <div className="space-y-4">
+                            {currentQuestion.question.choices?.map((choice: string) => (
                               <label 
                                 key={choice} 
-                                className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 p-2 rounded"
-                                onClick={() => handleAnswerSelect(index + 7, choice)}
+                                className="flex items-center gap-4 cursor-pointer hover:bg-muted/50 p-4 rounded-lg border transition-colors"
+                                onClick={() => handleAnswerSelect(currentQuizQuestion, choice)}
                               >
-                                <div className="w-6 h-6 border-2 border-gray-400 rounded-full flex items-center justify-center">
-                                  {quizAnswers[index + 7] === choice && <div className="w-4 h-4 bg-gray-700 rounded-full"></div>}
+                                <div className="w-6 h-6 border-2 border-gray-400 rounded-full flex items-center justify-center flex-shrink-0">
+                                  {quizAnswers[currentQuizQuestion] === choice && <div className="w-4 h-4 bg-gray-700 rounded-full"></div>}
                                 </div>
                                 <span className="text-lg">{choice}</span>
-                                {quizAnswers[index + 7] === choice && <span className="ml-auto text-green-600">✓</span>}
                               </label>
                             ))}
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-12 text-center">
-                  <button
-                    onClick={() => handleStepNavigation('feedback')}
-                    disabled={Object.keys(quizAnswers).length < 12}
-                    className={cn(
-                      "rounded-2xl px-12 py-4 text-xl font-medium transition-all",
-                      Object.keys(quizAnswers).length >= 12 
-                        ? "bg-primary hover:bg-primary/90 text-primary-foreground" 
-                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
                     )}
-                    data-testid="submit-quiz"
+                  </>
+                )}
+
+                {/* Navigation Buttons */}
+                <div className="flex justify-between items-center pt-8">
+                  <button
+                    onClick={handlePreviousQuestion}
+                    disabled={currentQuizQuestion === 1}
+                    className={cn(
+                      "rounded-xl px-8 py-3 text-lg font-medium transition-all",
+                      currentQuizQuestion > 1 
+                        ? "bg-secondary hover:bg-secondary/80 text-secondary-foreground" 
+                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    )}
+                    data-testid="previous-question"
                   >
-                    Submit Quiz ({Object.keys(quizAnswers).length}/12)
+                    Previous
+                  </button>
+
+                  <div className="text-center">
+                    {quizAnswers[currentQuizQuestion] ? (
+                      <span className="text-green-600 font-semibold">Answer Selected</span>
+                    ) : (
+                      <span className="text-gray-500">Select an answer</span>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={handleNextQuestion}
+                    disabled={!quizAnswers[currentQuizQuestion]}
+                    className={cn(
+                      "rounded-xl px-8 py-3 text-lg font-medium transition-all",
+                      quizAnswers[currentQuizQuestion]
+                        ? "bg-primary hover:bg-primary/90 text-primary-foreground" 
+                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    )}
+                    data-testid="next-question"
+                  >
+                    {currentQuizQuestion === totalQuizQuestions ? "Finish Quiz" : "Next"}
                   </button>
                 </div>
-              </>
+              </div>
             )}
           </div>
           <ProgressDots />
