@@ -225,9 +225,9 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
 
   const handleNextWord = () => {
     if (currentIndex < totalWords - 1) {
-      // Go to next word
+      // Go to next word - show landing with Definition/Sentences buttons
       setCurrentIndex(currentIndex + 1);
-      setCurrentStep('word');
+      setCurrentStep('landing');
       setSelectedChoice(null);
       setCurrentSentenceIndex(0);
       setCurrentHighlightedWord(-1);
