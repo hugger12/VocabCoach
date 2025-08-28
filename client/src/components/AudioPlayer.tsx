@@ -41,6 +41,7 @@ export function AudioPlayer({
   const [hasError, setHasError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const wordTimingsRef = useRef<Array<{ word: string; startTimeMs: number; endTimeMs: number }> | null>(null);
   const { getCachedAudio, cacheAudio } = useAudioCache();
 
   const generateCacheKey = useCallback((text: string, type: string, speed: string) => {
@@ -60,6 +61,8 @@ export function AudioPlayer({
       clearTimeout(highlightTimeoutRef.current);
       highlightTimeoutRef.current = null;
     }
+    // Clear word timings
+    wordTimingsRef.current = null;
     // Reset highlighting
     onWordHighlight?.(-1);
   }, [onWordHighlight]);
@@ -119,10 +122,34 @@ export function AudioPlayer({
           throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
         }
 
-        const audioBlob = await response.blob();
-        console.log("Received audio blob, size:", audioBlob.size);
-        audioUrl = cacheAudio(cacheKey, audioBlob);
-        console.log("Audio cached with URL:", audioUrl);
+        // Check if response is JSON (includes word timings) or binary audio
+        const contentType = response.headers.get("content-type");
+        
+        if (contentType?.includes("application/json")) {
+          // Response includes word timing data from ElevenLabs
+          const jsonData = await response.json();
+          console.log("Received audio with word timings:", jsonData.wordTimings);
+          
+          // Convert base64 audio to blob
+          const audioBase64 = jsonData.audioData.split(',')[1]; // Remove data:audio/mpeg;base64, prefix
+          const audioArrayBuffer = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0)).buffer;
+          const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
+          
+          audioUrl = cacheAudio(cacheKey, audioBlob);
+          console.log("Audio with timings cached with URL:", audioUrl);
+          
+          // Store word timings for highlighting
+          if (jsonData.wordTimings && type === "sentence") {
+            wordTimingsRef.current = jsonData.wordTimings;
+            console.log("Stored word timings for highlighting:", jsonData.wordTimings);
+          }
+        } else {
+          // Regular binary audio response (for words)
+          const audioBlob = await response.blob();
+          console.log("Received audio blob, size:", audioBlob.size);
+          audioUrl = cacheAudio(cacheKey, audioBlob);
+          console.log("Audio cached with URL:", audioUrl);
+        }
       } else {
         console.log("Using cached audio:", audioUrl);
       }
@@ -197,29 +224,66 @@ export function AudioPlayer({
     onWordHighlight,
   ]);
 
-  // Word highlighting function for sentences
+  // Word highlighting function for sentences using ElevenLabs precise timing
   const startWordHighlighting = useCallback((audio: HTMLAudioElement) => {
     if (type !== "sentence" || !onWordHighlight) return;
     
-    // Split text into words
+    // Use ElevenLabs word timings if available
+    if (wordTimingsRef.current && wordTimingsRef.current.length > 0) {
+      console.log(`Starting ElevenLabs word highlighting with ${wordTimingsRef.current.length} precise timings`);
+      
+      wordTimingsRef.current.forEach((wordTiming, index) => {
+        const delay = wordTiming.startTimeMs; // ElevenLabs provides precise start time in milliseconds
+        
+        const timeoutId = setTimeout(() => {
+          if (audio.paused || audio.ended) return; // Don't highlight if audio stopped
+          console.log(`Highlighting word ${index}: "${wordTiming.word}" at ${wordTiming.startTimeMs}ms`);
+          onWordHighlight(index);
+          
+          // Clear highlighting when word ends
+          const clearDelay = wordTiming.endTimeMs - wordTiming.startTimeMs;
+          setTimeout(() => {
+            if (!audio.paused && !audio.ended) {
+              // Only clear if we're not already highlighting the next word
+              const nextWord = wordTimingsRef.current?.[index + 1];
+              if (!nextWord || Date.now() >= wordTiming.endTimeMs) {
+                onWordHighlight(-1);
+              }
+            }
+          }, clearDelay);
+          
+        }, delay);
+        
+        // Store timeout for cleanup
+        if (index === 0) {
+          highlightTimeoutRef.current = timeoutId;
+        }
+      });
+      
+      return;
+    }
+    
+    // Fallback to estimated timing if no ElevenLabs data
     const words = text.split(/\s+/).filter(word => word.length > 0);
     if (words.length === 0) return;
     
-    // Estimate timing - assume roughly 150-200 words per minute for TTS
-    const estimatedDuration = audio.duration || (words.length * 0.4); // fallback: 0.4 seconds per word
+    const estimatedDuration = audio.duration || (words.length * 0.4);
     const timePerWord = estimatedDuration / words.length;
     
-    console.log(`Starting word highlighting: ${words.length} words, ${estimatedDuration}s duration, ${timePerWord}s per word`);
+    console.log(`Using estimated word highlighting: ${words.length} words, ${estimatedDuration}s duration, ${timePerWord}s per word`);
     
-    // Highlight each word with estimated timing
     words.forEach((word, index) => {
-      const delay = index * timePerWord * 1000; // convert to milliseconds
+      const delay = index * timePerWord * 1000;
       
-      highlightTimeoutRef.current = setTimeout(() => {
-        if (audio.paused || audio.ended) return; // Don't highlight if audio stopped
-        console.log(`Highlighting word ${index}: ${word}`);
+      const timeoutId = setTimeout(() => {
+        if (audio.paused || audio.ended) return;
+        console.log(`Highlighting word ${index}: ${word} (estimated)`);
         onWordHighlight(index);
       }, delay);
+      
+      if (index === 0) {
+        highlightTimeoutRef.current = timeoutId;
+      }
     });
   }, [text, type, onWordHighlight]);
 

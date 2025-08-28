@@ -250,10 +250,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Audio API with optional word timing
+  // Audio API with ElevenLabs word timings
   app.post("/api/audio/generate", async (req, res) => {
     try {
-      const { text, type, includeTimings = false } = req.body;
+      const { text, type } = req.body;
       
       if (!text || !type) {
         return res.status(400).json({ message: "Text and type are required" });
@@ -272,70 +272,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         durationMs: result.duration || null,
       });
 
-      // If word timings are requested (for dyslexic reading support)
-      if (includeTimings && type === "sentence") {
-        const words = text.split(/\s+/).filter((word: string) => word.length > 0);
-        const duration = result.duration || (words.length * 700); // 700ms per word estimate
+      // For sentences with word timings, return JSON with timing data
+      if (type === "sentence" && result.wordTimings) {
+        console.log(`Generated ${result.wordTimings.length} word timings from ElevenLabs for text: "${text.substring(0, 50)}..."`);
         
-        // Generate more realistic word-level timing estimates
-        // Duration from TTS is in milliseconds, convert to seconds for calculations
-        const durationSeconds = duration / 1000;
-        console.log('Audio duration:', duration, 'ms =', durationSeconds, 'seconds');
-        
-        // Estimate more realistic speech patterns with pauses and word emphasis
-        const totalWordLength = words.reduce((sum: number, word: string) => sum + word.length, 0);
-        const avgWordsPerSecond = 2.5; // Slower child-friendly speech
-        const estimatedSpeakingTime = durationSeconds * 0.85; // 85% speaking, 15% pauses
-        
-        // Calibrate timing based on actual audio duration
-        // Adjust timing to fit the actual generated audio length
-        const totalEstimatedTime = words.reduce((sum: number, word: string) => {
-          const charCount = word.replace(/[^\w]/g, '').length;
-          const syllables = Math.max(1, Math.floor(charCount / 2.5));
-          const wordTime = syllables * 0.25;
-          const pauseTime = /[,.!?;:]/.test(word) ? 0.15 : 0.05;
-          return sum + wordTime + pauseTime;
-        }, 0.1);
-        
-        // Scale timing to match actual audio duration  
-        const scaleFactor = (durationSeconds - 0.2) / totalEstimatedTime;
-        
-        let currentTimeSeconds = 0.05; // Minimal startup delay to match TTS faster
-        const wordTimings = words.map((word: string, index: number) => {
-          // Calculate word duration based on character count and complexity
-          const charCount = word.replace(/[^\w]/g, '').length;
-          const syllableEstimate = Math.max(1, Math.floor(charCount / 2.5));
-          
-          // Base timing on syllables with scaling, front-loaded for TTS patterns
-          let wordDuration = (syllableEstimate * 0.2) * scaleFactor; // Slightly shorter duration
-          wordDuration = Math.max(0.08, Math.min(0.6, wordDuration));
-          
-          // Reduced pauses to match faster TTS speech patterns
-          const hasPunctuation = /[,.!?;:]/.test(word);
-          const pauseDuration = (hasPunctuation ? 0.1 : 0.03) * scaleFactor;
-          
-          const startTime = currentTimeSeconds;
-          const endTime = startTime + wordDuration;
-          
-          currentTimeSeconds = endTime + pauseDuration;
-          
-          return {
-            word: word.replace(/[^\w']/g, ''),
-            originalWord: word,
-            startTime,
-            endTime,
-            index
-          };
-        });
-        
-        console.log('Generated word timings for duration:', durationSeconds, 'seconds:', wordTimings.map((w: any) => `${w.word}:${w.startTime.toFixed(1)}-${w.endTime.toFixed(1)}`));
-
-        // Return JSON response with audio data and timings
         const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
         return res.json({
           audioData: `data:audio/mpeg;base64,${base64Audio}`,
-          wordTimings,
-          duration: duration / 1000, // Convert to seconds
+          wordTimings: result.wordTimings,
+          duration: Math.max(...result.wordTimings.map(w => w.endTimeMs)) / 1000, // Duration in seconds
           provider: result.provider
         });
       }
