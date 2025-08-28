@@ -352,6 +352,8 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
   // Generate quiz content when quiz step is reached
   useEffect(() => {
     if (currentStep === 'quiz' && clozeQuestions.length === 0) {
+      // Set loading immediately when entering quiz step
+      setQuizLoading(true);
       // For quiz, we need all weekly words, not just the session words
       fetchQuizSession();
     }
@@ -372,21 +374,24 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
         } else {
           console.log("No words available for quiz");
           setTotalQuizQuestions(0);
+          setQuizLoading(false);
         }
       } else {
         console.error("Failed to fetch quiz session:", response.status);
         setTotalQuizQuestions(0);
+        setQuizLoading(false);
       }
     } catch (error) {
       console.error("Error fetching quiz session:", error);
       setTotalQuizQuestions(0);
+      setQuizLoading(false);
     }
   };
 
   // Generate quiz content with specific words array
   const generateQuizContentWithWords = async (words: any[]) => {
     try {
-      setQuizLoading(true);
+      // Loading state is already set by the calling function
       
       // Determine how many questions we can make based on available words
       const availableWords = words.length;
@@ -940,6 +945,21 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
       }
     };
 
+    // Show loading screen until quiz is fully ready
+    if (quizLoading) {
+      return (
+        <div className="min-h-screen bg-background flex flex-col">
+          <StudyHeader onClose={handleCloseSession} />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center py-16">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto mb-4"></div>
+              <p className="text-xl text-foreground/60">Generating your quiz...</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <StudyHeader onClose={handleCloseSession} />
@@ -952,12 +972,7 @@ export function StudyInterface({ onOpenParentDashboard }: StudyInterfaceProps) {
               </div>
             </div>
             
-            {quizLoading ? (
-              <div className="text-center py-16">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto mb-4"></div>
-                <p className="text-xl text-foreground/60">Generating your quiz...</p>
-              </div>
-            ) : totalQuizQuestions === 0 ? (
+            {totalQuizQuestions === 0 ? (
               <div className="text-center py-16">
                 <p className="text-xl text-foreground/60">No words available for quiz. Please add vocabulary words first.</p>
               </div>
