@@ -43,6 +43,16 @@ export const students = pgTable("students", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Vocabulary lists (named collections of words)
+export const vocabularyLists = pgTable("vocabulary_lists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  instructorId: varchar("instructor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  isCurrent: boolean("is_current").notNull().default(false), // Only one can be current per instructor
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const words = pgTable("words", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   text: text("text").notNull(),
@@ -52,8 +62,8 @@ export const words = pgTable("words", {
   syllables: text("syllables").array(),
   morphemes: text("morphemes").array(),
   ipa: text("ipa"),
-  weekId: varchar("week_id").notNull(),
-  instructorId: varchar("instructor_id").references(() => users.id, { onDelete: "cascade" }), // Words belong to instructor (nullable for migration)
+  listId: varchar("list_id").references(() => vocabularyLists.id, { onDelete: "cascade" }), // Optional during transition
+  instructorId: varchar("instructor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -121,7 +131,7 @@ export const clozeQuestions = pgTable("cloze_questions", {
 // Passage quiz questions (Section 2: reading passage with multiple blanks)
 export const passageQuestions = pgTable("passage_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  weekId: varchar("week_id").notNull(), // Links to a week of vocabulary
+  listId: varchar("list_id").references(() => vocabularyLists.id, { onDelete: "cascade" }), // Links to a vocabulary list (optional during transition)
   passageText: text("passage_text").notNull(), // The reading passage with numbered blanks
   title: text("title"), // Optional passage title
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -164,6 +174,12 @@ export const insertStudentSchema = createInsertSchema(students).omit({
   updatedAt: true,
 });
 
+export const insertVocabularyListSchema = createInsertSchema(vocabularyLists).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertWordSchema = createInsertSchema(words).omit({
   id: true,
   createdAt: true,
@@ -172,7 +188,7 @@ export const insertWordSchema = createInsertSchema(words).omit({
 // Simplified word input schema for AI processing
 export const simpleWordInputSchema = z.object({
   text: z.string().min(1).trim(),
-  weekId: z.string().optional(),
+  listId: z.string().optional(),
 });
 
 export const insertSentenceSchema = createInsertSchema(sentences).omit({
@@ -217,6 +233,8 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpsertUser = typeof users.$inferInsert; // For Replit Auth compatibility
 export type Student = typeof students.$inferSelect;
 export type InsertStudent = z.infer<typeof insertStudentSchema>;
+export type VocabularyList = typeof vocabularyLists.$inferSelect;
+export type InsertVocabularyList = z.infer<typeof insertVocabularyListSchema>;
 export type Word = typeof words.$inferSelect;
 export type InsertWord = z.infer<typeof insertWordSchema>;
 export type Sentence = typeof sentences.$inferSelect;

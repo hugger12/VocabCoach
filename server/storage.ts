@@ -4,6 +4,8 @@ import {
   type UpsertUser,
   type Student,
   type InsertStudent,
+  type VocabularyList,
+  type InsertVocabularyList,
   type Word, 
   type InsertWord, 
   type Sentence, 
@@ -23,6 +25,7 @@ import {
   type InsertPassageBlank,
   users,
   students,
+  vocabularyLists,
   words,
   sentences,
   audioCache as audioCacheTable,
@@ -50,10 +53,19 @@ export interface IStorage {
   updateStudent(id: string, updates: Partial<Student>): Promise<Student>;
   deleteStudent(id: string): Promise<void>;
 
-  // Words (now instructor-scoped)
+  // Vocabulary lists
+  getVocabularyList(id: string): Promise<VocabularyList | undefined>;
+  getVocabularyLists(instructorId: string): Promise<VocabularyList[]>;
+  getCurrentVocabularyList(instructorId: string): Promise<VocabularyList | undefined>;
+  createVocabularyList(list: InsertVocabularyList): Promise<VocabularyList>;
+  updateVocabularyList(id: string, updates: Partial<VocabularyList>): Promise<VocabularyList>;
+  setCurrentVocabularyList(instructorId: string, listId: string): Promise<void>;
+  deleteVocabularyList(id: string): Promise<void>;
+
+  // Words (now list-scoped)
   getWord(id: string): Promise<Word | undefined>;
-  getWords(weekId?: string, instructorId?: string): Promise<Word[]>;
-  getWordsWithProgress(weekId?: string, instructorId?: string, studentId?: string): Promise<WordWithProgress[]>;
+  getWords(listId?: string, instructorId?: string): Promise<Word[]>;
+  getWordsWithProgress(listId?: string, instructorId?: string, studentId?: string): Promise<WordWithProgress[]>;
   createWord(word: InsertWord): Promise<Word>;
   updateWord(id: string, updates: Partial<Word>): Promise<Word>;
   deleteWord(id: string): Promise<void>;
@@ -86,24 +98,15 @@ export interface IStorage {
   getSettings(): Promise<Settings[]>;
 
   // Quiz functionality
-  getWordsByWeek(weekId: string): Promise<Word[]>;
+  getWordsByList(listId: string): Promise<Word[]>;
   createClozeQuestion(question: InsertClozeQuestion): Promise<ClozeQuestion>;
-  getClozeQuestionsByWeek(weekId: string): Promise<ClozeQuestion[]>;
+  getClozeQuestionsByList(listId: string): Promise<ClozeQuestion[]>;
   createPassageQuestion(passage: InsertPassageQuestion): Promise<PassageQuestion>;
   createPassageBlank(blank: InsertPassageBlank): Promise<PassageBlank>;
-  getPassageQuestionByWeek(weekId: string): Promise<{ passage: PassageQuestion; blanks: PassageBlank[] } | null>;
-
-  // Utility
-  getCurrentWeek(): Promise<string>;
-  createWeek(): Promise<string>;
+  getPassageQuestionByList(listId: string): Promise<{ passage: PassageQuestion; blanks: PassageBlank[] } | null>;
 }
 
 export class DatabaseStorage implements IStorage {
-  private currentWeekId: string;
-
-  constructor() {
-    this.currentWeekId = this.generateWeekId();
-  }
 
   // User operations (required for Replit Auth)
   async getUser(id: string): Promise<User | undefined> {
@@ -178,6 +181,61 @@ export class DatabaseStorage implements IStorage {
     await db.delete(students).where(eq(students.id, id));
   }
 
+  // Vocabulary lists
+  async getVocabularyList(id: string): Promise<VocabularyList | undefined> {
+    const [list] = await db.select().from(vocabularyLists).where(eq(vocabularyLists.id, id));
+    return list;
+  }
+
+  async getVocabularyLists(instructorId: string): Promise<VocabularyList[]> {
+    return await db.select().from(vocabularyLists)
+      .where(eq(vocabularyLists.instructorId, instructorId))
+      .orderBy(desc(vocabularyLists.createdAt));
+  }
+
+  async getCurrentVocabularyList(instructorId: string): Promise<VocabularyList | undefined> {
+    const [list] = await db.select().from(vocabularyLists)
+      .where(and(eq(vocabularyLists.instructorId, instructorId), eq(vocabularyLists.isCurrent, true)));
+    return list;
+  }
+
+  async createVocabularyList(list: InsertVocabularyList): Promise<VocabularyList> {
+    const [created] = await db
+      .insert(vocabularyLists)
+      .values(list)
+      .returning();
+    return created;
+  }
+
+  async updateVocabularyList(id: string, updates: Partial<VocabularyList>): Promise<VocabularyList> {
+    const [list] = await db
+      .update(vocabularyLists)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(vocabularyLists.id, id))
+      .returning();
+    
+    if (!list) {
+      throw new Error(`Vocabulary list with id ${id} not found`);
+    }
+    return list;
+  }
+
+  async setCurrentVocabularyList(instructorId: string, listId: string): Promise<void> {
+    // First, set all lists for this instructor to not current
+    await db.update(vocabularyLists)
+      .set({ isCurrent: false, updatedAt: new Date() })
+      .where(eq(vocabularyLists.instructorId, instructorId));
+    
+    // Then set the specified list as current
+    await db.update(vocabularyLists)
+      .set({ isCurrent: true, updatedAt: new Date() })
+      .where(eq(vocabularyLists.id, listId));
+  }
+
+  async deleteVocabularyList(id: string): Promise<void> {
+    await db.delete(vocabularyLists).where(eq(vocabularyLists.id, id));
+  }
+
   private generateWeekId(): string {
     const now = new Date();
     const year = now.getFullYear();
@@ -227,19 +285,19 @@ export class DatabaseStorage implements IStorage {
     return word;
   }
 
-  async getWords(weekId?: string, instructorId?: string): Promise<Word[]> {
-    if (!weekId && !instructorId) {
+  async getWords(listId?: string, instructorId?: string): Promise<Word[]> {
+    if (!listId && !instructorId) {
       return await db.select().from(words).orderBy(words.createdAt);
     }
     
-    if (weekId && instructorId) {
+    if (listId && instructorId) {
       return await db.select().from(words)
-        .where(and(eq(words.weekId, weekId), eq(words.instructorId, instructorId)))
+        .where(and(eq(words.listId, listId), eq(words.instructorId, instructorId)))
         .orderBy(words.createdAt);
     }
     
-    if (weekId) {
-      return await db.select().from(words).where(eq(words.weekId, weekId)).orderBy(words.createdAt);
+    if (listId) {
+      return await db.select().from(words).where(eq(words.listId, listId)).orderBy(words.createdAt);
     }
     
     if (instructorId) {
@@ -249,8 +307,8 @@ export class DatabaseStorage implements IStorage {
     return [];
   }
 
-  async getWordsWithProgress(weekId?: string, instructorId?: string, studentId?: string): Promise<WordWithProgress[]> {
-    const wordsList = await this.getWords(weekId, instructorId);
+  async getWordsWithProgress(listId?: string, instructorId?: string, studentId?: string): Promise<WordWithProgress[]> {
+    const wordsList = await this.getWords(listId, instructorId);
     const wordsWithProgress: WordWithProgress[] = [];
 
     for (const word of wordsList) {
@@ -441,8 +499,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Quiz functionality
-  async getWordsByWeek(weekId: string): Promise<Word[]> {
-    return await db.select().from(words).where(eq(words.weekId, weekId));
+  async getWordsByList(listId: string): Promise<Word[]> {
+    return await db.select().from(words).where(eq(words.listId, listId));
   }
 
   async createClozeQuestion(question: InsertClozeQuestion): Promise<ClozeQuestion> {
@@ -453,7 +511,7 @@ export class DatabaseStorage implements IStorage {
     return savedQuestion;
   }
 
-  async getClozeQuestionsByWeek(weekId: string): Promise<ClozeQuestion[]> {
+  async getClozeQuestionsByList(listId: string): Promise<ClozeQuestion[]> {
     return await db
       .select({
         id: clozeQuestions.id,
@@ -466,7 +524,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(clozeQuestions)
       .innerJoin(words, eq(words.id, clozeQuestions.wordId))
-      .where(eq(words.weekId, weekId));
+      .where(eq(words.listId, listId));
   }
 
   async createPassageQuestion(passage: InsertPassageQuestion): Promise<PassageQuestion> {
@@ -485,11 +543,11 @@ export class DatabaseStorage implements IStorage {
     return savedBlank;
   }
 
-  async getPassageQuestionByWeek(weekId: string): Promise<{ passage: PassageQuestion; blanks: PassageBlank[] } | null> {
+  async getPassageQuestionByList(listId: string): Promise<{ passage: PassageQuestion; blanks: PassageBlank[] } | null> {
     const [passage] = await db
       .select()
       .from(passageQuestions)
-      .where(eq(passageQuestions.weekId, weekId));
+      .where(eq(passageQuestions.listId, listId));
     
     if (!passage) {
       return null;
@@ -501,17 +559,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(passageBlanks.passageId, passage.id));
 
     return { passage, blanks };
-  }
-
-  // Utility
-  async getCurrentWeek(): Promise<string> {
-    return this.currentWeekId;
-  }
-
-  async createWeek(): Promise<string> {
-    const newWeekId = this.generateWeekId();
-    this.currentWeekId = newWeekId;
-    return newWeekId;
   }
 }
 

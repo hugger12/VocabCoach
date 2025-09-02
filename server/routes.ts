@@ -5,7 +5,7 @@ import { aiService } from "./services/ai.js";
 import { ttsService } from "./services/tts.js";
 import { schedulerService } from "./services/scheduler.js";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertWordSchema, insertAttemptSchema, simpleWordInputSchema } from "@shared/schema.js";
+import { insertWordSchema, insertAttemptSchema, simpleWordInputSchema, insertVocabularyListSchema } from "@shared/schema.js";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -112,16 +112,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to authenticate student" });
     }
   });
+
+  // Vocabulary List API (instructor-scoped)
+  app.get('/api/vocabulary-lists', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const lists = await storage.getVocabularyLists(userId);
+      res.json(lists);
+    } catch (error) {
+      console.error("Error fetching vocabulary lists:", error);
+      res.status(500).json({ message: "Failed to fetch vocabulary lists" });
+    }
+  });
+
+  app.get('/api/vocabulary-lists/current', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentList = await storage.getCurrentVocabularyList(userId);
+      res.json(currentList);
+    } catch (error) {
+      console.error("Error fetching current vocabulary list:", error);
+      res.status(500).json({ message: "Failed to fetch current vocabulary list" });
+    }
+  });
+
+  app.post('/api/vocabulary-lists', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const listData = insertVocabularyListSchema.parse({
+        ...req.body,
+        instructorId: userId,
+        isCurrent: false // New lists start as not current
+      });
+      
+      const list = await storage.createVocabularyList(listData);
+      res.json(list);
+    } catch (error) {
+      console.error("Error creating vocabulary list:", error);
+      res.status(500).json({ message: "Failed to create vocabulary list" });
+    }
+  });
+
+  app.put('/api/vocabulary-lists/:id/set-current', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const listId = req.params.id;
+      
+      await storage.setCurrentVocabularyList(userId, listId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error setting current vocabulary list:", error);
+      res.status(500).json({ message: "Failed to set current vocabulary list" });
+    }
+  });
   
-  // Words API (instructor-scoped)
+  // Words API (now list-scoped instead of week-scoped)
   app.get("/api/words", isAuthenticated, async (req: any, res) => {
     try {
-      const weekId = req.query.week as string;
+      const listId = req.query.list as string;
       const studentId = req.query.student as string;
       const userId = req.user.claims.sub;
       
-      // Get words for this instructor, optionally filtered by week and student
-      const words = await storage.getWordsWithProgress(weekId, userId, studentId);
+      // Get words for this instructor, optionally filtered by list and student
+      const words = await storage.getWordsWithProgress(listId, userId, studentId);
       res.json(words);
     } catch (error) {
       console.error("Error fetching words:", error);
@@ -133,7 +186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/student/:studentId/words", async (req, res) => {
     try {
       const { studentId } = req.params;
-      const weekId = req.query.week as string;
+      const listId = req.query.list as string;
       
       // Get student to find their instructor
       const student = await storage.getStudent(studentId);
@@ -141,8 +194,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Student not found or inactive" });
       }
 
+      // If no listId provided, get current list for instructor
+      let targetListId = listId;
+      if (!targetListId) {
+        const currentList = await storage.getCurrentVocabularyList(student.instructorId);
+        if (currentList) {
+          targetListId = currentList.id;
+        }
+      }
+
       // Get words for the student's instructor
-      const words = await storage.getWordsWithProgress(weekId, student.instructorId, studentId);
+      const words = await storage.getWordsWithProgress(targetListId, student.instructorId, studentId);
       res.json(words);
     } catch (error) {
       console.error("Error fetching student words:", error);
@@ -153,7 +215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Manual word entry with teacher definition
   app.post("/api/words/manual", isAuthenticated, async (req: any, res) => {
     try {
-      const { text, definition, weekId } = req.body;
+      const { text, definition, listId } = req.body;
       const userId = req.user.claims.sub;
       
       if (!text || !definition) {
@@ -161,6 +223,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`Adding manual word: ${text} with teacher definition`);
+      
+      // If no listId provided, get or create current list
+      let targetListId = listId;
+      if (!targetListId) {
+        const currentList = await storage.getCurrentVocabularyList(userId);
+        if (currentList) {
+          targetListId = currentList.id;
+        } else {
+          // Create a default current list
+          const defaultList = await storage.createVocabularyList({
+            name: `Words - ${new Date().toLocaleDateString()}`,
+            instructorId: userId,
+            isCurrent: true
+          });
+          targetListId = defaultList.id;
+        }
+      }
       
       // Generate part of speech using AI but keep teacher definition
       const analysis = await aiService.analyzeWord(text);
@@ -173,7 +252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         partOfSpeech: analysis.partOfSpeech,
         kidDefinition: definition.trim(), // Use teacher's definition directly
         teacherDefinition: definition.trim(),
-        weekId: weekId || await storage.getCurrentWeek(),
+        listId: targetListId,
         instructorId: userId, // Associate word with instructor
         syllables: morphology.syllables,
         morphemes: morphology.morphemes,
@@ -234,12 +313,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Generate morphology
         const morphology = await aiService.analyzeMorphology(simpleInput.text);
         
+        // Handle listId (get current list or create one if needed)
+        let targetListId = simpleInput.listId;
+        if (!targetListId) {
+          // For unauthenticated requests, we need to get the instructor ID
+          // This will be handled by requiring authentication for word creation
+          throw new Error("List ID is required for word creation");
+        }
+        
         wordData = {
           text: simpleInput.text,
           partOfSpeech: analysis.partOfSpeech,
           kidDefinition: analysis.kidDefinition,
           teacherDefinition: analysis.teacherDefinition || null,
-          weekId: simpleInput.weekId || await storage.getCurrentWeek(),
+          listId: targetListId,
           syllables: morphology.syllables,
           morphemes: morphology.morphemes,
           ipa: null, // Optional field
@@ -249,9 +336,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fallback to full schema validation
         wordData = insertWordSchema.parse(req.body);
         
-        // If no weekId provided, use current week
-        if (!wordData.weekId) {
-          wordData.weekId = await storage.getCurrentWeek();
+        // If no listId provided, this endpoint now requires it
+        if (!wordData.listId) {
+          throw new Error("List ID is required for word creation");
         }
 
         // Simplify definition if teacher definition is provided
@@ -300,7 +387,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn("Failed to generate initial sentences:", error);
       }
 
-      const wordWithProgress = await storage.getWordsWithProgress(word.weekId);
+      const wordWithProgress = await storage.getWordsWithProgress(word.listId || undefined);
       const createdWord = wordWithProgress.find(w => w.id === word.id);
       
       res.json(createdWord);
@@ -456,38 +543,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
       const quizMode = req.query.quiz === 'true'; // Check if this is for quiz (need all words)
-      const currentWeek = await storage.getCurrentWeek();
+      const instructorId = req.query.instructor as string;
+      const listId = req.query.list as string;
       
-      // Get words from current week only
-      let currentWeekWords = await storage.getWords(currentWeek);
-      let activeWeek = currentWeek;
-      
-      // If no words in current week, look at the previous week (common case when day changes)
-      if (currentWeekWords.length === 0) {
-        // Calculate previous week
-        const now = new Date();
-        const year = now.getFullYear();
-        const currentWeekNumber = Math.ceil((now.getTime() - new Date(year, 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
-        const previousWeekNumber = currentWeekNumber - 1;
-        const previousWeek = `${year}-W${previousWeekNumber.toString().padStart(2, '0')}`;
-        
-        console.log(`No words found in current week ${currentWeek}, checking previous week ${previousWeek}`);
-        currentWeekWords = await storage.getWords(previousWeek);
-        activeWeek = previousWeek;
-        
-        // If still no words, get all words regardless of week (fallback for migration cases)
-        if (currentWeekWords.length === 0) {
-          console.log(`No words found in previous week ${previousWeek}, getting all words`);
-          currentWeekWords = await storage.getWords();
-          activeWeek = "all";
+      if (!instructorId) {
+        return res.status(400).json({ message: "Instructor ID is required" });
+      }
+
+      // Get current vocabulary list for instructor
+      let targetListId = listId;
+      if (!targetListId) {
+        const currentList = await storage.getCurrentVocabularyList(instructorId);
+        if (!currentList) {
+          return res.status(404).json({ message: "No current vocabulary list found" });
         }
+        targetListId = currentList.id;
       }
       
-      // For quiz mode, include ALL words from the week regardless of schedule
+      // Get words from current vocabulary list
+      const currentListWords = await storage.getWords(targetListId, instructorId);
+      
+      // For quiz mode, include ALL words from the list regardless of schedule
       if (quizMode) {
-        const words = activeWeek === "all" ? 
-          await storage.getWordsWithProgress() : 
-          await storage.getWordsWithProgress(activeWeek);
+        const words = await storage.getWordsWithProgress(targetListId, instructorId);
         
         const session = {
           words: words,
@@ -496,54 +574,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sessionStarted: new Date(),
         };
         
-        console.log(`Created quiz session with ${session.words.length} words from ${activeWeek}`);
+        console.log(`Created quiz session with ${session.words.length} words from list ${targetListId}`);
         res.json(session);
         return;
       }
       
       // Regular study mode - use spaced repetition scheduling
-      const currentWeekWordIds = currentWeekWords.map(word => word.id);
+      const currentListWordIds = currentListWords.map(word => word.id);
       
       // Get all schedules and filter to active words only
       const allSchedules = await storage.getAllSchedules();
-      const currentWeekSchedules = allSchedules.filter(schedule => 
-        currentWeekWordIds.includes(schedule.wordId)
+      const currentListSchedules = allSchedules.filter(schedule => 
+        currentListWordIds.includes(schedule.wordId)
       );
       
-      let dueSchedules = schedulerService.getWordsForToday(currentWeekSchedules, limit);
+      let dueSchedules = schedulerService.getWordsForToday(currentListSchedules, limit);
       
       // If we have very few words due (less than 3), expand to include more words for better practice
-      if (dueSchedules.length < 3 && currentWeekSchedules.length > dueSchedules.length) {
-        // Add more words from active week that are in box 1-4 (still learning or need reinforcement)
-        const additionalWords = currentWeekSchedules
+      if (dueSchedules.length < 3 && currentListSchedules.length > dueSchedules.length) {
+        // Add more words from active list that are in box 1-4 (still learning or need reinforcement)
+        const additionalWords = currentListSchedules
           .filter(schedule => schedule.box <= 4 && !dueSchedules.find(d => d.wordId === schedule.wordId))
           .slice(0, Math.min(12, (limit || 12) - dueSchedules.length));
         
         dueSchedules = [...dueSchedules, ...additionalWords];
       }
       
-      // If still no words, include all words from active week for initial learning
+      // If still no words, include all words from active list for initial learning
       if (dueSchedules.length === 0) {
-        // Get all words from active week that are in box 1-3 (still learning)
-        dueSchedules = currentWeekSchedules.filter(schedule => schedule.box <= 3).slice(0, limit || 12);
+        // Get all words from active list that are in box 1-3 (still learning)
+        dueSchedules = currentListSchedules.filter(schedule => schedule.box <= 3).slice(0, limit || 12);
         
         if (dueSchedules.length === 0) {
           return res.json({ 
             words: [], 
             currentIndex: 0, 
             totalWords: 0,
-            message: "No words to practice! Add some words to this week first." 
+            message: "No words to practice! Add some words to this vocabulary list first." 
           });
         }
       }
 
-      // Get words with progress for active week
-      const words = activeWeek === "all" ? 
-        await storage.getWordsWithProgress() : 
-        await storage.getWordsWithProgress(activeWeek);
+      // Get words with progress for active list
+      const words = await storage.getWordsWithProgress(targetListId, instructorId);
       const session = schedulerService.createStudySession(dueSchedules, words);
       
-      console.log(`Created study session with ${session.words.length} words from ${activeWeek}`);
+      console.log(`Created study session with ${session.words.length} words from list ${targetListId}`);
       res.json(session);
     } catch (error) {
       console.error("Error creating study session:", error);
@@ -754,10 +830,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate passage quiz (Section 2: reading passage with blanks)
   app.post("/api/quiz/passage/generate", async (req, res) => {
     try {
-      const { words, weekId } = req.body; // Array of 6 words for blanks 7-12
+      const { words, listId } = req.body; // Array of 6 words for blanks 7-12
       
       if (!words || !Array.isArray(words) || words.length !== 6) {
         return res.status(400).json({ message: "Exactly 6 words are required for passage quiz" });
+      }
+
+      if (!listId) {
+        return res.status(400).json({ message: "List ID is required" });
       }
 
       // Generate the passage with AI
@@ -765,7 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Save passage to database
       const savedPassage = await storage.createPassageQuestion({
-        weekId: weekId || await storage.getCurrentWeek(),
+        listId: listId,
         passageText: passageData.passageText,
         title: passageData.title,
       });
@@ -800,23 +880,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get quiz data for a week (both cloze and passage questions)
-  app.get("/api/quiz/:weekId", async (req, res) => {
+  // Get quiz data for a vocabulary list (both cloze and passage questions)
+  app.get("/api/quiz/:listId", async (req, res) => {
     try {
-      const { weekId } = req.params;
+      const { listId } = req.params;
       
-      // Get words for the week
-      const words = await storage.getWordsByWeek(weekId);
+      // Get words for the list
+      const words = await storage.getWordsByList(listId);
       
       if (words.length === 0) {
-        return res.status(404).json({ message: "No words found for this week" });
+        return res.status(404).json({ message: "No words found for this vocabulary list" });
       }
       
       // Get cloze questions for first 6 words (questions 1-6)
-      const clozeQuestions = await storage.getClozeQuestionsByWeek(weekId);
+      const clozeQuestions = await storage.getClozeQuestionsByList(listId);
       
       // Get passage questions for next 6 words (questions 7-12)  
-      const passageData = await storage.getPassageQuestionByWeek(weekId);
+      const passageData = await storage.getPassageQuestionByList(listId);
       
       res.json({
         clozeQuestions: clozeQuestions.map(q => ({
@@ -842,7 +922,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ 
       status: "healthy", 
       timestamp: new Date().toISOString(),
-      week: await storage.getCurrentWeek(),
     });
   });
 

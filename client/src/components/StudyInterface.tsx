@@ -10,6 +10,7 @@ import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
 
 export interface StudyInterfaceProps {
   onClose: () => void;
+  instructorId?: string;
 }
 
 // Simple header component
@@ -31,7 +32,7 @@ const StudyHeader = ({ onClose }: { onClose: () => void }) => (
   </header>
 );
 
-export function StudyInterface({ onClose }: StudyInterfaceProps) {
+export function StudyInterface({ onClose, instructorId }: StudyInterfaceProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
@@ -43,8 +44,14 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
 
   // Fetch study session
   const { data: session, isLoading, error } = useQuery<StudySession>({
-    queryKey: ["/api/study/session"],
-    enabled: !sessionComplete,
+    queryKey: ["/api/study/session", instructorId],
+    queryFn: async () => {
+      if (!instructorId) throw new Error("No instructor ID");
+      const response = await fetch(`/api/study/session?instructor=${instructorId}`);
+      if (!response.ok) throw new Error("Failed to fetch session");
+      return response.json();
+    },
+    enabled: !sessionComplete && !!instructorId,
   });
 
   // Store session words when first loaded

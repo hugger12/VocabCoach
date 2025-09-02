@@ -45,10 +45,32 @@ export function StudentInterface() {
     window.location.href = "/";
   };
 
+  // Fetch current vocabulary list for instructor
+  const { data: currentList } = useQuery({
+    queryKey: ["/api/vocabulary-lists/current", student?.instructorId],
+    queryFn: async () => {
+      if (!student?.instructorId) throw new Error("No instructor ID");
+      const response = await fetch("/api/vocabulary-lists/current", {
+        headers: {
+          'Authorization': `Bearer ${student.instructorId}` // This will need proper auth
+        }
+      });
+      if (!response.ok) return null; // No current list
+      return response.json();
+    },
+    enabled: !!student?.instructorId,
+  });
+
   // Fetch study session data for quiz purposes
   const { data: session } = useQuery<StudySession>({
-    queryKey: ["/api/study/session"],
-    enabled: showQuiz, // Only fetch when quiz is needed
+    queryKey: ["/api/study/session", student?.instructorId],
+    queryFn: async () => {
+      if (!student?.instructorId) throw new Error("No instructor ID");
+      const response = await fetch(`/api/study/session?instructor=${student.instructorId}&quiz=true`);
+      if (!response.ok) throw new Error("Failed to fetch session");
+      return response.json();
+    },
+    enabled: showQuiz && !!student?.instructorId, // Only fetch when quiz is needed and instructor ID is available
   });
 
   const handleStartStudy = () => {
@@ -84,7 +106,7 @@ export function StudentInterface() {
   }
 
   if (showStudy) {
-    return <StudyInterface onClose={handleCloseStudy} />;
+    return <StudyInterface onClose={handleCloseStudy} instructorId={student?.instructorId} />;
   }
 
   if (showQuiz) {
@@ -104,6 +126,8 @@ export function StudentInterface() {
         words={session.words}
         onClose={handleCloseQuiz}
         onComplete={handleQuizComplete}
+        instructorId={student?.instructorId}
+        listId={currentList?.id}
       />
     );
   }

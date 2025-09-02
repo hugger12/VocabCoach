@@ -9,6 +9,8 @@ export interface QuizInterfaceProps {
   words: WordWithProgress[];
   onClose: () => void;
   onComplete?: (score: number) => void;
+  instructorId?: string;
+  listId?: string;
 }
 
 interface ClozeQuizQuestion extends ClozeQuestion {
@@ -33,7 +35,7 @@ interface QuizAttempt {
   isCorrect: boolean;
 }
 
-export function QuizInterface({ words, onClose, onComplete }: QuizInterfaceProps) {
+export function QuizInterface({ words, onClose, onComplete, instructorId, listId }: QuizInterfaceProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -90,7 +92,7 @@ export function QuizInterface({ words, onClose, onComplete }: QuizInterfaceProps
               partOfSpeech: word.partOfSpeech,
               kidDefinition: word.kidDefinition,
             })),
-            weekId: "2025-W34", // Use current week
+            listId: listId, // Use current vocabulary list
           }),
         })
       ]);
