@@ -30,7 +30,7 @@ interface Word {
   createdAt: string;
 }
 
-export function Words() {
+export function WordsNew() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [listName, setListName] = useState("");
   const [vocabularyText, setVocabularyText] = useState("");

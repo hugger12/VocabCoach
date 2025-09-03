@@ -153,7 +153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/vocabulary-lists/:id/set-current', isAuthenticated, async (req: any, res) => {
+  app.post('/api/vocabulary-lists/:id/set-current', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const listId = req.params.id;
@@ -163,6 +163,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error setting current vocabulary list:", error);
       res.status(500).json({ message: "Failed to set current vocabulary list" });
+    }
+  });
+
+  // Import vocabulary list with words
+  app.post('/api/vocabulary-lists/import', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { listName, words } = req.body;
+
+      if (!listName || !Array.isArray(words) || words.length === 0) {
+        return res.status(400).json({ message: "List name and words are required" });
+      }
+
+      // Create vocabulary list
+      const listData = {
+        name: listName,
+        instructorId: userId,
+        isCurrent: true // New imported lists become current
+      };
+
+      // Set all other lists to not current first
+      const currentLists = await storage.getVocabularyLists(userId);
+      for (const existingList of currentLists) {
+        if (existingList.isCurrent) {
+          await storage.updateVocabularyList(existingList.id, { isCurrent: false });
+        }
+      }
+      
+      const list = await storage.createVocabularyList(listData);
+      let wordsCreated = 0;
+
+      // Add words to the list
+      for (const wordData of words) {
+        try {
+          // Use AI service to get simplified definition and other data
+          const aiData = await aiService.processWordDefinition(
+            wordData.text,
+            wordData.partOfSpeech,
+            wordData.definitions.join('; ')
+          );
+
+          const word = await storage.createWord({
+            text: wordData.text.toLowerCase(),
+            partOfSpeech: aiData.partOfSpeech,
+            teacherDefinition: wordData.definitions[0], // Use first definition as teacher definition
+            kidDefinition: aiData.kidDefinition,
+            syllables: aiData.syllables,
+            morphemes: aiData.morphemes,
+            instructorId: userId,
+            listId: list.id
+          });
+
+          // Create initial schedule for word
+          const scheduleData = schedulerService.createInitialSchedule(word.id);
+          await storage.createSchedule(scheduleData);
+
+          // Generate initial sentences
+          try {
+            const sentences = await aiService.generateSentences(
+              word.text,
+              word.partOfSpeech,
+              word.kidDefinition
+            );
+
+            for (const sentenceData of sentences) {
+              if (sentenceData.isAppropriate) {
+                await storage.createSentence({
+                  wordId: word.id,
+                  text: sentenceData.text,
+                  source: "ai",
+                  toxicityOk: true,
+                });
+              }
+            }
+          } catch (error) {
+            console.warn(`Failed to generate sentences for word ${word.text}:`, error);
+          }
+
+          wordsCreated++;
+        } catch (error) {
+          console.error(`Failed to process word ${wordData.text}:`, error);
+        }
+      }
+
+      res.json({
+        listId: list.id,
+        listName: list.name,
+        wordsCreated
+      });
+    } catch (error) {
+      console.error("Error importing vocabulary list:", error);
+      res.status(500).json({ message: "Failed to import vocabulary list" });
     }
   });
   

@@ -473,6 +473,37 @@ Respond with JSON in this format:
       throw new Error("Failed to generate passage quiz");
     }
   }
+
+  async processWordDefinition(word: string, partOfSpeech: string, teacherDefinition: string): Promise<{
+    partOfSpeech: string;
+    kidDefinition: string;
+    syllables: string[];
+    morphemes: string[];
+  }> {
+    try {
+      // First get the kid-friendly definition
+      const kidResult = await this.simplifyDefinition(teacherDefinition);
+      
+      // Get morphological analysis
+      const morphResult = await this.analyzeMorphology(word);
+      
+      return {
+        partOfSpeech: partOfSpeech,
+        kidDefinition: kidResult.definition,
+        syllables: morphResult.syllables || [word],
+        morphemes: morphResult.morphemes || [word]
+      };
+    } catch (error) {
+      console.error("Error processing word definition:", error);
+      // Return fallback data
+      return {
+        partOfSpeech: partOfSpeech,
+        kidDefinition: teacherDefinition,
+        syllables: [word],
+        morphemes: [word]
+      };
+    }
+  }
 }
 
 export const aiService = new AIService();
