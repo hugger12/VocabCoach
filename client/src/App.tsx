@@ -18,37 +18,31 @@ import NotFound from "@/pages/not-found";
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Switch>
-      {isLoading ? (
-        // Show loading state while checking authentication
-        <Route path="*">
-          <div className="min-h-screen bg-background flex items-center justify-center">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Loading...</p>
-            </div>
-          </div>
-        </Route>
-      ) : isAuthenticated ? (
-        // Authenticated instructor routes
+      <Route path="/" component={isAuthenticated ? InstructorDashboard : Landing} />
+      <Route path="/student-login" component={StudentLogin} />
+      <Route path="/student" component={StudentInterface} />
+      <Route path="/student/:rest*" component={StudentInterface} />
+      {isAuthenticated && (
         <>
-          <Route path="/" component={InstructorDashboard} />
           <Route path="/instructor/students" component={Students} />
           <Route path="/instructor/words" component={Words} />
           <Route path="/instructor/progress" component={Progress} />
-          <Route component={NotFound} />
-        </>
-      ) : (
-        // Unauthenticated routes
-        <>
-          <Route path="/" component={Landing} />
-          <Route path="/student-login" component={StudentLogin} />
-          <Route path="/student" component={StudentInterface} />
-          <Route path="/student/:rest*" component={StudentInterface} />
-          <Route path="*" component={NotFound} />
         </>
       )}
+      <Route path="*" component={NotFound} />
     </Switch>
   );
 }
