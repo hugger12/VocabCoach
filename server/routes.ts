@@ -286,17 +286,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Student not found or inactive" });
       }
 
+      console.log(`Student API: Student ${studentId} belongs to instructor ${student.instructorId}`);
+
       // If no listId provided, get current list for instructor
       let targetListId = listId;
       if (!targetListId) {
         const currentList = await storage.getCurrentVocabularyList(student.instructorId);
+        console.log(`Student API: Current list for instructor ${student.instructorId}:`, currentList);
         if (currentList) {
           targetListId = currentList.id;
         }
       }
 
+      console.log(`Student API: Using targetListId: ${targetListId}`);
+
       // Get words for the student's instructor
       const words = await storage.getWordsWithProgress(targetListId, student.instructorId, studentId);
+      console.log(`Student API: Found ${words.length} words for list ${targetListId}, instructor ${student.instructorId}`);
+      
       res.json(words);
     } catch (error) {
       console.error("Error fetching student words:", error);
