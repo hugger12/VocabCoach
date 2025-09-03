@@ -648,6 +648,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const instructorId = req.query.instructor as string;
       const listId = req.query.list as string;
       
+      console.log(`Study Session API: instructor=${instructorId}, quiz=${quizMode}, limit=${limit}, listId=${listId}`);
+      
       // Note: instructorId still required for student progress tracking but will use global vocabulary
 
       // Get global current vocabulary list (most recent across all instructors)
@@ -687,11 +689,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get all schedules and filter to active words only
       const allSchedules = await storage.getAllSchedules();
+      console.log(`Debug: Found ${allSchedules.length} total schedules`);
+      
       const currentListSchedules = allSchedules.filter(schedule => 
         currentListWordIds.includes(schedule.wordId)
       );
+      console.log(`Debug: Found ${currentListSchedules.length} schedules for current list (${currentListWordIds.length} words)`);
       
       let dueSchedules = schedulerService.getWordsForToday(currentListSchedules, limit);
+      console.log(`Debug: Found ${dueSchedules.length} due schedules`);
       
       // If we have very few words due (less than 3), expand to include more words for better practice
       if (dueSchedules.length < 3 && currentListSchedules.length > dueSchedules.length) {
@@ -719,7 +725,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get words with progress for active list
-      const words = await storage.getWordsWithProgress(targetListId, instructorId);
+      const words = await storage.getWordsWithProgress(targetListId, targetInstructorId);
       const session = schedulerService.createStudySession(dueSchedules, words);
       
       console.log(`Created study session with ${session.words.length} words from list ${targetListId}`);
