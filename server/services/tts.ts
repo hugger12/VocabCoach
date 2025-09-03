@@ -70,7 +70,7 @@ export class TTSService {
         style: 0.0, // Neutral style for educational content
         use_speaker_boost: true,
       },
-      model_id: "eleven_monolingual_v1", // Clear speech model
+      model_id: "eleven_flash_v2_5", // Fast, high-quality model for real-time applications
     };
 
     const response = await fetch(
@@ -105,7 +105,7 @@ export class TTSService {
         style: 0.0, // Neutral style for educational content
         use_speaker_boost: true,
       },
-      model_id: "eleven_monolingual_v1", // Clear speech model
+      model_id: "eleven_flash_v2_5", // Fast, high-quality model for real-time applications
     };
 
     const response = await fetch(
@@ -196,7 +196,7 @@ export class TTSService {
     return wordTimings;
   }
 
-  private generateCacheKey(options: TTSOptions): string {
+  generateCacheKey(options: TTSOptions): string {
     const { text, type, voiceSettings = {} } = options;
     const settingsStr = JSON.stringify(voiceSettings);
     const withTimestamps = type === "sentence" ? "timestamps" : "notimestamps";

@@ -576,18 +576,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Text and type are required" });
       }
 
+      // First, generate the cache key to check for pre-cached audio
+      const cacheKey = ttsService.generateCacheKey({ text, type });
+      const cachedAudio = await storage.getAudioCache(cacheKey);
+      
+      if (cachedAudio) {
+        console.log(`Using pre-cached audio for ${type}: "${text.substring(0, 50)}..."`);
+        
+        // If it's a sentence and we have cached timings, we need to regenerate for word timings
+        // For now, we'll regenerate sentences with timing data since the cache doesn't store the timings
+        if (type === "sentence") {
+          // Re-generate to get word timings (this is a limitation we can improve later)
+          const result = await ttsService.generateAudio({ text, type });
+          
+          const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
+          return res.json({
+            audioData: `data:audio/mpeg;base64,${base64Audio}`,
+            wordTimings: result.wordTimings || [],
+            duration: result.wordTimings ? Math.max(...result.wordTimings.map(w => w.endTimeMs)) / 1000 : null,
+            provider: result.provider
+          });
+        }
+        
+        // For word definitions, we can use cached audio directly
+        // Generate fresh audio for consistent response format
+      }
+
       const result = await ttsService.generateAudio({ text, type });
       
-      // Store in cache
-      await storage.createAudioCache({
-        wordId: req.body.wordId || null,
-        sentenceId: req.body.sentenceId || null,
-        type,
-        provider: result.provider,
-        audioUrl: null, // In memory storage
-        cacheKey: result.cacheKey,
-        durationMs: result.duration || null,
-      });
+      // Store in cache if not already cached
+      if (!cachedAudio) {
+        try {
+          await storage.createAudioCache({
+            wordId: req.body.wordId || null,
+            sentenceId: req.body.sentenceId || null,
+            type,
+            provider: result.provider,
+            audioUrl: null, // In memory storage
+            cacheKey: result.cacheKey,
+            durationMs: result.duration || null,
+          });
+        } catch (error) {
+          // Don't fail if caching fails - cache entry might already exist
+          console.log(`Cache entry may already exist for ${type}: "${text.substring(0, 30)}..."`);
+        }
+      }
 
       // For sentences with word timings, return JSON with timing data
       if (type === "sentence" && result.wordTimings) {
@@ -607,6 +640,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'Content-Length': result.audioBuffer.byteLength.toString(),
         'Cache-Control': 'public, max-age=3600',
         'X-Audio-Provider': result.provider,
+        'X-Cache-Status': cachedAudio ? 'pre-cached' : 'generated',
       });
 
       res.send(Buffer.from(result.audioBuffer));
@@ -637,6 +671,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating slow audio:", error);
       res.status(500).json({ message: "Failed to generate slow audio" });
+    }
+  });
+
+  // Audio Pre-caching API
+  app.post("/api/audio/precache", async (req, res) => {
+    try {
+      const { listId, instructorId } = req.body;
+      
+      if (!listId || !instructorId) {
+        return res.status(400).json({ message: "List ID and instructor ID are required" });
+      }
+
+      console.log(`Starting audio pre-caching for list ${listId} (instructor: ${instructorId})`);
+
+      // Get all words from the vocabulary list
+      const words = await storage.getWords(listId, instructorId);
+      const cachePromises: Promise<any>[] = [];
+
+      for (const word of words) {
+        // Pre-cache word definition audio
+        cachePromises.push(
+          ttsService.generateAudio({ 
+            text: word.kidDefinition, 
+            type: "word" 
+          }).then(result => {
+            return storage.createAudioCache({
+              wordId: word.id,
+              sentenceId: null,
+              type: "word",
+              provider: result.provider,
+              audioUrl: null,
+              cacheKey: result.cacheKey,
+              durationMs: result.duration || null,
+            });
+          }).catch(error => {
+            console.error(`Failed to pre-cache word ${word.text} definition:`, error);
+          })
+        );
+
+        // Get sentences for this word and pre-cache them
+        const sentences = await storage.getSentences(word.id);
+        for (const sentence of sentences) {
+          cachePromises.push(
+            ttsService.generateAudio({ 
+              text: sentence.text, 
+              type: "sentence" 
+            }).then(result => {
+              return storage.createAudioCache({
+                wordId: word.id,
+                sentenceId: sentence.id,
+                type: "sentence", 
+                provider: result.provider,
+                audioUrl: null,
+                cacheKey: result.cacheKey,
+                durationMs: result.duration || null,
+              });
+            }).catch(error => {
+              console.error(`Failed to pre-cache sentence for word ${word.text}:`, error);
+            })
+          );
+        }
+      }
+
+      // Wait for all pre-caching to complete
+      await Promise.allSettled(cachePromises);
+      
+      console.log(`Completed audio pre-caching for ${words.length} words with ${cachePromises.length} total audio files`);
+      
+      res.json({ 
+        message: "Audio pre-caching completed", 
+        wordsCount: words.length,
+        audioFilesCount: cachePromises.length
+      });
+    } catch (error) {
+      console.error("Error pre-caching audio:", error);
+      res.status(500).json({ message: "Failed to pre-cache audio" });
     }
   });
 
@@ -727,6 +837,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get words with progress for active list
       const words = await storage.getWordsWithProgress(targetListId, targetInstructorId);
       const session = schedulerService.createStudySession(dueSchedules, words);
+      
+      // Trigger audio pre-caching in the background for improved performance
+      // This will pre-generate audio for all words in the current vocabulary list
+      (async () => {
+        try {
+          console.log(`Starting background audio pre-caching for list ${targetListId}`);
+          const allListWords = await storage.getWords(targetListId, targetInstructorId);
+          const cachePromises: Promise<any>[] = [];
+
+          for (const word of allListWords) {
+            // Pre-cache word definition audio
+            cachePromises.push(
+              ttsService.generateAudio({ text: word.kidDefinition, type: "word" })
+                .then(result => storage.createAudioCache({
+                  wordId: word.id,
+                  sentenceId: null,
+                  type: "word",
+                  provider: result.provider,
+                  audioUrl: null,
+                  cacheKey: result.cacheKey,
+                  durationMs: result.duration || null,
+                }))
+                .catch(error => console.error(`Pre-cache failed for word ${word.text}:`, error))
+            );
+
+            // Pre-cache sentences
+            const sentences = await storage.getSentences(word.id);
+            for (const sentence of sentences) {
+              cachePromises.push(
+                ttsService.generateAudio({ text: sentence.text, type: "sentence" })
+                  .then(result => storage.createAudioCache({
+                    wordId: word.id,
+                    sentenceId: sentence.id,
+                    type: "sentence",
+                    provider: result.provider,
+                    audioUrl: null,
+                    cacheKey: result.cacheKey,
+                    durationMs: result.duration || null,
+                  }))
+                  .catch(error => console.error(`Pre-cache failed for sentence in word ${word.text}:`, error))
+              );
+            }
+          }
+
+          await Promise.allSettled(cachePromises);
+          console.log(`Background pre-caching completed for ${allListWords.length} words (${cachePromises.length} audio files)`);
+        } catch (error) {
+          console.error("Background audio pre-caching failed:", error);
+        }
+      })(); // Execute immediately but don't wait for it
       
       console.log(`Created study session with ${session.words.length} words from list ${targetListId}`);
       res.json(session);
