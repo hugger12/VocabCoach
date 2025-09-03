@@ -58,6 +58,13 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
     try {
       setIsLoading(true);
       
+      // Get listId from props or extract from first word as fallback
+      const currentListId = listId || (words.length > 0 ? words[0].listId : null);
+      
+      if (!currentListId) {
+        throw new Error("Unable to determine vocabulary list for quiz generation");
+      }
+      
       // Randomize word order each time to prevent memorization patterns
       const shuffledWords = [...words].sort(() => Math.random() - 0.5);
       
@@ -92,7 +99,7 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
               partOfSpeech: word.partOfSpeech,
               kidDefinition: word.kidDefinition,
             })),
-            listId: listId, // Use current vocabulary list
+            listId: currentListId, // Use current vocabulary list
           }),
         })
       ]);
