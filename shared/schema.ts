@@ -131,6 +131,7 @@ export const clozeQuestions = pgTable("cloze_questions", {
 // Passage quiz questions (Section 2: reading passage with multiple blanks)
 export const passageQuestions = pgTable("passage_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  weekId: varchar("week_id"), // Legacy field from week-based system, now nullable
   listId: varchar("list_id").references(() => vocabularyLists.id, { onDelete: "cascade" }), // Links to a vocabulary list (optional during transition)
   passageText: text("passage_text").notNull(), // The reading passage with numbered blanks
   title: text("title"), // Optional passage title
