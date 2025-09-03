@@ -45,8 +45,8 @@ function Router() {
           <Route path="/" component={Landing} />
           <Route path="/student-login" component={StudentLogin} />
           <Route path="/student" component={StudentInterface} />
-          <Route path="/student/*" component={StudentInterface} />
-          <Route component={NotFound} />
+          <Route path="/student/:rest*" component={StudentInterface} />
+          <Route path="*" component={NotFound} />
         </>
       )}
     </Switch>
