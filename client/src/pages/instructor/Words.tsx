@@ -16,19 +16,28 @@ interface Word {
   kidDefinition: string;
   teacherDefinition: string;
   partOfSpeech: string;
-  weekId: string;
+  listId: string | null;
   syllables: string[];
   morphemes: string[];
   createdAt: string;
 }
 
+interface VocabularyList {
+  id: string;
+  name: string;
+  instructorId: string;
+  isCurrent: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export function Words() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
+  const [listName, setListName] = useState("");
   const [newWord, setNewWord] = useState({
     text: "",
     definition: "",
-    weekId: "",
   });
   const [bulkWords, setBulkWords] = useState("");
   const [bulkDefinition, setBulkDefinition] = useState("");
@@ -54,9 +63,10 @@ export function Words() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/words"] });
       setShowAddDialog(false);
-      setNewWord({ text: "", definition: "", weekId: "" });
+      setNewWord({ text: "", definition: "" });
       setBulkWords("");
       setBulkDefinition("");
+      setListName("");
       toast({
         title: "Word Added",
         description: "Word has been added successfully.",
@@ -73,9 +83,9 @@ export function Words() {
 
   // Add bulk words mutation
   const addBulkWords = useMutation({
-    mutationFn: async (data: { words: string; definition: string; weekId: string }) => {
+    mutationFn: async (data: { words: string; definition: string; listName?: string }) => {
       const response = await fetch("/api/words/bulk", {
-        method: "POST",
+        method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
@@ -87,6 +97,7 @@ export function Words() {
       setShowAddDialog(false);
       setBulkWords("");
       setBulkDefinition("");
+      setListName("");
       toast({
         title: "Words Added",
         description: "All words have been added successfully.",
@@ -115,12 +126,12 @@ export function Words() {
       addBulkWords.mutate({
         words: bulkWords,
         definition: bulkDefinition,
-        weekId: newWord.weekId || new Date().toISOString().slice(0, 10),
+        listName: listName || `Words - ${new Date().toLocaleDateString()}`,
       });
     } else {
       addWord.mutate({
         ...newWord,
-        weekId: newWord.weekId || new Date().toISOString().slice(0, 10),
+        listName: listName || `Words - ${new Date().toLocaleDateString()}`,
       });
     }
   };
@@ -128,9 +139,10 @@ export function Words() {
   const resetDialog = () => {
     setShowAddDialog(false);
     setBulkMode(false);
-    setNewWord({ text: "", definition: "", weekId: "" });
+    setNewWord({ text: "", definition: "" });
     setBulkWords("");
     setBulkDefinition("");
+    setListName("");
   };
 
   if (isLoading) {
@@ -262,11 +274,11 @@ export function Words() {
                 )}
 
                 <div>
-                  <label className="text-sm font-medium text-foreground">Week ID</label>
+                  <label className="text-sm font-medium text-foreground">List Name</label>
                   <Input
-                    value={newWord.weekId}
-                    onChange={(e) => setNewWord({...newWord, weekId: e.target.value})}
-                    placeholder="Leave empty for current week"
+                    value={listName}
+                    onChange={(e) => setListName(e.target.value)}
+                    placeholder="Leave empty for auto-generated name"
                     className="mt-1"
                   />
                 </div>
@@ -304,7 +316,7 @@ export function Words() {
                       ({word.partOfSpeech})
                     </span>
                   </CardTitle>
-                  <p className="text-sm text-muted-foreground">Week: {word.weekId}</p>
+                  <p className="text-sm text-muted-foreground">List: {word.listId || 'Current'}</p>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>

@@ -275,13 +275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Initialize schedule
-      await storage.createSchedule({
-        wordId: word.id,
-        box: 1,
-        nextDueAt: new Date(),
-        reviewCount: 0,
-      });
+      // Note: Schedules are created per student when they start studying words
 
       res.json({ 
         ...word, 
@@ -291,6 +285,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error adding manual word:", error);
       res.status(500).json({ message: "Failed to add word with manual definition" });
+    }
+  });
+
+  // Bulk words route for adding multiple words with shared definition
+  app.post("/api/words/bulk", isAuthenticated, async (req: any, res) => {
+    try {
+      const { words, definition, listName } = req.body;
+      const userId = req.user.claims.sub;
+      
+      if (!words || !definition) {
+        return res.status(400).json({ message: "Words list and definition are required" });
+      }
+
+      console.log(`Adding bulk words with shared definition`);
+      
+      // Get or create the vocabulary list
+      let targetListId: string;
+      if (listName) {
+        // Check if list with this name already exists
+        const existingList = await storage.getVocabularyLists(userId);
+        const existing = existingList.find(list => list.name === listName);
+        
+        if (existing) {
+          targetListId = existing.id;
+        } else {
+          // Create new list
+          const newList = await storage.createVocabularyList({
+            name: listName,
+            instructorId: userId,
+            isCurrent: true // New lists become current
+          });
+          
+          // Set as current and deactivate others
+          await storage.setCurrentVocabularyList(userId, newList.id);
+          targetListId = newList.id;
+        }
+      } else {
+        // Use current list or create default
+        const currentList = await storage.getCurrentVocabularyList(userId);
+        if (currentList) {
+          targetListId = currentList.id;
+        } else {
+          const defaultList = await storage.createVocabularyList({
+            name: `Words - ${new Date().toLocaleDateString()}`,
+            instructorId: userId,
+            isCurrent: true
+          });
+          targetListId = defaultList.id;
+        }
+      }
+      
+      // Parse and process each word
+      const wordList = words.split(',').map((w: string) => w.trim()).filter((w: string) => w.length > 0);
+      const createdWords = [];
+      
+      for (const wordText of wordList) {
+        try {
+          // Generate part of speech using AI
+          const analysis = await aiService.analyzeWord(wordText);
+          
+          // Generate morphology
+          const morphology = await aiService.analyzeMorphology(wordText);
+          
+          const wordData = {
+            text: wordText.trim(),
+            partOfSpeech: analysis.partOfSpeech,
+            kidDefinition: definition.trim(),
+            teacherDefinition: definition.trim(),
+            listId: targetListId,
+            instructorId: userId,
+            syllables: morphology.syllables,
+            morphemes: morphology.morphemes,
+            ipa: null,
+          };
+
+          const word = await storage.createWord(wordData);
+          
+          // Generate sentences for each word
+          try {
+            const sentences = await aiService.generateSentences(word.text, word.partOfSpeech, definition);
+            
+            for (const sentence of sentences) {
+              await storage.createSentence({
+                text: sentence.text,
+                wordId: word.id,
+              });
+            }
+          } catch (error) {
+            console.warn(`Failed to generate sentences for ${wordText}:`, error);
+          }
+          
+          createdWords.push(word);
+        } catch (error) {
+          console.error(`Failed to create word ${wordText}:`, error);
+        }
+      }
+      
+      res.json({ 
+        message: `Successfully added ${createdWords.length} words`,
+        words: createdWords,
+        listId: targetListId
+      });
+      
+    } catch (error) {
+      console.error("Error adding bulk words:", error);
+      res.status(500).json({ message: "Failed to add bulk words" });
     }
   });
 
@@ -361,9 +461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const word = await storage.createWord(wordData);
       
-      // Create initial schedule
-      const scheduleData = schedulerService.createInitialSchedule(word.id);
-      await storage.createSchedule(scheduleData);
+      // Note: Schedules are created per student when they start studying words
 
       // Generate initial sentences
       try {
