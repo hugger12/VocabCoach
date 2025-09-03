@@ -280,29 +280,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { studentId } = req.params;
       const listId = req.query.list as string;
       
-      // Get student to find their instructor
+      // Get student to verify they exist
       const student = await storage.getStudent(studentId);
       if (!student || !student.isActive) {
         return res.status(404).json({ message: "Student not found or inactive" });
       }
 
-      console.log(`Student API: Student ${studentId} belongs to instructor ${student.instructorId}`);
+      console.log(`Student API: Student ${studentId} accessing global vocabulary`);
 
-      // If no listId provided, get current list for instructor
+      // If no listId provided, get the most recent vocabulary list globally
       let targetListId = listId;
+      let targetInstructorId = student.instructorId; // Default to student's instructor
+      
       if (!targetListId) {
-        const currentList = await storage.getCurrentVocabularyList(student.instructorId);
-        console.log(`Student API: Current list for instructor ${student.instructorId}:`, currentList);
-        if (currentList) {
-          targetListId = currentList.id;
+        const globalCurrentList = await storage.getGlobalCurrentVocabularyList();
+        console.log(`Student API: Global current list:`, globalCurrentList);
+        if (globalCurrentList) {
+          targetListId = globalCurrentList.id;
+          targetInstructorId = globalCurrentList.instructorId; // Use the list owner's instructor ID
         }
       }
 
-      console.log(`Student API: Using targetListId: ${targetListId}`);
+      console.log(`Student API: Using targetListId: ${targetListId}, instructorId: ${targetInstructorId}`);
 
-      // Get words for the student's instructor
-      const words = await storage.getWordsWithProgress(targetListId, student.instructorId, studentId);
-      console.log(`Student API: Found ${words.length} words for list ${targetListId}, instructor ${student.instructorId}`);
+      // Get words from the global current list (may be from any instructor)
+      const words = await storage.getWordsWithProgress(targetListId, targetInstructorId, studentId);
+      console.log(`Student API: Found ${words.length} words for list ${targetListId}, instructor ${targetInstructorId}`);
       
       res.json(words);
     } catch (error) {
@@ -645,26 +648,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const instructorId = req.query.instructor as string;
       const listId = req.query.list as string;
       
-      if (!instructorId) {
-        return res.status(400).json({ message: "Instructor ID is required" });
-      }
+      // Note: instructorId still required for student progress tracking but will use global vocabulary
 
-      // Get current vocabulary list for instructor
+      // Get global current vocabulary list (most recent across all instructors)
       let targetListId = listId;
+      let targetInstructorId = instructorId; // Default but may change
+      
       if (!targetListId) {
-        const currentList = await storage.getCurrentVocabularyList(instructorId);
-        if (!currentList) {
-          return res.status(404).json({ message: "No current vocabulary list found" });
+        const globalCurrentList = await storage.getGlobalCurrentVocabularyList();
+        if (!globalCurrentList) {
+          return res.status(404).json({ message: "No vocabulary list found" });
         }
-        targetListId = currentList.id;
+        targetListId = globalCurrentList.id;
+        targetInstructorId = globalCurrentList.instructorId; // Use the list owner's instructor ID
       }
       
-      // Get words from current vocabulary list
-      const currentListWords = await storage.getWords(targetListId, instructorId);
+      // Get words from global current vocabulary list
+      const currentListWords = await storage.getWords(targetListId, targetInstructorId);
       
       // For quiz mode, include ALL words from the list regardless of schedule
       if (quizMode) {
-        const words = await storage.getWordsWithProgress(targetListId, instructorId);
+        const words = await storage.getWordsWithProgress(targetListId, targetInstructorId);
         
         const session = {
           words: words,
@@ -673,7 +677,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sessionStarted: new Date(),
         };
         
-        console.log(`Created quiz session with ${session.words.length} words from list ${targetListId}`);
+        console.log(`Created quiz session with ${session.words.length} words from list ${targetListId} (instructor: ${targetInstructorId})`);
         res.json(session);
         return;
       }

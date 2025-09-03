@@ -199,6 +199,14 @@ export class DatabaseStorage implements IStorage {
     return list;
   }
 
+  async getGlobalCurrentVocabularyList(): Promise<VocabularyList | undefined> {
+    // Get the most recently created vocabulary list across all instructors
+    const [list] = await db.select().from(vocabularyLists)
+      .orderBy(desc(vocabularyLists.createdAt))
+      .limit(1);
+    return list;
+  }
+
   async createVocabularyList(list: InsertVocabularyList): Promise<VocabularyList> {
     const [created] = await db
       .insert(vocabularyLists)
