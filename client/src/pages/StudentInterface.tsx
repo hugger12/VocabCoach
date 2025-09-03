@@ -133,7 +133,7 @@ export function StudentInterface() {
   }
 
   return (
-    <div className="h-screen bg-background overflow-auto">
+    <div className="h-screen bg-background overflow-hidden flex flex-col">
       {/* Header */}
       <header className="flex items-center justify-between p-6 border-b border-border">
         <div className="flex items-center gap-4">
@@ -161,7 +161,8 @@ export function StudentInterface() {
         </Button>
       </header>
 
-      <div className="container mx-auto max-w-4xl p-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="container mx-auto max-w-4xl p-6">
         {/* Welcome Section */}
         <div className="text-center py-12">
           <h2 className="text-3xl font-bold text-foreground mb-4 dyslexia-text-2xl">
@@ -204,7 +205,7 @@ export function StudentInterface() {
           </div>
         </div>
 
-
+        </div>
       </div>
     </div>
   );

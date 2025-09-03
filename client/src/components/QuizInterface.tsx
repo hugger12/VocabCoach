@@ -351,8 +351,8 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
 
   // Main quiz display - one question at a time
   return (
-    <div className="h-screen bg-background flex flex-col">
-      <header className="flex items-center justify-between p-6">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
+      <header className="flex items-center justify-between p-6 flex-shrink-0">
         <img 
           src={huggerLogo} 
           alt="Hugger Digital" 
@@ -369,7 +369,7 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
       </header>
 
       {/* Progress bar */}
-      <div className="px-6 pb-4">
+      <div className="px-6 pb-4 flex-shrink-0">
         <div className="w-full bg-muted rounded-full h-2">
           <div 
             className="bg-primary h-2 rounded-full transition-all duration-300"
@@ -381,7 +381,7 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
         </p>
       </div>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8 overflow-y-auto min-h-0">
         <div className="max-w-4xl w-full text-center">
           {currentQuestion && (
             <>
