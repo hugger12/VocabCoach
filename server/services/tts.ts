@@ -59,11 +59,25 @@ export class TTSService {
     }
   }
 
+  private preprocessText(text: string): string {
+    // Expand common abbreviations for better pronunciation
+    return text
+      .replace(/\(n\.\)/gi, '(noun)')
+      .replace(/\(v\.\)/gi, '(verb)')  
+      .replace(/\(adj\.\)/gi, '(adjective)')
+      .replace(/\(adv\.\)/gi, '(adverb)')
+      .replace(/\(prep\.\)/gi, '(preposition)')
+      .replace(/\(conj\.\)/gi, '(conjunction)')
+      .replace(/\(interj\.\)/gi, '(interjection)')
+      .replace(/\(pron\.\)/gi, '(pronoun)');
+  }
+
   private async generateElevenLabsAudio(options: TTSOptions): Promise<ArrayBuffer> {
     const { text, voiceSettings = {} } = options;
+    const processedText = this.preprocessText(text);
     
     const requestBody = {
-      text,
+      text: processedText,
       voice_settings: {
         stability: voiceSettings.stability ?? 0.5,
         similarity_boost: voiceSettings.clarity ?? 0.75,
@@ -96,9 +110,10 @@ export class TTSService {
 
   private async generateElevenLabsAudioWithTimestamps(options: TTSOptions): Promise<{ audioBuffer: ArrayBuffer; wordTimings: WordTiming[] }> {
     const { text, voiceSettings = {} } = options;
+    const processedText = this.preprocessText(text);
     
     const requestBody = {
-      text,
+      text: processedText,
       voice_settings: {
         stability: voiceSettings.stability ?? 0.5,
         similarity_boost: voiceSettings.clarity ?? 0.75,
