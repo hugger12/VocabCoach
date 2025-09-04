@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Plus, ArrowLeft, FileText, CheckCircle, Calendar, Users } from "lucide-react";
+import { BookOpen, Plus, ArrowLeft, FileText, CheckCircle, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
@@ -19,31 +19,35 @@ interface VocabularyList {
   wordCount: number;
 }
 
-interface Word {
-  id: string;
-  text: string;
-  kidDefinition: string;
-  teacherDefinition: string;
-  partOfSpeech: string;
-  syllables: string[];
-  morphemes: string[];
-  createdAt: string;
+interface WordEntry {
+  word: string;
+  definition: string;
 }
 
 export function Words() {
-  const [showImportDialog, setShowImportDialog] = useState(false);
+  // NEW: 12-row interface state
+  const [showNewInterface, setShowNewInterface] = useState(false);
   const [listName, setListName] = useState("");
+  const [wordEntries, setWordEntries] = useState<WordEntry[]>(
+    Array.from({ length: 12 }, () => ({ word: "", definition: "" }))
+  );
+  const [isCreating, setIsCreating] = useState(false);
+
+  // PRESERVE EXISTING FUNCTIONALITY: Bulk import state
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [bulkListName, setBulkListName] = useState("");
   const [vocabularyText, setVocabularyText] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch vocabulary lists
+  // PRESERVE EXISTING FUNCTIONALITY: Fetch vocabulary lists
   const { data: vocabularyLists, isLoading } = useQuery<VocabularyList[]>({
     queryKey: ["/api/vocabulary-lists"],
   });
 
-  // Parse vocabulary text into words with definitions
+  // PRESERVE EXISTING FUNCTIONALITY: Parse vocabulary text into words with definitions
   const parseVocabularyText = (text: string) => {
     const lines = text.trim().split('\n').filter(line => line.trim());
     const words = [];
@@ -103,7 +107,51 @@ export function Words() {
     return words;
   };
 
-  // Import vocabulary list mutation
+  // NEW: Direct word entry mutation (bypasses AI modification)
+  const createVocabularyList = useMutation({
+    mutationFn: async (data: { listName: string; words: WordEntry[] }) => {
+      const response = await fetch("/api/vocabulary-lists/direct-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listName: data.listName,
+          words: data.words.filter(entry => entry.word.trim() && entry.definition.trim())
+        }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to create vocabulary list");
+      }
+      
+      return response.json();
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vocabulary-lists"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        query.queryKey[0] === "/api/words" || 
+        (Array.isArray(query.queryKey) && query.queryKey[0] === "/api/words")
+      });
+      setIsCreating(false);
+      // Clear form
+      setListName("");
+      setWordEntries(Array.from({ length: 12 }, () => ({ word: "", definition: "" })));
+      toast({
+        title: "Success!",
+        description: `Created "${result.listName}" with ${result.wordsCreated} words`,
+      });
+    },
+    onError: (error: any) => {
+      setIsCreating(false);
+      toast({
+        title: "Create Failed",
+        description: error.message || "Failed to create vocabulary list",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // PRESERVE EXISTING FUNCTIONALITY: Import vocabulary list mutation
   const importVocabularyList = useMutation({
     mutationFn: async (data: { listName: string; vocabularyText: string }) => {
       const parsedWords = parseVocabularyText(data.vocabularyText);
@@ -130,9 +178,12 @@ export function Words() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/vocabulary-lists"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/words"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        query.queryKey[0] === "/api/words" || 
+        (Array.isArray(query.queryKey) && query.queryKey[0] === "/api/words")
+      });
       setShowImportDialog(false);
-      setListName("");
+      setBulkListName("");
       setVocabularyText("");
       setIsImporting(false);
       toast({
@@ -151,7 +202,7 @@ export function Words() {
   });
 
   const handleImport = () => {
-    if (!listName.trim()) {
+    if (!bulkListName.trim()) {
       toast({
         title: "Error",
         description: "Please enter a name for this vocabulary list",
@@ -171,12 +222,51 @@ export function Words() {
 
     setIsImporting(true);
     importVocabularyList.mutate({
-      listName: listName,
+      listName: bulkListName,
       vocabularyText: vocabularyText
     });
   };
 
-  // Set current list mutation
+  const handleWordChange = (index: number, value: string) => {
+    const newEntries = [...wordEntries];
+    newEntries[index].word = value;
+    setWordEntries(newEntries);
+  };
+
+  const handleDefinitionChange = (index: number, value: string) => {
+    const newEntries = [...wordEntries];
+    newEntries[index].definition = value;
+    setWordEntries(newEntries);
+  };
+
+  const handleCreateList = () => {
+    if (!listName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a name for this vocabulary list",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const filledWords = wordEntries.filter(entry => entry.word.trim() && entry.definition.trim());
+    if (filledWords.length === 0) {
+      toast({
+        title: "Error", 
+        description: "Please enter at least one word and definition",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsCreating(true);
+    createVocabularyList.mutate({
+      listName: listName,
+      words: wordEntries
+    });
+  };
+
+  // PRESERVE EXISTING FUNCTIONALITY: Set current list mutation
   const setCurrentList = useMutation({
     mutationFn: async (listId: string) => {
       const response = await fetch(`/api/vocabulary-lists/${listId}/set-current`, {
@@ -212,9 +302,135 @@ export function Words() {
     );
   }
 
+  if (showNewInterface) {
+    return (
+      <div className="h-screen bg-background overflow-auto">
+        {/* Header */}
+        <header className="flex items-center justify-between p-6 border-b border-border">
+          <div className="flex items-center gap-4">
+            <img 
+              src={huggerLogo} 
+              alt="Hugger Digital" 
+              className="w-[100px] h-[100px] object-contain"
+            />
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">WordWizard</h1>
+              <p className="text-muted-foreground dyslexia-text-base">Create Vocabulary List</p>
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowNewInterface(false)}
+              className="tap-target border-border text-foreground hover:bg-accent"
+              data-testid="button-back-to-lists"
+            >
+              Back to Lists
+            </Button>
+            <Link href="/">
+              <Button 
+                variant="outline" 
+                className="tap-target border-border text-foreground hover:bg-accent"
+                data-testid="button-dashboard"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Dashboard
+              </Button>
+            </Link>
+          </div>
+        </header>
+
+        <div className="container mx-auto max-w-6xl p-6">
+          {/* List Name Input */}
+          <Card className="bg-card border-border mb-6">
+            <CardHeader>
+              <CardTitle className="text-lg">List Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div>
+                <label className="text-sm font-medium text-foreground dyslexia-text-base mb-2 block">
+                  List Name *
+                </label>
+                <Input
+                  placeholder="e.g., Week 1 Vocabulary, September Words, etc."
+                  value={listName}
+                  onChange={(e) => setListName(e.target.value)}
+                  className="dyslexia-text-base"
+                  data-testid="input-list-name"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 12-Row Word Entry Table */}
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="text-lg">Words & Definitions (12 rows)</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Enter each word and its exact definition. Definitions will be used exactly as entered - no AI modifications.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {wordEntries.map((entry, index) => (
+                  <div key={index} className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4 border border-border rounded-lg">
+                    <div className="lg:col-span-1">
+                      <label className="text-sm font-medium text-foreground mb-2 block">
+                        Word {index + 1}
+                      </label>
+                      <Input
+                        placeholder="burden"
+                        value={entry.word}
+                        onChange={(e) => handleWordChange(index, e.target.value)}
+                        className="dyslexia-text-base"
+                        data-testid={`input-word-${index}`}
+                      />
+                    </div>
+                    <div className="lg:col-span-2">
+                      <label className="text-sm font-medium text-foreground mb-2 block">
+                        Definition {index + 1}
+                      </label>
+                      <Textarea
+                        placeholder="1. (n.) something that is carried, a load; something that is very hard to bear&#10;2. (v.) to weigh down or put too heavy a load on"
+                        value={entry.definition}
+                        onChange={(e) => handleDefinitionChange(index, e.target.value)}
+                        rows={3}
+                        className="dyslexia-text-base"
+                        data-testid={`textarea-definition-${index}`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-border">
+                <Button
+                  onClick={handleCreateList}
+                  disabled={isCreating || !listName.trim()}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  data-testid="button-create-list"
+                >
+                  {isCreating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Creating...
+                    </>
+                  ) : (
+                    "Create Vocabulary List"
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-background overflow-auto">
-      {/* Header */}
+      {/* PRESERVE EXISTING FUNCTIONALITY: Header (unchanged) */}
       <header className="flex items-center justify-between p-6 border-b border-border">
         <div className="flex items-center gap-4">
           <img 
@@ -250,55 +466,67 @@ export function Words() {
             <div>
               <h2 className="text-2xl font-bold text-foreground dyslexia-text-xl">Vocabulary Lists</h2>
               <p className="text-muted-foreground dyslexia-text-base">
-                Import and manage your weekly vocabulary lists
+                Create and manage your vocabulary lists
               </p>
             </div>
           </div>
 
-          <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-            <DialogTrigger asChild>
-              <Button 
-                className="tap-target bg-primary text-primary-foreground hover:bg-primary/90"
-                data-testid="button-import"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Import New List
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-card border-border max-w-4xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="text-foreground flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Import Vocabulary List
-                </DialogTitle>
-                <p className="text-muted-foreground text-sm">
-                  Paste your vocabulary list exactly as provided by the teacher
-                </p>
-              </DialogHeader>
-              
-              <div className="space-y-6">
-                <div>
-                  <label className="text-sm font-medium text-foreground dyslexia-text-base mb-2 block">
-                    List Name *
-                  </label>
-                  <Input
-                    placeholder="e.g., Week 1 Vocabulary, September Words, etc."
-                    value={listName}
-                    onChange={(e) => setListName(e.target.value)}
-                    className="dyslexia-text-base"
-                    data-testid="input-list-name"
-                  />
-                </div>
+          <div className="flex gap-2">
+            {/* NEW: 12-row interface button */}
+            <Button 
+              onClick={() => setShowNewInterface(true)}
+              className="tap-target bg-secondary text-secondary-foreground hover:bg-secondary/90"
+              data-testid="button-new-interface"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Create 12-Row List
+            </Button>
 
-                <div>
-                  <label className="text-sm font-medium text-foreground dyslexia-text-base mb-2 block">
-                    Vocabulary List *
-                  </label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Copy and paste the entire vocabulary list from your teacher. Include word names and all definitions.
+            {/* PRESERVE EXISTING FUNCTIONALITY: Bulk import dialog */}
+            <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+              <DialogTrigger asChild>
+                <Button 
+                  className="tap-target bg-primary text-primary-foreground hover:bg-primary/90"
+                  data-testid="button-import"
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Bulk Import
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-card border-border max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-foreground flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Import Vocabulary List
+                  </DialogTitle>
+                  <p className="text-muted-foreground text-sm">
+                    Paste your vocabulary list exactly as provided by the teacher
                   </p>
-                  <Textarea
-                    placeholder={`Example format:
+                </DialogHeader>
+                
+                <div className="space-y-6">
+                  <div>
+                    <label className="text-sm font-medium text-foreground dyslexia-text-base mb-2 block">
+                      List Name *
+                    </label>
+                    <Input
+                      placeholder="e.g., Week 1 Vocabulary, September Words, etc."
+                      value={bulkListName}
+                      onChange={(e) => setBulkListName(e.target.value)}
+                      className="dyslexia-text-base"
+                      data-testid="input-bulk-list-name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-foreground dyslexia-text-base mb-2 block">
+                      Vocabulary List *
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Copy and paste the entire vocabulary list from your teacher. Include word names and all definitions.
+                    </p>
+                    <Textarea
+                      placeholder={`Example format:
 urgent
 (adj.) needing or demanding immediate action or attention
 
@@ -307,69 +535,70 @@ indicate
 
 attractive
 (adj.) pleasing to the eye, mind, or senses; having the power to draw attention`}
-                    value={vocabularyText}
-                    onChange={(e) => setVocabularyText(e.target.value)}
-                    rows={15}
-                    className="dyslexia-text-base font-mono text-sm"
-                    data-testid="textarea-vocabulary"
-                  />
-                </div>
-
-                {vocabularyText && (
-                  <div className="bg-accent/50 p-4 rounded-lg">
-                    <h4 className="font-medium text-foreground mb-2">Preview</h4>
-                    <p className="text-sm text-muted-foreground">
-                      {parseVocabularyText(vocabularyText).length} words detected
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {parseVocabularyText(vocabularyText).slice(0, 6).map((word, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          {word.text} ({word.partOfSpeech})
-                        </Badge>
-                      ))}
-                      {parseVocabularyText(vocabularyText).length > 6 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{parseVocabularyText(vocabularyText).length - 6} more
-                        </Badge>
-                      )}
-                    </div>
+                      value={vocabularyText}
+                      onChange={(e) => setVocabularyText(e.target.value)}
+                      rows={15}
+                      className="dyslexia-text-base font-mono text-sm"
+                      data-testid="textarea-vocabulary"
+                    />
                   </div>
-                )}
 
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setShowImportDialog(false)}
-                    disabled={isImporting}
-                    data-testid="button-cancel"
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={handleImport}
-                    disabled={isImporting || !listName.trim() || !vocabularyText.trim()}
-                    className="bg-primary text-primary-foreground"
-                    data-testid="button-import-submit"
-                  >
-                    {isImporting ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Importing...
-                      </>
-                    ) : (
-                      <>
-                        <FileText className="mr-2 h-4 w-4" />
-                        Import List
-                      </>
-                    )}
-                  </Button>
+                  {vocabularyText && (
+                    <div className="bg-accent/50 p-4 rounded-lg">
+                      <h4 className="font-medium text-foreground mb-2">Preview</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {parseVocabularyText(vocabularyText).length} words detected
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {parseVocabularyText(vocabularyText).slice(0, 6).map((word, index) => (
+                          <Badge key={index} variant="secondary" className="text-xs">
+                            {word.text} ({word.partOfSpeech})
+                          </Badge>
+                        ))}
+                        {parseVocabularyText(vocabularyText).length > 6 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{parseVocabularyText(vocabularyText).length - 6} more
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setShowImportDialog(false)}
+                      disabled={isImporting}
+                      data-testid="button-cancel"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleImport}
+                      disabled={isImporting || !bulkListName.trim() || !vocabularyText.trim()}
+                      className="bg-primary text-primary-foreground"
+                      data-testid="button-import-submit"
+                    >
+                      {isImporting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Importing...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="mr-2 h-4 w-4" />
+                          Import List
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
-        {/* Vocabulary Lists */}
+        {/* PRESERVE EXISTING FUNCTIONALITY: Vocabulary Lists Display (unchanged) */}
         <div className="space-y-4">
           {vocabularyLists?.length === 0 ? (
             <Card className="bg-card border-border">
@@ -379,16 +608,26 @@ attractive
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">No Vocabulary Lists</h3>
                 <p className="text-muted-foreground mb-4 dyslexia-text-base">
-                  Import your first vocabulary list to get started
+                  Create your first vocabulary list to get started
                 </p>
-                <Button 
-                  onClick={() => setShowImportDialog(true)}
-                  className="bg-primary text-primary-foreground"
-                  data-testid="button-import-first"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Import Your First List
-                </Button>
+                <div className="flex gap-2 justify-center">
+                  <Button 
+                    onClick={() => setShowNewInterface(true)}
+                    className="bg-primary text-primary-foreground"
+                    data-testid="button-create-first"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create 12-Row List
+                  </Button>
+                  <Button 
+                    onClick={() => setShowImportDialog(true)}
+                    className="bg-secondary text-secondary-foreground"
+                    data-testid="button-import-first"
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Bulk Import
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ) : (

@@ -258,6 +258,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Direct vocabulary list creation request body validation schema
+  const directCreateSchema = z.object({
+    listName: z.string().trim().min(1, "List name is required").max(100, "List name too long"),
+    words: z.array(z.object({
+      word: z.string().trim().min(1, "Word is required").max(50, "Word too long"),
+      definition: z.string().trim().min(1, "Definition is required").max(500, "Definition too long")
+    })).min(1, "At least one word is required").max(100, "Too many words")
+  });
+
+  // NEW: Direct vocabulary list creation (no AI modification of definitions)
+  app.post('/api/vocabulary-lists/direct-create', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Validate request body with proper Zod validation
+      const validatedData = directCreateSchema.parse(req.body);
+      const { listName, words } = validatedData;
+
+      if (!listName || !Array.isArray(words) || words.length === 0) {
+        return res.status(400).json({ message: "List name and words are required" });
+      }
+
+      // Words are already validated by Zod schema, no need to filter
+      const validWords = words;
+      
+      // Zod validation ensures we have at least one valid word
+
+      // Create vocabulary list
+      const listData = {
+        name: listName,
+        instructorId: userId,
+        isCurrent: true // New lists become current
+      };
+
+      // Set all other lists to not current first
+      const currentLists = await storage.getVocabularyLists(userId);
+      for (const existingList of currentLists) {
+        if (existingList.isCurrent) {
+          await storage.updateVocabularyList(existingList.id, { isCurrent: false });
+        }
+      }
+      
+      const list = await storage.createVocabularyList(listData);
+      let wordsCreated = 0;
+
+      // Add words to the list WITHOUT AI modification
+      for (const wordData of validWords) {
+        try {
+          // Extract part of speech from definition if available (e.g., "(n.)" or "(v.)")
+          const posMatch = wordData.definition.match(/\(([^)]+)\)/);
+          let partOfSpeech = 'noun'; // Default
+          let cleanDefinition = wordData.definition;
+
+          if (posMatch) {
+            const pos = posMatch[1].toLowerCase();
+            if (pos.includes('n') || pos.includes('noun')) partOfSpeech = 'noun';
+            else if (pos.includes('v') || pos.includes('verb')) partOfSpeech = 'verb';
+            else if (pos.includes('adj') || pos.includes('adjective')) partOfSpeech = 'adjective';
+            else if (pos.includes('adv') || pos.includes('adverb')) partOfSpeech = 'adverb';
+            // Keep definition as-is to preserve teacher's exact formatting
+          }
+
+          // Basic syllable breakdown (simple approach)
+          const syllables = [wordData.word.toLowerCase()]; // Keep as single syllable by default
+          
+          const word = await storage.createWord({
+            text: wordData.word.trim().toLowerCase(),
+            partOfSpeech: partOfSpeech,
+            teacherDefinition: wordData.definition.trim(), // Use exact teacher definition
+            kidDefinition: wordData.definition.trim(), // Use same definition for kids (no AI modification)
+            syllables: syllables,
+            morphemes: [wordData.word.trim().toLowerCase()], // Simple morpheme (just the word itself)
+            instructorId: userId,
+            listId: list.id
+          });
+
+          // Create initial schedule for word
+          const scheduleData = schedulerService.createInitialSchedule(word.id);
+          await storage.createSchedule(scheduleData);
+
+          // Generate initial sentences using the exact teacher definition
+          try {
+            const sentences = await aiService.generateSentences(
+              word.text,
+              word.partOfSpeech,
+              word.kidDefinition // This is now the exact teacher definition
+            );
+
+            for (const sentenceData of sentences) {
+              if (sentenceData.isAppropriate) {
+                await storage.createSentence({
+                  wordId: word.id,
+                  text: sentenceData.text,
+                  source: "ai",
+                  toxicityOk: true,
+                });
+              }
+            }
+          } catch (error) {
+            console.warn(`Failed to generate sentences for word ${word.text}:`, error);
+          }
+
+          wordsCreated++;
+        } catch (error) {
+          console.error(`Failed to process word ${wordData.word}:`, error);
+        }
+      }
+
+      res.json({
+        listId: list.id,
+        listName: list.name,
+        wordsCreated
+      });
+    } catch (error) {
+      console.error("Error creating vocabulary list:", error);
+      res.status(500).json({ message: "Failed to create vocabulary list" });
+    }
+  });
+  
   // Words API (now list-scoped instead of week-scoped)
   app.get("/api/words", isAuthenticated, async (req: any, res) => {
     try {
