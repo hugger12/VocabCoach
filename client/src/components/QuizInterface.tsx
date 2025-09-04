@@ -126,6 +126,7 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
       
       // Store passage question (7-12)
       if (passageData.passage && passageData.blanks) {
+        console.log(`Generated passage with ${passageData.blanks.length} blanks:`, passageData.blanks.map((b: any) => b.blankNumber));
         const passageQ = {
           questionType: 'passage' as const,
           passage: passageData.passage,
@@ -203,9 +204,19 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
         setSelectedAnswer("");
         setShowResult(false);
       } else {
-        // Quiz complete
+        // Quiz complete - include the current answer in the total
+        const currentBlank = passageQuestion.blanks[currentPassageBlankIndex];
+        const finalAttempt: QuizAttempt = {
+          questionId: currentBlank.id,
+          questionNumber: currentBlank.questionNumber,
+          selectedAnswer,
+          correctAnswer: currentBlank.correctAnswer,
+          isCorrect: selectedAnswer === currentBlank.correctAnswer,
+        };
+        const allAttempts = [...attempts, finalAttempt];
+        setAttempts(allAttempts);
         setIsComplete(true);
-        const score = Math.round((attempts.filter(a => a.isCorrect).length + 1) / 12 * 100);
+        const score = Math.round((allAttempts.filter(a => a.isCorrect).length) / allAttempts.length * 100);
         onComplete?.(score);
       }
     }
@@ -270,7 +281,8 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
 
   if (isComplete) {
     const correctAnswers = attempts.filter(a => a.isCorrect).length;
-    const score = Math.round((correctAnswers / 12) * 100); // Total 12 questions
+    const totalQuestions = attempts.length;
+    const score = Math.round((correctAnswers / totalQuestions) * 100);
     
     return (
       <div className="h-screen bg-background flex flex-col">
@@ -306,7 +318,7 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
               </h2>
               
               <p className="text-xl text-muted-foreground mb-6 dyslexia-text-lg">
-                You got {correctAnswers} out of 12 questions correct!
+                You got {correctAnswers} out of {totalQuestions} questions correct!
               </p>
               
               {score >= 80 ? (
