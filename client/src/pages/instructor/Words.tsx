@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Plus, ArrowLeft, FileText, CheckCircle, Calendar } from "lucide-react";
+import { BookOpen, Plus, ArrowLeft, FileText, CheckCircle, Calendar, RefreshCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
@@ -286,6 +286,38 @@ export function Words() {
       toast({
         title: "Error",
         description: error.message || "Failed to update current list",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Clear audio cache mutation
+  const clearAudioCache = useMutation({
+    mutationFn: async (listId: string) => {
+      const response = await fetch(`/api/audio/clear-cache`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ listId }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to clear audio cache");
+      }
+      
+      return response.json();
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Audio Cache Cleared!",
+        description: `Cleared ${result.deletedCount} cached audio files. New audio will use improved pronunciation.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Clear Cache",
+        description: error.message || "Failed to clear audio cache",
         variant: "destructive",
       });
     },
@@ -657,17 +689,39 @@ attractive
                       {new Date(list.createdAt).toLocaleDateString()}
                     </div>
 
-                    {!list.isCurrent && (
+                    <div className="space-y-2">
+                      {!list.isCurrent && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentList.mutate(list.id)}
+                          className="w-full border-border text-foreground hover:bg-accent"
+                          data-testid={`button-set-current-${list.id}`}
+                        >
+                          Make Current
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setCurrentList.mutate(list.id)}
+                        onClick={() => clearAudioCache.mutate(list.id)}
+                        disabled={clearAudioCache.isPending}
                         className="w-full border-border text-foreground hover:bg-accent"
-                        data-testid={`button-set-current-${list.id}`}
+                        data-testid={`button-regenerate-audio-${list.id}`}
                       >
-                        Make Current
+                        {clearAudioCache.isPending ? (
+                          <>
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2"></div>
+                            Clearing...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCcw className="w-3 h-3 mr-2" />
+                            Regenerate Audio
+                          </>
+                        )}
                       </Button>
-                    )}
+                    </div>
                   </CardContent>
                 </Card>
               ))}

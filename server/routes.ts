@@ -869,6 +869,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Clear audio cache for a vocabulary list to force regeneration
+  app.post("/api/audio/clear-cache", isAuthenticated, async (req: any, res) => {
+    try {
+      const { listId } = req.body;
+      const userId = req.user.claims.sub;
+      
+      if (!listId) {
+        return res.status(400).json({ message: "List ID is required" });
+      }
+
+      console.log(`Clearing audio cache for list ${listId} (instructor: ${userId})`);
+
+      // Get all words from the vocabulary list to find associated cache entries
+      const words = await storage.getWords(listId, userId);
+      let deletedCount = 0;
+
+      for (const word of words) {
+        // Delete cache entries for word definitions
+        const wordCacheKey = ttsService.generateCacheKey({ 
+          text: word.kidDefinition, 
+          type: "word" 
+        });
+        const wordCache = await storage.getAudioCache(wordCacheKey);
+        if (wordCache) {
+          await storage.deleteAudioCache(wordCache.id);
+          deletedCount++;
+        }
+
+        // Delete cache entries for sentences
+        const sentences = await storage.getSentences(word.id);
+        for (const sentence of sentences) {
+          const sentenceCacheKey = ttsService.generateCacheKey({ 
+            text: sentence.text, 
+            type: "sentence" 
+          });
+          const sentenceCache = await storage.getAudioCache(sentenceCacheKey);
+          if (sentenceCache) {
+            await storage.deleteAudioCache(sentenceCache.id);
+            deletedCount++;
+          }
+        }
+      }
+      
+      console.log(`Cleared ${deletedCount} audio cache entries for list ${listId}`);
+      
+      res.json({ 
+        message: "Audio cache cleared successfully", 
+        deletedCount,
+        wordsCount: words.length
+      });
+    } catch (error) {
+      console.error("Error clearing audio cache:", error);
+      res.status(500).json({ message: "Failed to clear audio cache" });
+    }
+  });
+
   // Study Session API
   app.get("/api/study/session", async (req, res) => {
     try {
