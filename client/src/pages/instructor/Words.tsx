@@ -380,7 +380,7 @@ export function Words() {
                         Word {index + 1}
                       </label>
                       <Input
-                        placeholder="burden"
+                        placeholder=""
                         value={entry.word}
                         onChange={(e) => handleWordChange(index, e.target.value)}
                         className="dyslexia-text-base"
@@ -392,7 +392,7 @@ export function Words() {
                         Definition {index + 1}
                       </label>
                       <Textarea
-                        placeholder="1. (n.) something that is carried, a load; something that is very hard to bear&#10;2. (v.) to weigh down or put too heavy a load on"
+                        placeholder=""
                         value={entry.definition}
                         onChange={(e) => handleDefinitionChange(index, e.target.value)}
                         rows={3}
