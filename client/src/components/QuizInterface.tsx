@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { X, CheckCircle, XCircle, ArrowRight, BookOpen } from "lucide-react";
+import { X, CheckCircle, XCircle, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { ClozeQuestion, PassageQuestion, PassageBlank, WordWithProgress } from "@shared/schema";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
@@ -141,18 +141,25 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
       setClozeQuestions(clozeQs);
       console.log(`Generated ${clozeQs.length} cloze questions (1-6)`);
       
-      // Store passage question (7-12) - Force sequential numbering on client
+      // Store passage question (7-12) - Sort by blankNumber then force sequential numbering
+      // This ensures questions display in reading order regardless of AI generation order
+      const sortedBlanks = [...passageData.blanks].sort((a, b) => {
+        const aNum = parseInt(String(a.blankNumber)) || 0;
+        const bNum = parseInt(String(b.blankNumber)) || 0;
+        return aNum - bNum;
+      });
       const passageQ = {
         questionType: 'passage' as const,
         passage: passageData.passage,
-        blanks: passageData.blanks.map((blank: any, index: number) => ({
+        blanks: sortedBlanks.map((blank: any, index: number) => ({
           ...blank,
-          questionNumber: 7 + index, // Force sequential 7-12 regardless of server blankNumber
+          questionNumber: 7 + index, // Force sequential 7-12 for display
           choices: [blank.correctAnswer, ...blank.distractors].sort(() => Math.random() - 0.5)
         }))
       };
       setPassageQuestion(passageQ);
       console.log(`Generated passage with ${passageQ.blanks.length} blanks (7-12)`);
+      console.log(`Blank order: ${passageQ.blanks.map(b => b.questionNumber).join(', ')}`);
       console.log(`Total quiz questions: ${clozeQs.length + passageQ.blanks.length}`);
     } catch (error) {
       console.error("Error generating comprehensive quiz:", error);
@@ -220,19 +227,9 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
         setSelectedAnswer("");
         setShowResult(false);
       } else {
-        // Quiz complete - include the current answer in the total
-        const currentBlank = passageQuestion.blanks[currentPassageBlankIndex];
-        const finalAttempt: QuizAttempt = {
-          questionId: currentBlank.id,
-          questionNumber: currentBlank.questionNumber,
-          selectedAnswer,
-          correctAnswer: currentBlank.correctAnswer,
-          isCorrect: selectedAnswer === currentBlank.correctAnswer,
-        };
-        const allAttempts = [...attempts, finalAttempt];
-        setAttempts(allAttempts);
+        // Quiz complete - use existing attempts (already added in handleSubmitAnswer)
         setIsComplete(true);
-        const score = Math.round((allAttempts.filter(a => a.isCorrect).length) / allAttempts.length * 100);
+        const score = Math.round((attempts.filter(a => a.isCorrect).length) / attempts.length * 100);
         onComplete?.(score);
       }
     }
@@ -550,20 +547,22 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
                 )}
               </div>
 
-              {/* Result feedback */}
-              {showResult && (
-                <div className="mt-6 p-4 rounded-lg">
-                  {selectedAnswer === (currentQuestion as any).correctAnswer ? (
-                    <p className="text-green-600 text-lg font-medium dyslexia-text-base">
-                      ✓ Correct! Well done!
-                    </p>
-                  ) : (
-                    <p className="text-red-600 text-lg font-medium dyslexia-text-base">
-                      ✗ The correct answer is "{(currentQuestion as any).correctAnswer}"
-                    </p>
-                  )}
-                </div>
-              )}
+              {/* Result feedback - Fixed height to prevent UI jumping */}
+              <div className="mt-6 min-h-20 flex items-center justify-center" aria-live="polite" role="status" aria-atomic="true">
+                {showResult && (
+                  <div className="p-4 rounded-lg">
+                    {selectedAnswer === (currentQuestion as any).correctAnswer ? (
+                      <p className="text-green-600 text-lg font-medium dyslexia-text-base" data-testid="feedback-correct">
+                        ✓ Correct! Well done!
+                      </p>
+                    ) : (
+                      <p className="text-red-600 text-lg font-medium dyslexia-text-base" data-testid="feedback-incorrect">
+                        ✗ The correct answer is "{(currentQuestion as any).correctAnswer}"
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
