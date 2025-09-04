@@ -65,8 +65,17 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
         throw new Error("Unable to determine vocabulary list for quiz generation");
       }
       
-      // Randomize word order each time to prevent memorization patterns
-      const shuffledWords = [...words].sort(() => Math.random() - 0.5);
+      // Validate we have exactly 12 words
+      if (words.length !== 12) {
+        throw new Error(`Quiz requires exactly 12 words, but got ${words.length}`);
+      }
+      
+      // Proper Fisher-Yates shuffle for unbiased randomization
+      const shuffledWords = [...words];
+      for (let i = shuffledWords.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledWords[i], shuffledWords[j]] = [shuffledWords[j], shuffledWords[i]];
+      }
       
       // Split shuffled words into two groups: first 6 for cloze, next 6 for passage
       const clozeWords = shuffledWords.slice(0, 6);
@@ -111,33 +120,40 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
       const clozeData = await clozeResponse.json();
       const passageData = await passageResponse.json();
       
+      // Validate responses
+      if (!clozeData.questions || clozeData.questions.length !== 6) {
+        throw new Error(`Expected 6 cloze questions, got ${clozeData.questions?.length || 0}`);
+      }
+      
+      if (!passageData.blanks || passageData.blanks.length !== 6) {
+        throw new Error(`Expected 6 passage blanks, got ${passageData.blanks?.length || 0}`);
+      }
+      
       const allQuestions: QuizQuestion[] = [];
       
       // Store cloze questions (1-6)
-      if (clozeData.questions) {
-        const clozeQs = clozeData.questions.map((q: any, index: number) => ({
-          ...q,
-          questionType: 'cloze' as const,
-          questionNumber: index + 1,
-          choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
-        }));
-        setClozeQuestions(clozeQs);
-      }
+      const clozeQs = clozeData.questions.map((q: any, index: number) => ({
+        ...q,
+        questionType: 'cloze' as const,
+        questionNumber: index + 1,
+        choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
+      }));
+      setClozeQuestions(clozeQs);
+      console.log(`Generated ${clozeQs.length} cloze questions (1-6)`);
       
-      // Store passage question (7-12)
-      if (passageData.passage && passageData.blanks) {
-        console.log(`Generated passage with ${passageData.blanks.length} blanks:`, passageData.blanks.map((b: any) => b.blankNumber));
-        const passageQ = {
-          questionType: 'passage' as const,
-          passage: passageData.passage,
-          blanks: passageData.blanks.map((blank: any, index: number) => ({
-            ...blank,
-            questionNumber: 7 + index,
-            choices: [blank.correctAnswer, ...blank.distractors].sort(() => Math.random() - 0.5)
-          }))
-        };
-        setPassageQuestion(passageQ);
-      }
+      // Store passage question (7-12) - Force sequential numbering on client
+      const passageQ = {
+        questionType: 'passage' as const,
+        passage: passageData.passage,
+        blanks: passageData.blanks.map((blank: any, index: number) => ({
+          ...blank,
+          questionNumber: 7 + index, // Force sequential 7-12 regardless of server blankNumber
+          choices: [blank.correctAnswer, ...blank.distractors].sort(() => Math.random() - 0.5)
+        }))
+      };
+      setPassageQuestion(passageQ);
+      console.log(`Generated passage with ${passageQ.blanks.length} blanks (7-12)`);
+      console.log(`Total quiz questions: ${clozeQs.length + passageQ.blanks.length}`);
     } catch (error) {
       console.error("Error generating comprehensive quiz:", error);
       toast({

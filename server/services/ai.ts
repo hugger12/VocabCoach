@@ -463,10 +463,42 @@ Respond with JSON in this format:
 
       const result = JSON.parse(response.choices[0].message.content || "{}");
       
+      // CRITICAL: Validate that we have exactly 6 blanks numbered 7-12
+      let blanks = result.blanks || [];
+      
+      // If we don't have exactly 6 blanks or they're not properly numbered, fix them
+      if (blanks.length !== 6) {
+        console.warn(`Passage generation returned ${blanks.length} blanks instead of 6. Fixing...`);
+        
+        // Ensure we have 6 blanks, one for each word
+        blanks = words.map((word, index) => ({
+          blankNumber: 7 + index,
+          correctAnswer: word.text,
+          distractors: blanks[index]?.distractors || ["option1", "option2", "option3"] // Fallback distractors
+        }));
+      } else {
+        // Ensure proper sequential numbering 7-12
+        blanks = blanks.map((blank, index) => ({
+          ...blank,
+          blankNumber: 7 + index // Force sequential numbering
+        }));
+      }
+      
+      // Validate each blank has required fields
+      blanks = blanks.map((blank, index) => ({
+        blankNumber: blank.blankNumber || (7 + index),
+        correctAnswer: blank.correctAnswer || words[index]?.text || `word${index + 1}`,
+        distractors: Array.isArray(blank.distractors) && blank.distractors.length >= 3 
+          ? blank.distractors.slice(0, 3)
+          : ["option1", "option2", "option3"]
+      }));
+      
+      console.log(`Passage quiz generated with ${blanks.length} blanks numbered:`, blanks.map(b => b.blankNumber));
+      
       return {
         passageText: result.passageText,
         title: result.title,
-        blanks: result.blanks || []
+        blanks: blanks
       };
     } catch (error) {
       console.error("Error generating passage quiz:", error);
