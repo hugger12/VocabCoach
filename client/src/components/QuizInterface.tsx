@@ -81,37 +81,57 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
     return { clozeQuestions, passageQuestion };
   };
 
-  // Check for pre-generated quiz in localStorage
+  // Check for pre-generated quiz variants in localStorage
   const checkForPreGeneratedQuiz = (words: WordWithProgress[]) => {
     try {
       const wordIds = words.map(w => w.id).sort().join(',');
-      const cacheKey = `preGeneratedQuiz_${wordIds}`;
       
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const preGenerated = JSON.parse(cached);
+      // Look for available variants (1, 2, 3)
+      for (let variant = 1; variant <= 3; variant++) {
+        const cacheKey = `preGeneratedQuiz_${wordIds}_variant_${variant}`;
+        const cached = localStorage.getItem(cacheKey);
         
-        // Check if cache is still valid (not too old)
-        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-        if (Date.now() - preGenerated.generatedAt < maxAge) {
-          console.log("Found valid cached quiz, checking word match...");
+        if (cached) {
+          const preGenerated = JSON.parse(cached);
           
-          // Check if this cached quiz matches our current words
-          const cachedWordIds = preGenerated.words.map((w: any) => w.id).sort().join(',');
-          
-          if (cachedWordIds === wordIds) {
-            // Don't remove cache yet - let it be reused until TTL expires
-            return preGenerated;
+          // Check if cache is still valid (not too old)
+          const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days for weekly vocab
+          if (Date.now() - preGenerated.generatedAt < maxAge && preGenerated.ready) {
+            console.log(`Found variant ${variant} cached quiz, checking word match...`);
+            
+            // Check if this cached quiz matches our current words
+            const cachedWordIds = preGenerated.words.map((w: any) => w.id).sort().join(',');
+            
+            if (cachedWordIds === wordIds) {
+              console.log(`🎯 Using variant ${variant} - consuming cache entry`);
+              
+              // Remove this variant from cache so next quiz uses a different one
+              localStorage.removeItem(cacheKey);
+              
+              // Check how many variants remain
+              const remainingVariants = [];
+              for (let v = 1; v <= 3; v++) {
+                const checkKey = `preGeneratedQuiz_${wordIds}_variant_${v}`;
+                if (localStorage.getItem(checkKey)) {
+                  remainingVariants.push(v);
+                }
+              }
+              console.log(`📊 Remaining variants after consumption: [${remainingVariants.join(', ')}]`);
+              
+              return preGenerated;
+            }
+          } else {
+            // Clean up expired cache
+            localStorage.removeItem(cacheKey);
+            console.log(`Cleaned up expired variant ${variant}`);
           }
-        } else {
-          // Clean up expired cache
-          localStorage.removeItem(cacheKey);
         }
       }
       
+      console.log("No valid quiz variants found in cache");
       return null;
     } catch (error) {
-      console.log("Error checking for pre-generated quiz:", error);
+      console.log("Error checking for pre-generated quiz variants:", error);
       return null;
     }
   };
@@ -135,8 +155,9 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
       // Check for pre-generated quiz first
       const preGeneratedQuiz = checkForPreGeneratedQuiz(words);
       if (preGeneratedQuiz && preGeneratedQuiz.ready) {
-        console.log("🚀 Using pre-generated quiz for instant loading!");
+        console.log("🚀 Using pre-generated quiz variant for instant loading!");
         console.log("Cache details:", {
+          variant: preGeneratedQuiz.variant,
           clozeQuestions: preGeneratedQuiz.clozeData?.questions?.length || 0,
           passageBlanks: preGeneratedQuiz.passageData?.blanks?.length || 0,
           generatedAt: new Date(preGeneratedQuiz.generatedAt).toLocaleTimeString()
