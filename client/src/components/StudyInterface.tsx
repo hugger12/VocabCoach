@@ -65,110 +65,127 @@ export function StudyInterface({ onClose, instructorId }: StudyInterfaceProps) {
     }
   }, [session?.words, sessionWords.length, session?.totalWords, instructorId]);
 
-  // Background quiz generation function
+  // Background quiz generation function - now generates multiple variants for the week
   const generateQuizInBackground = async (words: WordWithProgress[], instructorId?: string) => {
     try {
       console.log("🎯 Starting background quiz generation with", words.length, "words...");
+      console.log("📚 Generating 3 quiz variants for the week...");
       
       if (words.length !== 12) {
         console.log("⚠️ Background quiz generation skipped: need exactly 12 words, got", words.length);
         return;
       }
 
-      // Generate stable cache key based on word IDs (no timestamp)
       const wordIds = words.map(w => w.id).sort().join(',');
-      const cacheKey = `preGeneratedQuiz_${wordIds}`;
-      
-      // Don't purge existing cache until we successfully generate a new one
-      // This prevents losing valid cache during generation failures
-
-      // Get listId from words
       const currentListId = words.length > 0 ? words[0].listId : null;
+      
       if (!currentListId) {
         console.log("⚠️ Background quiz generation skipped: no list ID found");
         return;
       }
 
-      // Shuffle words using Fisher-Yates algorithm
-      const shuffledWords = [...words];
-      for (let i = shuffledWords.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffledWords[i], shuffledWords[j]] = [shuffledWords[j], shuffledWords[i]];
+      // Check if we already have variants cached
+      const existingVariants = Object.keys(localStorage)
+        .filter(key => key.startsWith(`preGeneratedQuiz_${wordIds}_variant_`))
+        .length;
+      
+      if (existingVariants >= 3) {
+        console.log("✅ 3 quiz variants already cached, skipping generation");
+        return;
       }
 
-      // Split into cloze and passage words
-      const clozeWords = shuffledWords.slice(0, 6);
-      const passageWords = shuffledWords.slice(6, 12);
+      console.log(`📝 Found ${existingVariants}/3 variants, generating ${3 - existingVariants} more...`);
 
-      // Generate both question types in parallel
-      const [clozeResponse, passageResponse] = await Promise.all([
-        fetch("/api/quiz/cloze/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            words: clozeWords.map(word => ({
-              id: word.id,
-              text: word.text,
-              partOfSpeech: word.partOfSpeech,
-              kidDefinition: word.kidDefinition,
-            })),
-          }),
-        }),
-        fetch("/api/quiz/passage/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            words: passageWords.map(word => ({
-              id: word.id,
-              text: word.text,
-              partOfSpeech: word.partOfSpeech,
-              kidDefinition: word.kidDefinition,
-            })),
-            listId: currentListId,
-          }),
-        })
-      ]);
-
-      if (clozeResponse.ok && passageResponse.ok) {
-        const clozeData = await clozeResponse.json();
-        const passageData = await passageResponse.json();
-
-        // Store the generated quiz data for later use
-        const preGeneratedQuiz = {
-          clozeData,
-          passageData,
-          words: shuffledWords,
-          instructorId,
-          listId: currentListId,
-          generatedAt: Date.now(),
-          ready: true // Mark as complete and ready to use
-        };
-
-        localStorage.setItem(cacheKey, JSON.stringify(preGeneratedQuiz));
-        console.log("✅ Quiz generated and cached for instant access!");
-        
-        // Clean up any old expired caches after successful generation
-        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('preGeneratedQuiz_') && key !== cacheKey) {
-            try {
-              const oldCache = JSON.parse(localStorage.getItem(key) || '{}');
-              if (Date.now() - oldCache.generatedAt > maxAge) {
-                localStorage.removeItem(key);
-              }
-            } catch (e) {
-              localStorage.removeItem(key); // Remove corrupted cache
-            }
+      // Generate multiple variants with different shuffles
+      for (let variant = existingVariants + 1; variant <= 3; variant++) {
+        try {
+          console.log(`🔄 Generating variant ${variant}/3...`);
+          
+          // Create unique shuffle for each variant
+          const shuffledWords = [...words];
+          for (let i = shuffledWords.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffledWords[i], shuffledWords[j]] = [shuffledWords[j], shuffledWords[i]];
           }
-        });
-      } else {
-        console.log("⚠️ Background quiz generation failed - API errors:", 
-          clozeResponse.status, clozeResponse.statusText, 
-          passageResponse.status, passageResponse.statusText);
+
+          const clozeWords = shuffledWords.slice(0, 6);
+          const passageWords = shuffledWords.slice(6, 12);
+
+          // Generate both question types in parallel
+          const [clozeResponse, passageResponse] = await Promise.all([
+            fetch("/api/quiz/cloze/generate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                words: clozeWords.map(word => ({
+                  id: word.id,
+                  text: word.text,
+                  partOfSpeech: word.partOfSpeech,
+                  kidDefinition: word.kidDefinition,
+                })),
+              }),
+            }),
+            fetch("/api/quiz/passage/generate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                words: passageWords.map(word => ({
+                  id: word.id,
+                  text: word.text,
+                  partOfSpeech: word.partOfSpeech,
+                  kidDefinition: word.kidDefinition,
+                })),
+                listId: currentListId,
+              }),
+            })
+          ]);
+
+          if (clozeResponse.ok && passageResponse.ok) {
+            const clozeData = await clozeResponse.json();
+            const passageData = await passageResponse.json();
+
+            const cacheKey = `preGeneratedQuiz_${wordIds}_variant_${variant}`;
+            const preGeneratedQuiz = {
+              clozeData,
+              passageData,
+              words: shuffledWords,
+              instructorId,
+              listId: currentListId,
+              generatedAt: Date.now(),
+              variant,
+              ready: true
+            };
+
+            localStorage.setItem(cacheKey, JSON.stringify(preGeneratedQuiz));
+            console.log(`✅ Variant ${variant}/3 generated and cached!`);
+          } else {
+            console.log(`⚠️ Variant ${variant} generation failed:`, 
+              clozeResponse.status, passageResponse.status);
+          }
+        } catch (variantError) {
+          console.log(`⚠️ Error generating variant ${variant}:`, variantError);
+        }
       }
+
+      console.log("🎉 Multi-variant quiz generation complete!");
+      
+      // Clean up any old expired caches after successful generation
+      const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days for weekly vocab
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('preGeneratedQuiz_') && !key.includes(`_${wordIds}_`)) {
+          try {
+            const oldCache = JSON.parse(localStorage.getItem(key) || '{}');
+            if (Date.now() - oldCache.generatedAt > maxAge) {
+              localStorage.removeItem(key);
+            }
+          } catch (e) {
+            localStorage.removeItem(key);
+          }
+        }
+      });
+      
     } catch (error) {
-      console.log("⚠️ Background quiz generation failed with error:", error);
-      // Fail silently - quiz will generate normally when needed
+      console.log("⚠️ Multi-variant quiz generation failed:", error);
     }
   };
 
