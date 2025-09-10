@@ -54,6 +54,37 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
     generateComprehensiveQuiz();
   }, []);
 
+  // Check for pre-generated quiz in localStorage
+  const checkForPreGeneratedQuiz = (words: WordWithProgress[]) => {
+    try {
+      const wordIds = words.map(w => w.id).sort().join(',');
+      
+      // Find any pre-generated quiz that matches our word set
+      const cacheKeys = Object.keys(localStorage).filter(key => key.startsWith('preGeneratedQuiz_'));
+      
+      for (const key of cacheKeys) {
+        const cached = localStorage.getItem(key);
+        if (cached) {
+          const preGenerated = JSON.parse(cached);
+          
+          // Check if this cached quiz matches our current words
+          const cachedWordIds = preGenerated.words.map((w: any) => w.id).sort().join(',');
+          
+          if (cachedWordIds === wordIds) {
+            // Found a matching quiz - clean up this cache entry since we're using it
+            localStorage.removeItem(key);
+            return preGenerated;
+          }
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.log("Error checking for pre-generated quiz:", error);
+      return null;
+    }
+  };
+
   const generateComprehensiveQuiz = async () => {
     try {
       setIsLoading(true);
@@ -69,6 +100,40 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
       if (words.length !== 12) {
         throw new Error(`Quiz requires exactly 12 words, but got ${words.length}`);
       }
+
+      // Check for pre-generated quiz first
+      const preGeneratedQuiz = checkForPreGeneratedQuiz(words);
+      if (preGeneratedQuiz) {
+        console.log("🚀 Using pre-generated quiz for instant loading!");
+        
+        // Use the pre-generated data
+        const { clozeData, passageData, words: shuffledWords } = preGeneratedQuiz;
+        
+        // Process and set the questions using cached data
+        const clozeQuestions: ClozeQuizQuestion[] = clozeData.questions.map((q: any, index: number) => ({
+          ...q,
+          questionType: 'cloze' as const,
+          questionNumber: index + 1,
+          choices: q.choices || []
+        }));
+
+        const passageQuestion: PassageQuizQuestion | null = passageData.blanks ? {
+          questionType: 'passage' as const,
+          passage: passageData,
+          blanks: passageData.blanks.map((blank: any) => ({
+            ...blank,
+            choices: blank.distractors ? [blank.correctAnswer, ...blank.distractors].sort(() => Math.random() - 0.5) : [],
+            questionNumber: blank.blankNumber || 7
+          }))
+        } : null;
+
+        setClozeQuestions(clozeQuestions);
+        setPassageQuestion(passageQuestion);
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("⏳ No pre-generated quiz found, generating new quiz...");
       
       // Proper Fisher-Yates shuffle for unbiased randomization
       const shuffledWords = [...words];
