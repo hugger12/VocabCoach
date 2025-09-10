@@ -59,8 +59,104 @@ export function StudyInterface({ onClose, instructorId }: StudyInterfaceProps) {
     if (session?.words && sessionWords.length === 0) {
       setSessionWords([...session.words]);
       setTotalSessionWords(session.totalWords);
+      
+      // Start generating quiz in background for faster access later
+      generateQuizInBackground(session.words, instructorId);
     }
-  }, [session?.words, sessionWords.length, session?.totalWords]);
+  }, [session?.words, sessionWords.length, session?.totalWords, instructorId]);
+
+  // Background quiz generation function
+  const generateQuizInBackground = async (words: WordWithProgress[], instructorId?: string) => {
+    try {
+      console.log("🎯 Starting background quiz generation...");
+      
+      if (words.length !== 12) {
+        console.log("⚠️ Background quiz generation skipped: need exactly 12 words, got", words.length);
+        return;
+      }
+
+      // Generate a unique cache key based on word IDs to ensure fresh quizzes for different word sets
+      const wordIds = words.map(w => w.id).sort().join(',');
+      const cacheKey = `preGeneratedQuiz_${wordIds}_${Date.now()}`;
+      
+      // Clear any old cached quizzes to prevent memory buildup
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('preGeneratedQuiz_') && key !== cacheKey) {
+          localStorage.removeItem(key);
+        }
+      });
+
+      // Get listId from words
+      const currentListId = words.length > 0 ? words[0].listId : null;
+      if (!currentListId) {
+        console.log("⚠️ Background quiz generation skipped: no list ID found");
+        return;
+      }
+
+      // Shuffle words using Fisher-Yates algorithm
+      const shuffledWords = [...words];
+      for (let i = shuffledWords.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledWords[i], shuffledWords[j]] = [shuffledWords[j], shuffledWords[i]];
+      }
+
+      // Split into cloze and passage words
+      const clozeWords = shuffledWords.slice(0, 6);
+      const passageWords = shuffledWords.slice(6, 12);
+
+      // Generate both question types in parallel
+      const [clozeResponse, passageResponse] = await Promise.all([
+        fetch("/api/quiz/cloze/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            words: clozeWords.map(word => ({
+              id: word.id,
+              text: word.text,
+              partOfSpeech: word.partOfSpeech,
+              kidDefinition: word.kidDefinition,
+            })),
+          }),
+        }),
+        fetch("/api/quiz/passage/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            words: passageWords.map(word => ({
+              id: word.id,
+              text: word.text,
+              partOfSpeech: word.partOfSpeech,
+              kidDefinition: word.kidDefinition,
+            })),
+            listId: currentListId,
+          }),
+        })
+      ]);
+
+      if (clozeResponse.ok && passageResponse.ok) {
+        const clozeData = await clozeResponse.json();
+        const passageData = await passageResponse.json();
+
+        // Store the generated quiz data for later use
+        const preGeneratedQuiz = {
+          clozeData,
+          passageData,
+          words: shuffledWords,
+          instructorId,
+          listId: currentListId,
+          generatedAt: Date.now()
+        };
+
+        localStorage.setItem(cacheKey, JSON.stringify(preGeneratedQuiz));
+        console.log("✅ Quiz generated and cached for instant access!");
+      } else {
+        console.log("⚠️ Background quiz generation failed - API errors");
+      }
+    } catch (error) {
+      console.log("⚠️ Background quiz generation failed:", error);
+      // Fail silently - quiz will generate normally when needed
+    }
+  };
 
   // Stop audio when word changes or component unmounts
   useEffect(() => {
