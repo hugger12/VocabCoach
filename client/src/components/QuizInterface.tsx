@@ -54,27 +54,58 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
     generateComprehensiveQuiz();
   }, []);
 
+  // Shared utility to process quiz data consistently
+  const processQuizData = (clozeData: any, passageData: any) => {
+    // Process cloze questions with proper choice construction
+    const clozeQuestions: ClozeQuizQuestion[] = clozeData.questions.map((q: any, index: number) => ({
+      ...q,
+      questionType: 'cloze' as const,
+      questionNumber: index + 1,
+      // Build choices from correctAnswer + distractors, then shuffle
+      choices: [q.correctAnswer, ...(q.distractors || [])].sort(() => Math.random() - 0.5)
+    }));
+
+    // Process passage question with proper data structure
+    const passageQuestion: PassageQuizQuestion | null = passageData.blanks ? {
+      questionType: 'passage' as const,
+      passage: passageData.passage || passageData, // Handle both data shapes
+      blanks: passageData.blanks
+        .sort((a: any, b: any) => (a.blankNumber || 0) - (b.blankNumber || 0)) // Ensure proper ordering
+        .map((blank: any) => ({
+          ...blank,
+          choices: [blank.correctAnswer, ...(blank.distractors || [])].sort(() => Math.random() - 0.5),
+          questionNumber: blank.blankNumber || 7
+        }))
+    } : null;
+
+    return { clozeQuestions, passageQuestion };
+  };
+
   // Check for pre-generated quiz in localStorage
   const checkForPreGeneratedQuiz = (words: WordWithProgress[]) => {
     try {
       const wordIds = words.map(w => w.id).sort().join(',');
+      const cacheKey = `preGeneratedQuiz_${wordIds}`;
       
-      // Find any pre-generated quiz that matches our word set
-      const cacheKeys = Object.keys(localStorage).filter(key => key.startsWith('preGeneratedQuiz_'));
-      
-      for (const key of cacheKeys) {
-        const cached = localStorage.getItem(key);
-        if (cached) {
-          const preGenerated = JSON.parse(cached);
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const preGenerated = JSON.parse(cached);
+        
+        // Check if cache is still valid (not too old)
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+        if (Date.now() - preGenerated.generatedAt < maxAge) {
+          console.log("Found valid cached quiz, checking word match...");
           
           // Check if this cached quiz matches our current words
           const cachedWordIds = preGenerated.words.map((w: any) => w.id).sort().join(',');
           
           if (cachedWordIds === wordIds) {
-            // Found a matching quiz - clean up this cache entry since we're using it
-            localStorage.removeItem(key);
+            // Don't remove cache yet - let it be reused until TTL expires
             return preGenerated;
           }
+        } else {
+          // Clean up expired cache
+          localStorage.removeItem(cacheKey);
         }
       }
       
@@ -103,32 +134,22 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
 
       // Check for pre-generated quiz first
       const preGeneratedQuiz = checkForPreGeneratedQuiz(words);
-      if (preGeneratedQuiz) {
+      if (preGeneratedQuiz && preGeneratedQuiz.ready) {
         console.log("🚀 Using pre-generated quiz for instant loading!");
+        console.log("Cache details:", {
+          clozeQuestions: preGeneratedQuiz.clozeData?.questions?.length || 0,
+          passageBlanks: preGeneratedQuiz.passageData?.blanks?.length || 0,
+          generatedAt: new Date(preGeneratedQuiz.generatedAt).toLocaleTimeString()
+        });
         
         // Use the pre-generated data
         const { clozeData, passageData, words: shuffledWords } = preGeneratedQuiz;
         
-        // Process and set the questions using cached data
-        const clozeQuestions: ClozeQuizQuestion[] = clozeData.questions.map((q: any, index: number) => ({
-          ...q,
-          questionType: 'cloze' as const,
-          questionNumber: index + 1,
-          choices: q.choices || []
-        }));
-
-        const passageQuestion: PassageQuizQuestion | null = passageData.blanks ? {
-          questionType: 'passage' as const,
-          passage: passageData,
-          blanks: passageData.blanks.map((blank: any) => ({
-            ...blank,
-            choices: blank.distractors ? [blank.correctAnswer, ...blank.distractors].sort(() => Math.random() - 0.5) : [],
-            questionNumber: blank.blankNumber || 7
-          }))
-        } : null;
-
-        setClozeQuestions(clozeQuestions);
-        setPassageQuestion(passageQuestion);
+        // Process cached data using same logic as fresh generation
+        const processedData = processQuizData(clozeData, passageData);
+        
+        setClozeQuestions(processedData.clozeQuestions);
+        setPassageQuestion(processedData.passageQuestion);
         setIsLoading(false);
         return;
       }

@@ -68,23 +68,19 @@ export function StudyInterface({ onClose, instructorId }: StudyInterfaceProps) {
   // Background quiz generation function
   const generateQuizInBackground = async (words: WordWithProgress[], instructorId?: string) => {
     try {
-      console.log("🎯 Starting background quiz generation...");
+      console.log("🎯 Starting background quiz generation with", words.length, "words...");
       
       if (words.length !== 12) {
         console.log("⚠️ Background quiz generation skipped: need exactly 12 words, got", words.length);
         return;
       }
 
-      // Generate a unique cache key based on word IDs to ensure fresh quizzes for different word sets
+      // Generate stable cache key based on word IDs (no timestamp)
       const wordIds = words.map(w => w.id).sort().join(',');
-      const cacheKey = `preGeneratedQuiz_${wordIds}_${Date.now()}`;
+      const cacheKey = `preGeneratedQuiz_${wordIds}`;
       
-      // Clear any old cached quizzes to prevent memory buildup
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('preGeneratedQuiz_') && key !== cacheKey) {
-          localStorage.removeItem(key);
-        }
-      });
+      // Don't purge existing cache until we successfully generate a new one
+      // This prevents losing valid cache during generation failures
 
       // Get listId from words
       const currentListId = words.length > 0 ? words[0].listId : null;
@@ -144,16 +140,34 @@ export function StudyInterface({ onClose, instructorId }: StudyInterfaceProps) {
           words: shuffledWords,
           instructorId,
           listId: currentListId,
-          generatedAt: Date.now()
+          generatedAt: Date.now(),
+          ready: true // Mark as complete and ready to use
         };
 
         localStorage.setItem(cacheKey, JSON.stringify(preGeneratedQuiz));
         console.log("✅ Quiz generated and cached for instant access!");
+        
+        // Clean up any old expired caches after successful generation
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('preGeneratedQuiz_') && key !== cacheKey) {
+            try {
+              const oldCache = JSON.parse(localStorage.getItem(key) || '{}');
+              if (Date.now() - oldCache.generatedAt > maxAge) {
+                localStorage.removeItem(key);
+              }
+            } catch (e) {
+              localStorage.removeItem(key); // Remove corrupted cache
+            }
+          }
+        });
       } else {
-        console.log("⚠️ Background quiz generation failed - API errors");
+        console.log("⚠️ Background quiz generation failed - API errors:", 
+          clozeResponse.status, clozeResponse.statusText, 
+          passageResponse.status, passageResponse.statusText);
       }
     } catch (error) {
-      console.log("⚠️ Background quiz generation failed:", error);
+      console.log("⚠️ Background quiz generation failed with error:", error);
       // Fail silently - quiz will generate normally when needed
     }
   };
