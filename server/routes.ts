@@ -83,17 +83,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // For demo purposes, create a test student if PIN is 1234
       if (pin === "1234") {
+        const student = {
+          id: "demo-student",
+          firstName: "Test",
+          lastName: "Student",
+          displayName: "Test Student",
+          pin: "1234",
+          instructorId: "demo-instructor",
+          grade: 3,
+          isActive: true
+        };
+        
+        // Store student session for subsequent API calls
+        (req.session as any).studentId = student.id;
+        (req.session as any).student = student;
+        
         res.json({ 
-          student: {
-            id: "demo-student",
-            firstName: "Test",
-            lastName: "Student",
-            displayName: "Test Student",
-            pin: "1234",
-            instructorId: "demo-instructor",
-            grade: 3,
-            isActive: true
-          }, 
+          student: student, 
           success: true 
         });
         return;
@@ -106,6 +112,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid PIN or inactive student" });
       }
 
+      // Store student session for subsequent API calls
+      (req.session as any).studentId = student.id;
+      (req.session as any).student = student;
+      
       res.json({ student, success: true });
     } catch (error) {
       console.error("Error during student login:", error);
@@ -125,9 +135,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/vocabulary-lists/current', isAuthenticated, async (req: any, res) => {
+  app.get('/api/vocabulary-lists/current', async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      let userId;
+      
+      // Check for instructor authentication
+      if (req.isAuthenticated() && req.user) {
+        userId = req.user.claims.sub;
+      } 
+      // Check for student session
+      else if ((req.session as any)?.student) {
+        userId = (req.session as any).student.instructorId || "demo-instructor";
+      } 
+      else {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       const currentList = await storage.getCurrentVocabularyList(userId);
       res.json(currentList);
     } catch (error) {
@@ -1243,7 +1266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { text, partOfSpeech, kidDefinition, id } = wordData;
         
         try {
-          const question = await aiService.generateClozeQuestion(text, partOfSpeech, kidDefinition);
+          const question = await aiService.generateValidatedClozeQuestion(text, partOfSpeech, kidDefinition);
           
           // Save to database
           const savedQuestion = await storage.createClozeQuestion({
@@ -1284,8 +1307,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "List ID is required" });
       }
 
-      // Generate the passage with AI
-      const passageData = await aiService.generatePassageQuiz(words);
+      // Generate the passage with AI and validation
+      const passageData = await aiService.generateValidatedPassageQuiz(words);
       
       // Save passage to database
       const savedPassage = await storage.createPassageQuestion({
