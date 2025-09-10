@@ -23,7 +23,10 @@ const StudyHeader = ({ onClose }: { onClose: () => void }) => (
     />
     <h1 className="text-2xl font-bold text-foreground">WordWizard</h1>
     <button
-      onClick={onClose}
+      onClick={() => {
+        stopAllAudio(); // Stop any playing audio when closing
+        onClose();
+      }}
       className="p-2 text-foreground hover:text-muted-foreground transition-colors"
       data-testid="close-session"
     >
@@ -405,6 +408,7 @@ export function StudyInterface({ onClose, instructorId }: StudyInterfaceProps) {
           <div className="flex items-center justify-center gap-8 mb-4">
             <button
               onClick={() => {
+                stopAllAudio(); // Stop any playing audio and highlighting
                 if (currentIndex > 0) {
                   setCurrentIndex(currentIndex - 1);
                 }
@@ -418,6 +422,7 @@ export function StudyInterface({ onClose, instructorId }: StudyInterfaceProps) {
             
             <button
               onClick={() => {
+                stopAllAudio(); // Stop any playing audio and highlighting
                 if (currentIndex + 1 < sessionWords.length) {
                   setCurrentIndex(currentIndex + 1);
                 } else {
