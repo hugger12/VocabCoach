@@ -170,7 +170,7 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
         const cachedClozeAnswers = clozeData.questions?.map((q: any) => q.correctAnswer) || [];
         const cachedPassageAnswers = passageData.blanks?.map((b: any) => b.correctAnswer) || [];
         const cachedAllAnswers = [...cachedClozeAnswers, ...cachedPassageAnswers];
-        const cachedExpectedWords = shuffledWords.map(w => w.text);
+        const cachedExpectedWords = shuffledWords.map((w: any) => w.text);
         
         console.log("🔍 Validating cached quiz for word uniqueness...");
         console.log("Cached cloze answers:", cachedClozeAnswers);
