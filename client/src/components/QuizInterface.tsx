@@ -235,6 +235,38 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
       if (!passageData.blanks || passageData.blanks.length !== 6) {
         throw new Error(`Expected 6 passage blanks, got ${passageData.blanks?.length || 0}`);
       }
+
+      // CRITICAL VALIDATION: Ensure all 12 words are used exactly once across entire quiz
+      const clozeWords = clozeData.questions.map((q: any) => q.correctAnswer);
+      const passageWords = passageData.blanks.map((b: any) => b.correctAnswer);
+      const allAnswers = [...clozeWords, ...passageWords];
+      const expectedWords = shuffledWords.map(w => w.text);
+      
+      console.log("🔍 Validating word uniqueness across entire quiz...");
+      console.log("Expected words:", expectedWords);
+      console.log("Cloze answers:", clozeWords);
+      console.log("Passage answers:", passageWords);
+      
+      // Check for exact match between expected and actual words
+      const answerSet = new Set(allAnswers);
+      const expectedSet = new Set(expectedWords);
+      
+      if (allAnswers.length !== 12) {
+        throw new Error(`Quiz must have exactly 12 answers, got ${allAnswers.length}`);
+      }
+      
+      if (answerSet.size !== 12) {
+        const duplicates = allAnswers.filter((word, index) => allAnswers.indexOf(word) !== index);
+        throw new Error(`Quiz contains duplicate words: [${duplicates.join(', ')}]. Each word must be used exactly once.`);
+      }
+      
+      if (answerSet.size !== expectedSet.size || !Array.from(answerSet).every(word => expectedSet.has(word))) {
+        const missing = expectedWords.filter(word => !answerSet.has(word));
+        const unexpected = allAnswers.filter(word => !expectedSet.has(word));
+        throw new Error(`Word mismatch - Missing: [${missing.join(', ')}], Unexpected: [${unexpected.join(', ')}]`);
+      }
+      
+      console.log("✅ Quiz validation passed: All 12 words used exactly once");
       
       const allQuestions: QuizQuestion[] = [];
       

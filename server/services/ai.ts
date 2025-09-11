@@ -516,11 +516,17 @@ Respond with JSON in this format:
       let blanks = result.blanks || [];
       
       // Check for word uniqueness - this is the critical bug fix
-      const usedWords = new Set(blanks.map((b: any) => b.correctAnswer));
-      const expectedWords = new Set(words.map(w => w.text));
+      const usedWords = new Set<string>(blanks.map((b: any) => b.correctAnswer as string));
+      const expectedWords = new Set<string>(words.map(w => w.text));
       
       // If we don't have exactly 6 blanks, wrong numbering, or duplicate words, fix them
-      const setsEqual = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every(x => b.has(x));
+      const setsEqual = (a: Set<string>, b: Set<string>) => {
+        if (a.size !== b.size) return false;
+        for (const item of Array.from(a)) {
+          if (!b.has(item)) return false;
+        }
+        return true;
+      };
       if (blanks.length !== 6 || usedWords.size !== 6 || !setsEqual(usedWords, expectedWords)) {
         console.warn(`Passage generation has word reuse or missing words. Fixing...`);
         console.warn(`Expected words: [${words.map(w => w.text).join(', ')}]`);
