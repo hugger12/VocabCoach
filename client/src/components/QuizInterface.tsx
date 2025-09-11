@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { X, CheckCircle, XCircle, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { ClozeQuestion, PassageQuestion, PassageBlank, WordWithProgress } from "@shared/schema";
+import { quizService, type QuizSession, type QuizAttempt, type ClozeQuizQuestion, type PassageQuizQuestion } from "@/services/QuizService";
+import type { WordWithProgress } from "@shared/schema";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
 
 export interface QuizInterfaceProps {
@@ -13,298 +14,43 @@ export interface QuizInterfaceProps {
   // SECURITY: Removed instructorId prop - now using server session auth
 }
 
-interface ClozeQuizQuestion extends ClozeQuestion {
-  choices: string[];
-  questionType: 'cloze';
-  questionNumber: number;
-}
-
-interface PassageQuizQuestion {
-  questionType: 'passage';
-  passage: PassageQuestion;
-  blanks: (PassageBlank & { choices: string[]; questionNumber: number })[];
-}
-
-type QuizQuestion = ClozeQuizQuestion | PassageQuizQuestion;
-
-interface QuizAttempt {
-  questionId: string;
-  questionNumber: number;
-  selectedAnswer: string;
-  correctAnswer: string;
-  isCorrect: boolean;
-}
-
 export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterfaceProps) {
   const [isLoading, setIsLoading] = useState(true);
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string>("");
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [showResult, setShowResult] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [currentSection, setCurrentSection] = useState<'cloze' | 'passage'>('cloze');
-  const [passageLoading, setPassageLoading] = useState(true);
   const [clozeQuestions, setClozeQuestions] = useState<ClozeQuizQuestion[]>([]);
   const [passageQuestion, setPassageQuestion] = useState<PassageQuizQuestion | null>(null);
   const [currentPassageBlankIndex, setCurrentPassageBlankIndex] = useState(0);
+  const [quizSession, setQuizSession] = useState<QuizSession | null>(null);
   const { toast } = useToast();
 
   // Generate comprehensive quiz when component mounts
   useEffect(() => {
-    generateComprehensiveQuiz();
+    generateQuiz();
   }, []);
 
-  // Shared utility to process quiz data consistently
-  const processQuizData = (clozeData: any, passageData: any) => {
-    // Process cloze questions with proper choice construction
-    const clozeQuestions: ClozeQuizQuestion[] = clozeData.questions.map((q: any, index: number) => ({
-      ...q,
-      questionType: 'cloze' as const,
-      questionNumber: index + 1,
-      // Build choices from correctAnswer + distractors, then shuffle
-      choices: [q.correctAnswer, ...(q.distractors || [])].sort(() => Math.random() - 0.5)
-    }));
-
-    // Process passage question with proper data structure
-    const passageQuestion: PassageQuizQuestion | null = passageData.blanks ? {
-      questionType: 'passage' as const,
-      passage: passageData.passage || passageData, // Handle both data shapes
-      blanks: passageData.blanks
-        .sort((a: any, b: any) => (a.blankNumber || 0) - (b.blankNumber || 0)) // Ensure proper ordering
-        .map((blank: any) => ({
-          ...blank,
-          choices: [blank.correctAnswer, ...(blank.distractors || [])].sort(() => Math.random() - 0.5),
-          questionNumber: blank.blankNumber || 7
-        }))
-    } : null;
-
-    return { clozeQuestions, passageQuestion };
-  };
-
-  // Check for pre-generated quiz variants in localStorage
-  const checkForPreGeneratedQuiz = (words: WordWithProgress[]) => {
-    try {
-      const wordIds = words.map(w => w.id).sort().join(',');
-      
-      // Look for available variants (1, 2, 3)
-      for (let variant = 1; variant <= 3; variant++) {
-        const cacheKey = `preGeneratedQuiz_${wordIds}_variant_${variant}`;
-        const cached = localStorage.getItem(cacheKey);
-        
-        if (cached) {
-          const preGenerated = JSON.parse(cached);
-          
-          // Check if cache is still valid (not too old)
-          const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days for weekly vocab
-          if (Date.now() - preGenerated.generatedAt < maxAge && preGenerated.ready) {
-            console.log(`Found variant ${variant} cached quiz, checking word match...`);
-            
-            // Check if this cached quiz matches our current words
-            const cachedWordIds = preGenerated.words.map((w: any) => w.id).sort().join(',');
-            
-            if (cachedWordIds === wordIds) {
-              console.log(`🎯 Using variant ${variant} - consuming cache entry`);
-              
-              // Remove this variant from cache so next quiz uses a different one
-              localStorage.removeItem(cacheKey);
-              
-              // Check how many variants remain
-              const remainingVariants = [];
-              for (let v = 1; v <= 3; v++) {
-                const checkKey = `preGeneratedQuiz_${wordIds}_variant_${v}`;
-                if (localStorage.getItem(checkKey)) {
-                  remainingVariants.push(v);
-                }
-              }
-              console.log(`📊 Remaining variants after consumption: [${remainingVariants.join(', ')}]`);
-              
-              return preGenerated;
-            }
-          } else {
-            // Clean up expired cache
-            localStorage.removeItem(cacheKey);
-            console.log(`Cleaned up expired variant ${variant}`);
-          }
-        }
-      }
-      
-      console.log("No valid quiz variants found in cache");
-      return null;
-    } catch (error) {
-      console.log("Error checking for pre-generated quiz variants:", error);
-      return null;
-    }
-  };
-
-  const generateComprehensiveQuiz = async () => {
+  // Generate quiz using QuizService
+  const generateQuiz = async () => {
     try {
       setIsLoading(true);
       
-      // Get listId from props or extract from first word as fallback
-      const currentListId = listId || (words.length > 0 ? words[0].listId : null);
+      // Use QuizService to generate comprehensive quiz
+      const session = await quizService.generateComprehensiveQuiz(words, listId);
       
-      if (!currentListId) {
-        throw new Error("Unable to determine vocabulary list for quiz generation");
-      }
-      
-      // Validate we have exactly 12 words
-      if (words.length !== 12) {
-        throw new Error(`Quiz requires exactly 12 words, but got ${words.length}`);
-      }
-
-      // Check for pre-generated quiz first
-      const preGeneratedQuiz = checkForPreGeneratedQuiz(words);
-      if (preGeneratedQuiz && preGeneratedQuiz.ready) {
-        console.log("🚀 Using pre-generated quiz variant for instant loading!");
-        console.log("Cache details:", {
-          variant: preGeneratedQuiz.variant,
-          clozeQuestions: preGeneratedQuiz.clozeData?.questions?.length || 0,
-          passageBlanks: preGeneratedQuiz.passageData?.blanks?.length || 0,
-          generatedAt: new Date(preGeneratedQuiz.generatedAt).toLocaleTimeString()
-        });
-        
-        // Use the pre-generated data
-        const { clozeData, passageData, words: shuffledWords } = preGeneratedQuiz;
-        
-        // CRITICAL: Validate cached quiz has exactly 12 unique words before using
-        const cachedClozeAnswers = clozeData.questions?.map((q: any) => q.correctAnswer) || [];
-        const cachedPassageAnswers = passageData.blanks?.map((b: any) => b.correctAnswer) || [];
-        const cachedAllAnswers = [...cachedClozeAnswers, ...cachedPassageAnswers];
-        const cachedExpectedWords = shuffledWords.map((w: any) => w.text);
-        
-        console.log("🔍 Validating cached quiz for word uniqueness...");
-        console.log("Cached cloze answers:", cachedClozeAnswers);
-        console.log("Cached passage answers:", cachedPassageAnswers);
-        
-        // Check for exact match between expected and actual words in cache
-        const cachedAnswerSet = new Set(cachedAllAnswers);
-        const cachedExpectedSet = new Set(cachedExpectedWords);
-        
-        if (cachedAllAnswers.length !== 12 || cachedAnswerSet.size !== 12 || 
-            !Array.from(cachedAnswerSet).every(word => cachedExpectedSet.has(word))) {
-          console.warn("⚠️ Cached quiz failed validation - contains duplicates or missing words!");
-          console.warn("Expected words:", cachedExpectedWords);
-          console.warn("Cached answers:", cachedAllAnswers);
-          console.warn("Discarding invalid cache and generating fresh quiz...");
-          
-          // Remove the invalid cache entry and fall through to fresh generation
-          const wordIds = words.map(w => w.id).sort().join(',');
-          for (let variant = 1; variant <= 3; variant++) {
-            const cacheKey = `preGeneratedQuiz_${wordIds}_variant_${variant}`;
-            if (localStorage.getItem(cacheKey)) {
-              localStorage.removeItem(cacheKey);
-              console.log(`Removed invalid cache variant ${variant}`);
-            }
-          }
-        } else {
-          console.log("✅ Cached quiz validation passed: All 12 words used exactly once");
-          
-          // Process cached data using same logic as fresh generation
-          const processedData = processQuizData(clozeData, passageData);
-          
-          setClozeQuestions(processedData.clozeQuestions);
-          setPassageQuestion(processedData.passageQuestion);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      console.log("⏳ No pre-generated quiz found, generating new quiz...");
-      
-      // Proper Fisher-Yates shuffle for unbiased randomization
-      const shuffledWords = [...words];
-      for (let i = shuffledWords.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffledWords[i], shuffledWords[j]] = [shuffledWords[j], shuffledWords[i]];
-      }
-      
-      // Split shuffled words into two groups: first 6 for cloze, next 6 for passage
-      const clozeWords = shuffledWords.slice(0, 6);
-      const passageWords = shuffledWords.slice(6, 12);
-      
-      // PROGRESSIVE LOADING: Start cloze questions immediately, load passage in background
-      console.log("🚀 Starting progressive quiz loading - cloze first, then passage");
-      
-      // Start cloze questions first (questions 1-6)
-      const clozePromise = fetch("/api/quiz/cloze/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          words: clozeWords.map(word => ({
-            id: word.id,
-            text: word.text,
-            partOfSpeech: word.partOfSpeech,
-            kidDefinition: word.kidDefinition,
-          })),
-        }),
-      });
-      
-      // Load cloze data and start quiz immediately
-      const clozeResponse = await clozePromise;
-      
-      if (!clozeResponse.ok) {
-        throw new Error("Failed to generate cloze questions");
-      }
-      
-      const clozeData = await clozeResponse.json();
-      
-      // Validate cloze response
-      if (!clozeData.questions || clozeData.questions.length !== 6) {
-        throw new Error(`Expected 6 cloze questions, got ${clozeData.questions?.length || 0}`);
-      }
-      
-      // Process and display cloze questions immediately
-      const processedCloze = processQuizData(clozeData, { blanks: [] });
-      setClozeQuestions(processedCloze.clozeQuestions);
+      setQuizSession(session);
+      setClozeQuestions(session.clozeQuestions);
+      setPassageQuestion(session.passageQuestion);
       setCurrentSection('cloze');
-      setIsLoading(false); // Quiz can start now!
       
-      console.log("✅ Cloze questions loaded! Quiz started. Loading passage in background...");
-      
-      // Load passage questions in background (questions 7-12)
-      fetch("/api/quiz/passage/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          words: passageWords.map(word => ({
-            id: word.id,
-            text: word.text,
-            partOfSpeech: word.partOfSpeech,
-            kidDefinition: word.kidDefinition,
-          })),
-          listId: currentListId,
-        }),
-      })
-      .then(passageResponse => {
-        if (!passageResponse.ok) {
-          console.error("Failed to load passage questions");
-          return;
-        }
-        return passageResponse.json();
-      })
-      .then(passageData => {
-        if (!passageData || !passageData.blanks || passageData.blanks.length !== 6) {
-          console.error(`Expected 6 passage blanks, got ${passageData?.blanks?.length || 0}`);
-          return;
-        }
-        
-        const processedPassage = processQuizData({ questions: [] }, passageData);
-        setPassageQuestion(processedPassage.passageQuestion);
-        setPassageLoading(false);
-        console.log("✅ Passage questions loaded in background!");
-      })
-      .catch(error => {
-        console.error("Background passage loading failed:", error);
-      });
-      
-      // Skip validation since we're loading progressively
-      return;
     } catch (error) {
-      console.error("Error generating comprehensive quiz:", error);
+      console.error("Error generating quiz:", error);
       toast({
         title: "Quiz Error",
-        description: "Could not generate quiz questions. Please try again.",
+        description: error instanceof Error ? error.message : "Could not generate quiz questions. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -381,10 +127,10 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
         setSelectedAnswer("");
         setShowResult(false);
       } else {
-        // Quiz complete - use existing attempts (already added in handleSubmitAnswer)
+        // Quiz complete - calculate final score using QuizService
         setIsComplete(true);
-        const score = Math.round((attempts.filter(a => a.isCorrect).length) / attempts.length * 100);
-        onComplete?.(score);
+        const scoreResult = quizService.calculateQuizScore(attempts);
+        onComplete?.(scoreResult.score);
       }
     }
   };
@@ -447,9 +193,8 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
   }
 
   if (isComplete) {
-    const correctAnswers = attempts.filter(a => a.isCorrect).length;
-    const totalQuestions = attempts.length;
-    const score = Math.round((correctAnswers / totalQuestions) * 100);
+    const scoreResult = quizService.calculateQuizScore(attempts);
+    const { score, correctAnswers, totalQuestions } = scoreResult;
     
     return (
       <div className="h-screen bg-background flex flex-col">

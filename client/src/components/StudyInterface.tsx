@@ -5,6 +5,7 @@ import { AudioPlayer } from "./AudioPlayer";
 import { DyslexicReader } from "./DyslexicReader";
 import { QuizInterface } from "./QuizInterface";
 import { stopAllAudio } from "@/lib/audioManager";
+import { learningService, type LearningSessionState } from "@/services/LearningService";
 import type { WordWithProgress, StudySession } from "@shared/schema";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
 
@@ -44,6 +45,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   const [currentWordHighlightIndex, setCurrentWordHighlightIndex] = useState(-1);
   const [currentSentenceHighlightIndex, setCurrentSentenceHighlightIndex] = useState(-1);
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
+  const [learningSession, setLearningSession] = useState<LearningSessionState | null>(null);
 
   // Fetch study session - now using secure session-based auth
   const { data: session, isLoading, error } = useQuery<StudySession>({
@@ -59,139 +61,30 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     enabled: !sessionComplete,
   });
 
-  // Store session words when first loaded
+  // Store session words when first loaded and start learning session
   useEffect(() => {
     if (session?.words && sessionWords.length === 0) {
       setSessionWords([...session.words]);
       setTotalSessionWords(session.totalWords);
       
-      // Start generating quiz in background for faster access later
-      generateQuizInBackground(session.words);
+      // Start learning session using LearningService
+      startLearningSession(session.words);
     }
   }, [session?.words, sessionWords.length, session?.totalWords]);
-
-  // Background quiz generation function - now generates multiple variants for the week
-  const generateQuizInBackground = async (words: WordWithProgress[]) => {
+  
+  // Initialize learning session with background quiz generation
+  const startLearningSession = async (words: WordWithProgress[]) => {
     try {
-      console.log("🎯 Starting background quiz generation with", words.length, "words...");
-      console.log("📚 Generating 3 quiz variants for the week...");
-      
-      if (words.length !== 12) {
-        console.log("⚠️ Background quiz generation skipped: need exactly 12 words, got", words.length);
-        return;
-      }
-
-      const wordIds = words.map(w => w.id).sort().join(',');
-      const currentListId = words.length > 0 ? words[0].listId : null;
-      
-      if (!currentListId) {
-        console.log("⚠️ Background quiz generation skipped: no list ID found");
-        return;
-      }
-
-      // Check if we already have variants cached
-      const existingVariants = Object.keys(localStorage)
-        .filter(key => key.startsWith(`preGeneratedQuiz_${wordIds}_variant_`))
-        .length;
-      
-      if (existingVariants >= 3) {
-        console.log("✅ 3 quiz variants already cached, skipping generation");
-        return;
-      }
-
-      console.log(`📝 Found ${existingVariants}/3 variants, generating ${3 - existingVariants} more...`);
-
-      // Generate multiple variants with different shuffles
-      for (let variant = existingVariants + 1; variant <= 3; variant++) {
-        try {
-          console.log(`🔄 Generating variant ${variant}/3...`);
-          
-          // Create unique shuffle for each variant
-          const shuffledWords = [...words];
-          for (let i = shuffledWords.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffledWords[i], shuffledWords[j]] = [shuffledWords[j], shuffledWords[i]];
-          }
-
-          const clozeWords = shuffledWords.slice(0, 6);
-          const passageWords = shuffledWords.slice(6, 12);
-
-          // Generate both question types in parallel
-          const [clozeResponse, passageResponse] = await Promise.all([
-            fetch("/api/quiz/cloze/generate", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                words: clozeWords.map(word => ({
-                  id: word.id,
-                  text: word.text,
-                  partOfSpeech: word.partOfSpeech,
-                  kidDefinition: word.kidDefinition,
-                })),
-              }),
-            }),
-            fetch("/api/quiz/passage/generate", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                words: passageWords.map(word => ({
-                  id: word.id,
-                  text: word.text,
-                  partOfSpeech: word.partOfSpeech,
-                  kidDefinition: word.kidDefinition,
-                })),
-                listId: currentListId,
-              }),
-            })
-          ]);
-
-          if (clozeResponse.ok && passageResponse.ok) {
-            const clozeData = await clozeResponse.json();
-            const passageData = await passageResponse.json();
-
-            const cacheKey = `preGeneratedQuiz_${wordIds}_variant_${variant}`;
-            const preGeneratedQuiz = {
-              clozeData,
-              passageData,
-              words: shuffledWords,
-              listId: currentListId,
-              generatedAt: Date.now(),
-              variant,
-              ready: true
-            };
-
-            localStorage.setItem(cacheKey, JSON.stringify(preGeneratedQuiz));
-            console.log(`✅ Variant ${variant}/3 generated and cached!`);
-          } else {
-            console.log(`⚠️ Variant ${variant} generation failed:`, 
-              clozeResponse.status, passageResponse.status);
-          }
-        } catch (variantError) {
-          console.log(`⚠️ Error generating variant ${variant}:`, variantError);
-        }
-      }
-
-      console.log("🎉 Multi-variant quiz generation complete!");
-      
-      // Clean up any old expired caches after successful generation
-      const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days for weekly vocab
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('preGeneratedQuiz_') && !key.includes(`_${wordIds}_`)) {
-          try {
-            const oldCache = JSON.parse(localStorage.getItem(key) || '{}');
-            if (Date.now() - oldCache.generatedAt > maxAge) {
-              localStorage.removeItem(key);
-            }
-          } catch (e) {
-            localStorage.removeItem(key);
-          }
-        }
+      const newSession = await learningService.startLearningSession({
+        sessionType: 'study',
+        listId: session?.listId,
       });
-      
+      setLearningSession(newSession);
     } catch (error) {
-      console.log("⚠️ Multi-variant quiz generation failed:", error);
+      console.error("Failed to start learning session:", error);
     }
   };
+
 
   // Stop audio when word changes or component unmounts
   useEffect(() => {
@@ -243,13 +136,32 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     setActiveSentenceIndex(-1);
   };
 
-  const handleStartQuiz = () => {
-    setShowQuiz(true);
+  const handleStartQuiz = async () => {
+    try {
+      // Use LearningService to start quiz session
+      if (learningSession) {
+        await learningService.startQuizSession(learningSession.id, sessionWords);
+      }
+      setShowQuiz(true);
+    } catch (error) {
+      console.error("Failed to start quiz session:", error);
+    }
   };
 
-  const handleQuizComplete = (score: number) => {
-    // Quiz completed - could save score here if needed
-    console.log("Quiz completed with score:", score);
+  const handleQuizComplete = async (score: number) => {
+    try {
+      // Use LearningService to handle quiz completion
+      if (learningSession) {
+        await learningService.endSession(learningSession.id, { 
+          quizScore: score,
+          studyProgress: currentIndex + 1,
+          totalWords: sessionWords.length
+        });
+      }
+      console.log("Quiz completed with score:", score);
+    } catch (error) {
+      console.error("Failed to complete quiz session:", error);
+    }
   };
 
   const handleQuizClose = () => {

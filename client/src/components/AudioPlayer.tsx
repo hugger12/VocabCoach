@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Volume2, VolumeX, RotateCcw, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAudioCache } from "@/hooks/use-audio-cache";
+import { audioService } from "@/services/AudioService";
 import { cn } from "@/lib/utils";
 import { audioManager } from "@/lib/audioManager";
 import { getWordsArray } from "@/utils/tokenization";
@@ -50,58 +50,7 @@ export function AudioPlayer({
   const wordBoundariesRef = useRef<Array<{ start: number; end: number }>>([]);
   const rafIdRef = useRef<number | null>(null);
   const lastIndexRef = useRef<number>(-1);
-  const { getCachedAudio, cacheAudio } = useAudioCache();
-
-  const generateCacheKey = useCallback((text: string, type: string, speed: string) => {
-    return `${type}-${speed}-${text}`.replace(/[^a-zA-Z0-9]/g, "_");
-  }, []);
-
-  // Compute word boundaries for real-time highlighting
-  const computeBoundaries = useCallback((text: string, timings?: Array<{ word: string; startTimeMs: number; endTimeMs: number }>, duration?: number) => {
-    // Use shared tokenization utility to ensure perfect sync with DyslexicReader
-    const allWords = getWordsArray(text);
-
-    if (allWords.length === 0) {
-      return [];
-    }
-
-    // Use ElevenLabs timings when available (convert ms to seconds)
-    if (timings && timings.length > 0) {
-      // Guard: Verify timing count matches our tokenized word count
-      if (timings.length !== allWords.length) {
-        console.warn(`TokenizationMismatch: ElevenLabs returned ${timings.length} word timings but we tokenized ${allWords.length} words. Falling back to proportional distribution.`);
-        // Fall through to proportional distribution
-      } else {
-        return timings.map(timing => ({
-          start: timing.startTimeMs / 1000, // Convert ms to seconds
-          end: timing.endTimeMs / 1000,     // Convert ms to seconds
-        }));
-      }
-    }
-
-    // Fallback to proportional word length distribution
-    // Calculate total character count for proportional distribution
-    const totalChars = allWords.reduce((sum, word) => sum + word.length, 0);
-    const audioDuration = duration || (allWords.length * 0.4); // fallback estimate
-    
-    const boundaries: Array<{ start: number; end: number }> = [];
-    let currentTime = 0;
-    
-    allWords.forEach((word, index) => {
-      // Proportional time based on word length
-      const wordProportion = word.length / totalChars;
-      const wordDuration = audioDuration * wordProportion;
-      
-      boundaries.push({
-        start: currentTime,
-        end: currentTime + wordDuration,
-      });
-      
-      currentTime += wordDuration;
-    });
-    
-    return boundaries;
-  }, []);
+  // Use AudioService for all audio business logic
 
   // Real-time highlighting using requestAnimationFrame + audio.currentTime
   const startRealtimeHighlighting = useCallback((audio: HTMLAudioElement) => {
