@@ -1315,7 +1315,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Generate cloze quiz questions (Section 1: dual sentences)
+  // Generate cloze quiz questions (Section 1: dual sentences) - OPTIMIZED VERSION
   app.post("/api/quiz/cloze/generate", async (req, res) => {
     try {
       const { words } = req.body; // Array of word objects with text, partOfSpeech, definition
@@ -1324,36 +1324,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Words array is required" });
       }
 
-      const clozeQuestions = [];
+      console.log(`Generating ${words.length} cloze questions in parallel (optimized)...`);
+      const startTime = Date.now();
       
-      for (const wordData of words) {
-        const { text, partOfSpeech, kidDefinition, id } = wordData;
+      // OPTIMIZATION: Use parallel generation instead of sequential for loop
+      const questions = await aiService.generateOptimizedClozeQuestions(
+        words.map(w => ({
+          text: w.text,
+          partOfSpeech: w.partOfSpeech,
+          kidDefinition: w.kidDefinition
+        }))
+      );
+      
+      console.log(`Generated ${questions.length} questions in ${Date.now() - startTime}ms`);
+      
+      // Save all questions to database in parallel
+      const savePromises = questions.map((question, index) => {
+        const wordData = words[index];
+        if (!wordData) return null;
         
-        try {
-          const question = await aiService.generateValidatedClozeQuestion(text, partOfSpeech, kidDefinition);
+        return storage.createClozeQuestion({
+          wordId: wordData.id,
+          sentence1: question.sentence1,
+          sentence2: question.sentence2,
+          correctAnswer: question.correctAnswer,
+          distractors: question.distractors,
+        }).catch(error => {
+          console.error(`Error saving cloze question for word ${wordData.text}:`, error);
+          return null;
+        });
+      }).filter(Boolean);
+      
+      const savedQuestions = await Promise.all(savePromises);
+      
+      // Format response
+      const clozeQuestions = savedQuestions
+        .filter(Boolean)
+        .map((savedQuestion, index) => {
+          const question = questions[index];
+          if (!question) return null;
           
-          // Save to database
-          const savedQuestion = await storage.createClozeQuestion({
-            wordId: id,
-            sentence1: question.sentence1,
-            sentence2: question.sentence2,
-            correctAnswer: question.correctAnswer,
-            distractors: question.distractors,
-          });
-          
-          clozeQuestions.push({
+          return {
             ...savedQuestion,
             choices: [question.correctAnswer, ...question.distractors].sort(() => Math.random() - 0.5)
-          });
-        } catch (error) {
-          console.error(`Error generating cloze question for word ${text}:`, error);
-          // Continue with other words
-        }
-      }
+          };
+        })
+        .filter(Boolean);
       
-      res.json({ questions: clozeQuestions });
+      res.json({ 
+        questions: clozeQuestions,
+        generationTime: Date.now() - startTime,
+        optimized: true
+      });
     } catch (error) {
-      console.error("Error generating cloze quiz:", error);
+      console.error("Error generating optimized cloze quiz:", error);
       res.status(500).json({ message: "Failed to generate cloze quiz" });
     }
   });
@@ -1371,8 +1395,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "List ID is required" });
       }
 
-      // Generate the passage with AI and validation
+      console.log(`Generating passage quiz with optimized validation for ${words.length} words...`);
+      const startTime = Date.now();
+      
+      // OPTIMIZATION: Uses the optimized generateValidatedPassageQuiz with batch validation
       const passageData = await aiService.generateValidatedPassageQuiz(words);
+      
+      console.log(`Generated passage quiz in ${Date.now() - startTime}ms with optimizations`);
       
       // Save passage to database
       const savedPassage = await storage.createPassageQuestion({
@@ -1403,7 +1432,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         passage: savedPassage,
-        blanks: blanks
+        blanks: blanks,
+        generationTime: Date.now() - startTime,
+        optimized: true,
+        validationScore: passageData.validationScore
       });
     } catch (error) {
       console.error("Error generating passage quiz:", error);
