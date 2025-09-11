@@ -1,4 +1,8 @@
 import OpenAI from "openai";
+import { resilientOperation, DefaultConfigs, getUserFriendlyErrorMessage, ServiceError } from '@shared/errorHandling.js';
+import { circuitBreakerManager } from './circuitBreakerManager.js';
+import { gracefulDegradationService } from './gracefulDegradation.js';
+import { errorRecoveryService } from './errorRecovery.js';
 
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || ""
@@ -42,8 +46,15 @@ export class AIService {
   private model = "gpt-4o";
 
   async generateSentences(word: string, partOfSpeech: string, definition: string): Promise<GeneratedSentence[]> {
-    try {
-      const prompt = `Generate 3 age-appropriate sentences for a 9-year-old child using the word "${word}" (${partOfSpeech}).
+    const circuitBreaker = circuitBreakerManager.getCircuitBreaker('openai', 'generateSentences');
+    
+    return resilientOperation(
+      async () => {
+        if (!process.env.OPENAI_API_KEY && !process.env.OPENAI_KEY) {
+          throw new ServiceError('OpenAI API key not configured', 'openai', 'generateSentences', 'MISSING_API_KEY', false);
+        }
+
+        const prompt = `Generate 3 age-appropriate sentences for a 9-year-old child using the word "${word}" (${partOfSpeech}).
 
 Requirements:
 - Use CEFR B1-B2 vocabulary level
@@ -64,34 +75,56 @@ Respond with JSON in this format:
   ]
 }`;
 
-      const response = await openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert in creating educational content for children with dyslexia. Focus on clear, simple language that supports learning."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: 500,
-      });
+        const response = await openai.chat.completions.create({
+          model: this.model,
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert in creating educational content for children with dyslexia. Focus on clear, simple language that supports learning."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+          max_tokens: 500,
+        });
 
-      const result = JSON.parse(response.choices[0].message.content || "{}");
-      return result.sentences || [];
-    } catch (error) {
-      console.error("Error generating sentences:", error);
-      throw new Error("Failed to generate sentences");
-    }
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+        return result.sentences || [];
+      },
+      {
+        service: 'openai',
+        operation: 'generateSentences',
+        timeout: DefaultConfigs.openAI.timeout,
+        retry: DefaultConfigs.openAI.retry,
+        circuitBreaker
+      }
+    ).catch(error => {
+      console.error(`Error generating sentences for word "${word}":`, error);
+      throw new ServiceError(
+        getUserFriendlyErrorMessage(error, 'teacher'),
+        'openai',
+        'generateSentences',
+        'GENERATION_FAILED',
+        error instanceof ServiceError ? error.isRetryable : true,
+        error
+      );
+    });
   }
 
   async simplifyDefinition(definition: string): Promise<SimplifiedDefinition> {
-    try {
-      const prompt = `Simplify this definition for a 9-year-old child: "${definition}"
+    const circuitBreaker = circuitBreakerManager.getCircuitBreaker('openai', 'simplifyDefinition');
+    
+    return resilientOperation(
+      async () => {
+        if (!process.env.OPENAI_API_KEY && !process.env.OPENAI_KEY) {
+          throw new ServiceError('OpenAI API key not configured', 'openai', 'simplifyDefinition', 'MISSING_API_KEY', false);
+        }
+
+        const prompt = `Simplify this definition for a 9-year-old child: "${definition}"
 
 Requirements:
 - Maximum 15 words
@@ -105,34 +138,56 @@ Respond with JSON:
   "wordCount": number
 }`;
 
-      const response = await openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert at simplifying complex definitions for children with learning differences."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.3,
-        max_tokens: 200,
-      });
+        const response = await openai.chat.completions.create({
+          model: this.model,
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert at simplifying complex definitions for children with learning differences."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.3,
+          max_tokens: 200,
+        });
 
-      const result = JSON.parse(response.choices[0].message.content || "{}");
-      return result;
-    } catch (error) {
-      console.error("Error simplifying definition:", error);
-      throw new Error("Failed to simplify definition");
-    }
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+        return result;
+      },
+      {
+        service: 'openai',
+        operation: 'simplifyDefinition',
+        timeout: DefaultConfigs.openAI.timeout,
+        retry: DefaultConfigs.openAI.retry,
+        circuitBreaker
+      }
+    ).catch(error => {
+      console.error(`Error simplifying definition "${definition.substring(0, 50)}...":`, error);
+      throw new ServiceError(
+        getUserFriendlyErrorMessage(error, 'teacher'),
+        'openai',
+        'simplifyDefinition',
+        'SIMPLIFICATION_FAILED',
+        error instanceof ServiceError ? error.isRetryable : true,
+        error
+      );
+    });
   }
 
   async analyzeWord(word: string): Promise<WordAnalysis> {
-    try {
-      const prompt = `Analyze the word "${word}" for a 9-year-old child with dyslexia.
+    const circuitBreaker = circuitBreakerManager.getCircuitBreaker('openai', 'analyzeWord');
+    
+    return resilientOperation(
+      async () => {
+        if (!process.env.OPENAI_API_KEY && !process.env.OPENAI_KEY) {
+          throw new ServiceError('OpenAI API key not configured', 'openai', 'analyzeWord', 'MISSING_API_KEY', false);
+        }
+
+        const prompt = `Analyze the word "${word}" for a 9-year-old child with dyslexia.
 
 Requirements:
 - Determine the most common part of speech
@@ -148,38 +203,46 @@ Respond with JSON in this format:
   "teacherDefinition": "formal definition (optional)"
 }`;
 
-      const response = await openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: "system", 
-            content: "You are an expert in creating educational content for children with dyslexia. Focus on clear, simple definitions that support learning."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.3,
-        max_tokens: 200,
-      });
+        const response = await openai.chat.completions.create({
+          model: this.model,
+          messages: [
+            {
+              role: "system", 
+              content: "You are an expert in creating educational content for children with dyslexia. Focus on clear, simple definitions that support learning."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.3,
+          max_tokens: 200,
+        });
 
-      const result = JSON.parse(response.choices[0].message.content || "{}");
-      return {
-        partOfSpeech: result.partOfSpeech || "noun",
-        kidDefinition: result.kidDefinition || `a word meaning ${word}`,
-        teacherDefinition: result.teacherDefinition,
-      };
-    } catch (error) {
-      console.error("Error analyzing word:", error);
-      // Fallback for when AI fails
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+        return {
+          partOfSpeech: result.partOfSpeech || "noun",
+          kidDefinition: result.kidDefinition || `a word meaning ${word}`,
+          teacherDefinition: result.teacherDefinition,
+        };
+      },
+      {
+        service: 'openai',
+        operation: 'analyzeWord',
+        timeout: DefaultConfigs.openAI.timeout,
+        retry: DefaultConfigs.openAI.retry,
+        circuitBreaker
+      }
+    ).catch(error => {
+      console.error(`Error analyzing word "${word}":`, error);
+      // Graceful fallback with basic word analysis
       return {
         partOfSpeech: "noun", 
         kidDefinition: `a word meaning ${word}`,
         teacherDefinition: undefined,
       };
-    }
+    });
   }
 
   async analyzeMorphology(word: string): Promise<MorphologyAnalysis> {
@@ -320,19 +383,41 @@ Respond with JSON:
   }
 
   async generateTTS(text: string): Promise<ArrayBuffer> {
-    try {
-      const response = await openai.audio.speech.create({
-        model: "tts-1",
-        voice: "nova", // Child-friendly voice
-        input: text,
-        speed: 0.9, // Slightly slower for clarity
-      });
+    const circuitBreaker = circuitBreakerManager.getCircuitBreaker('openai', 'generateTTS');
+    
+    return resilientOperation(
+      async () => {
+        if (!process.env.OPENAI_API_KEY && !process.env.OPENAI_KEY) {
+          throw new ServiceError('OpenAI API key not configured', 'openai', 'generateTTS', 'MISSING_API_KEY', false);
+        }
 
-      return await response.arrayBuffer();
-    } catch (error) {
-      console.error("Error generating TTS:", error);
-      throw new Error("Failed to generate TTS audio");
-    }
+        const response = await openai.audio.speech.create({
+          model: "tts-1",
+          voice: "nova", // Child-friendly voice
+          input: text,
+          speed: 0.9, // Slightly slower for clarity
+        });
+
+        return await response.arrayBuffer();
+      },
+      {
+        service: 'openai',
+        operation: 'generateTTS',
+        timeout: DefaultConfigs.openAI.timeout,
+        retry: DefaultConfigs.openAI.retry,
+        circuitBreaker
+      }
+    ).catch(error => {
+      console.error(`Error generating TTS for text "${text.substring(0, 50)}...":`, error);
+      throw new ServiceError(
+        getUserFriendlyErrorMessage(error, 'teacher'),
+        'openai',
+        'generateTTS',
+        'TTS_GENERATION_FAILED',
+        error instanceof ServiceError ? error.isRetryable : true,
+        error
+      );
+    });
   }
   // Generate cloze quiz questions (dual sentences with same word)
   async generateClozeQuestion(word: string, partOfSpeech: string, definition: string): Promise<{

@@ -39,6 +39,8 @@ import {
 import { randomUUID } from "crypto";
 import { eq, desc, and, inArray, sql, lte } from "drizzle-orm";
 import { db } from "./db";
+import { databaseResilienceService } from "./services/databaseResilience.js";
+import { errorRecoveryService } from "./services/errorRecovery.js";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -116,93 +118,159 @@ export class DatabaseStorage implements IStorage {
 
   // User operations (required for Replit Auth)
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [user] = await db.select().from(users).where(eq(users.id, id));
+        return user;
+      },
+      'getUser',
+      `id: ${id}`
+    );
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-    return user;
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [user] = await db
+          .insert(users)
+          .values(userData)
+          .onConflictDoUpdate({
+            target: users.id,
+            set: {
+              ...userData,
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
+        return user;
+      },
+      'upsertUser',
+      `userId: ${userData.id}`
+    );
   }
 
   // Student operations
   async getStudent(id: string): Promise<Student | undefined> {
-    const [student] = await db.select().from(students).where(eq(students.id, id));
-    return student;
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [student] = await db.select().from(students).where(eq(students.id, id));
+        return student;
+      },
+      'getStudent',
+      `id: ${id}`
+    );
   }
 
   async getStudentsByInstructor(instructorId: string): Promise<Student[]> {
-    return await db.select().from(students).where(eq(students.instructorId, instructorId));
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        return await db.select().from(students).where(eq(students.instructorId, instructorId));
+      },
+      'getStudentsByInstructor',
+      `instructorId: ${instructorId}`
+    );
   }
 
   async getStudentByPin(pin: string, instructorId?: string): Promise<Student | undefined> {
-    if (instructorId) {
-      const [student] = await db
-        .select()
-        .from(students)
-        .where(and(eq(students.pin, pin), eq(students.instructorId, instructorId)));
-      return student;
-    } else {
-      // Find student by PIN across all instructors
-      const [student] = await db
-        .select()
-        .from(students)
-        .where(eq(students.pin, pin));
-      return student;
-    }
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        if (instructorId) {
+          const [student] = await db
+            .select()
+            .from(students)
+            .where(and(eq(students.pin, pin), eq(students.instructorId, instructorId)));
+          return student;
+        } else {
+          // Find student by PIN across all instructors
+          const [student] = await db
+            .select()
+            .from(students)
+            .where(eq(students.pin, pin));
+          return student;
+        }
+      },
+      'getStudentByPin',
+      `pin: ${pin}, instructorId: ${instructorId}`
+    );
   }
 
   async createStudent(student: InsertStudent): Promise<Student> {
-    const [created] = await db
-      .insert(students)
-      .values(student)
-      .returning();
-    return created;
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [created] = await db
+          .insert(students)
+          .values(student)
+          .returning();
+        return created;
+      },
+      'createStudent',
+      `name: ${student.name}`
+    );
   }
 
   async updateStudent(id: string, updates: Partial<Student>): Promise<Student> {
-    const [student] = await db
-      .update(students)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(students.id, id))
-      .returning();
-    
-    if (!student) {
-      throw new Error(`Student with id ${id} not found`);
-    }
-    return student;
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [student] = await db
+          .update(students)
+          .set({ ...updates, updatedAt: new Date() })
+          .where(eq(students.id, id))
+          .returning();
+        
+        if (!student) {
+          throw new Error(`Student with id ${id} not found`);
+        }
+        return student;
+      },
+      'updateStudent',
+      `id: ${id}`
+    );
   }
 
   async deleteStudent(id: string): Promise<void> {
-    await db.delete(students).where(eq(students.id, id));
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        await db.delete(students).where(eq(students.id, id));
+      },
+      'deleteStudent',
+      `id: ${id}`
+    );
   }
 
   // Vocabulary lists
   async getVocabularyList(id: string): Promise<VocabularyList | undefined> {
-    const [list] = await db.select().from(vocabularyLists).where(eq(vocabularyLists.id, id));
-    return list;
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [list] = await db.select().from(vocabularyLists).where(eq(vocabularyLists.id, id));
+        return list;
+      },
+      'getVocabularyList',
+      `id: ${id}`
+    );
   }
 
   async getVocabularyLists(instructorId: string): Promise<VocabularyList[]> {
-    return await db.select().from(vocabularyLists)
-      .where(eq(vocabularyLists.instructorId, instructorId))
-      .orderBy(desc(vocabularyLists.createdAt));
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        return await db.select().from(vocabularyLists)
+          .where(eq(vocabularyLists.instructorId, instructorId))
+          .orderBy(desc(vocabularyLists.createdAt));
+      },
+      'getVocabularyLists',
+      `instructorId: ${instructorId}`
+    );
   }
 
   async getCurrentVocabularyList(instructorId: string): Promise<VocabularyList | undefined> {
-    const [list] = await db.select().from(vocabularyLists)
-      .where(and(eq(vocabularyLists.instructorId, instructorId), eq(vocabularyLists.isCurrent, true)));
-    return list;
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [list] = await db.select().from(vocabularyLists)
+          .where(and(eq(vocabularyLists.instructorId, instructorId), eq(vocabularyLists.isCurrent, true)));
+        return list;
+      },
+      'getCurrentVocabularyList',
+      `instructorId: ${instructorId}`
+    );
   }
 
   async getGlobalCurrentVocabularyList(): Promise<VocabularyList | undefined> {
@@ -214,36 +282,54 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createVocabularyList(list: InsertVocabularyList): Promise<VocabularyList> {
-    const [created] = await db
-      .insert(vocabularyLists)
-      .values(list)
-      .returning();
-    return created;
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [created] = await db
+          .insert(vocabularyLists)
+          .values(list)
+          .returning();
+        return created;
+      },
+      'createVocabularyList',
+      `name: ${list.name}`
+    );
   }
 
   async updateVocabularyList(id: string, updates: Partial<VocabularyList>): Promise<VocabularyList> {
-    const [list] = await db
-      .update(vocabularyLists)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(vocabularyLists.id, id))
-      .returning();
-    
-    if (!list) {
-      throw new Error(`Vocabulary list with id ${id} not found`);
-    }
-    return list;
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [list] = await db
+          .update(vocabularyLists)
+          .set({ ...updates, updatedAt: new Date() })
+          .where(eq(vocabularyLists.id, id))
+          .returning();
+        
+        if (!list) {
+          throw new Error(`Vocabulary list with id ${id} not found`);
+        }
+        return list;
+      },
+      'updateVocabularyList',
+      `id: ${id}`
+    );
   }
 
   async setCurrentVocabularyList(instructorId: string, listId: string): Promise<void> {
-    // First, set all lists for this instructor to not current
-    await db.update(vocabularyLists)
-      .set({ isCurrent: false, updatedAt: new Date() })
-      .where(eq(vocabularyLists.instructorId, instructorId));
-    
-    // Then set the specified list as current
-    await db.update(vocabularyLists)
-      .set({ isCurrent: true, updatedAt: new Date() })
-      .where(eq(vocabularyLists.id, listId));
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        // First, set all lists for this instructor to not current
+        await db.update(vocabularyLists)
+          .set({ isCurrent: false, updatedAt: new Date() })
+          .where(eq(vocabularyLists.instructorId, instructorId));
+        
+        // Then set the specified list as current
+        await db.update(vocabularyLists)
+          .set({ isCurrent: true, updatedAt: new Date() })
+          .where(eq(vocabularyLists.id, listId));
+      },
+      'setCurrentVocabularyList',
+      `instructorId: ${instructorId}, listId: ${listId}`
+    );
   }
 
   async deleteVocabularyList(id: string): Promise<void> {

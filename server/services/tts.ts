@@ -3,6 +3,10 @@ import { createHash } from 'crypto';
 import { writeFile, readFile, mkdir, access, stat, unlink } from 'fs/promises';
 import { join, dirname } from 'path';
 import { constants as fsConstants } from 'fs';
+import { resilientOperation, DefaultConfigs, getUserFriendlyErrorMessage, ServiceError } from '@shared/errorHandling.js';
+import { circuitBreakerManager } from './circuitBreakerManager.js';
+import { gracefulDegradationService } from './gracefulDegradation.js';
+import { errorRecoveryService } from './errorRecovery.js';
 
 export interface TTSOptions {
   text: string;
@@ -64,90 +68,81 @@ export class TTSService {
     }
   }
 
-  // Retry wrapper for handling ElevenLabs rate limits
-  private async retryWithExponentialBackoff<T>(
-    operation: () => Promise<T>,
-    maxRetries = 3,
-    baseDelayMs = 1000
-  ): Promise<T> {
-    let lastError: Error;
-    
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        return await operation();
-      } catch (error) {
-        lastError = error as Error;
-        
-        // Check if it's a rate limit error (429) - more comprehensive detection
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const isRateLimit = errorMessage.includes('429') || 
-                           errorMessage.includes('Too Many Requests') || 
-                           errorMessage.includes('too_many_concurrent_requests');
-        
-        if (isRateLimit) {
-          if (attempt < maxRetries) {
-            const delayMs = baseDelayMs * Math.pow(2, attempt) + Math.random() * 1000; // Add jitter
-            console.log(`Rate limit detected, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries + 1}) - Error: ${errorMessage.substring(0, 100)}`);
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-            continue;
-          }
-          console.log(`Rate limit retry exhausted after ${maxRetries} attempts`);
-        }
-        
-        // For non-rate-limit errors, fail immediately
-        if (attempt === 0 && !isRateLimit) {
-          throw error;
-        }
-        
-        // If we've exhausted retries or it's not a rate limit error, throw
-        if (attempt === maxRetries) {
-          throw error;
-        }
-      }
-    }
-    
-    throw lastError!;
-  }
+  // Note: Retry logic is now handled by resilientOperation from shared/errorHandling.js
+  // Custom retry methods removed to avoid duplication
 
   async generateAudio(options: TTSOptions): Promise<TTSResult> {
     const cacheKey = this.generateCacheKey(options);
+    const circuitBreaker = circuitBreakerManager.getCircuitBreaker('elevenlabs', 'generateAudio');
     
     if (!this.elevenLabsApiKey) {
-      throw new Error("ElevenLabs API key is required. Please configure ELEVENLABS_API_KEY environment variable.");
+      throw new ServiceError(
+        'ElevenLabs API key not configured',
+        'elevenlabs',
+        'generateAudio',
+        'MISSING_API_KEY',
+        false
+      );
     }
 
-    // Acquire global concurrency slot before making any API requests
-    await TTSService.acquireSlot();
-    
-    try {
-      // Use ElevenLabs exclusively with timestamps for sentences
-      if (options.type === "sentence") {
-        const result = await this.retryWithExponentialBackoff(() => 
-          this.generateElevenLabsAudioWithTimestamps(options)
-        );
-        return {
-          ...result,
-          provider: "elevenlabs",
-          cacheKey,
-        };
-      } else {
-        // For individual words, use regular ElevenLabs without timestamps
-        const audioBuffer = await this.retryWithExponentialBackoff(() => 
-          this.generateElevenLabsAudio(options)
-        );
-        return {
-          audioBuffer,
-          provider: "elevenlabs",
-          cacheKey,
-        };
+    return resilientOperation(
+      async () => {
+        // Acquire global concurrency slot before making any API requests
+        await TTSService.acquireSlot();
+        
+        try {
+          const startTime = Date.now();
+          let result: TTSResult;
+          
+          // Use ElevenLabs exclusively with timestamps for sentences
+          if (options.type === "sentence") {
+            const audioResult = await this.generateElevenLabsAudioWithTimestamps(options);
+            result = {
+              ...audioResult,
+              provider: "elevenlabs" as const,
+              cacheKey,
+            };
+          } else {
+            // For individual words, use regular ElevenLabs without timestamps
+            const audioBuffer = await this.generateElevenLabsAudio(options);
+            result = {
+              audioBuffer,
+              provider: "elevenlabs" as const,
+              cacheKey,
+            };
+          }
+          
+          // Record successful operation
+          const responseTime = Date.now() - startTime;
+          errorRecoveryService.recordSuccess('elevenlabs', responseTime);
+          
+          return result;
+        } finally {
+          // Always release the slot, even if there was an error
+          TTSService.releaseSlot();
+        }
+      },
+      {
+        service: 'elevenlabs',
+        operation: 'generateAudio',
+        timeout: DefaultConfigs.elevenLabs.timeout,
+        retry: DefaultConfigs.elevenLabs.retry,
+        circuitBreaker
       }
-    } catch (error) {
-      console.error("ElevenLabs TTS failed after retries:", error);
-      throw new Error(`ElevenLabs TTS failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      // Always release the slot, even if there was an error
-      TTSService.releaseSlot();
-    }
+    ).catch(error => {
+      console.error(`ElevenLabs TTS failed for text "${options.text.substring(0, 50)}...":`, error);
+      // Record failure for health monitoring
+      errorRecoveryService.recordFailure('elevenlabs', error instanceof Error ? error.message : 'Unknown error');
+      
+      throw new ServiceError(
+        getUserFriendlyErrorMessage(error, 'teacher'),
+        'elevenlabs',
+        'generateAudio',
+        'AUDIO_GENERATION_FAILED',
+        error instanceof ServiceError ? error.isRetryable : true,
+        error
+      );
+    });
   }
 
   private preprocessText(text: string): string {

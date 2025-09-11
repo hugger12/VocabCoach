@@ -4,9 +4,13 @@ import { storage } from "./storage.js";
 import { aiService } from "./services/ai.js";
 import { ttsService } from "./services/tts.js";
 import { schedulerService } from "./services/scheduler.js";
+import { gracefulDegradationService } from "./services/gracefulDegradation.js";
 import { setupAuth, isAuthenticated, isStudentAuthenticated, isInstructorOrStudentAuthenticated } from "./replitAuth";
 import { insertWordSchema, insertAttemptSchema, simpleWordInputSchema, insertVocabularyListSchema } from "@shared/schema.js";
 import { studentLoginRateLimit, createRateLimitMiddleware } from "./services/rateLimit.js";
+import { circuitBreakerManager } from "./services/circuitBreakerManager.js";
+import { errorRecoveryService } from "./services/errorRecovery.js";
+import { databaseResilienceService } from "./services/databaseResilience.js";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -26,6 +30,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Auth middleware
   await setupAuth(app);
+
+  // Health check endpoint for monitoring system resilience
+  app.get('/api/health', async (req, res) => {
+    try {
+      const circuitBreakerStatus = circuitBreakerManager.getHealthStatus();
+      const circuitBreakerStats = circuitBreakerManager.getStatistics();
+      const serviceHealthStatus = errorRecoveryService.getHealthStatus();
+      const systemHealthSummary = errorRecoveryService.getSystemHealthSummary();
+      const databaseHealth = await databaseResilienceService.getHealthStatus();
+
+      const healthData = {
+        timestamp: new Date().toISOString(),
+        overall: systemHealthSummary.overallHealth,
+        services: {
+          database: databaseHealth,
+          circuitBreakers: {
+            status: circuitBreakerStatus,
+            statistics: circuitBreakerStats
+          },
+          recovery: {
+            services: serviceHealthStatus,
+            summary: systemHealthSummary
+          }
+        },
+        version: '1.0.0'
+      };
+
+      // Set appropriate HTTP status based on overall health
+      const statusCode = systemHealthSummary.overallHealth === 'healthy' ? 200 :
+                        systemHealthSummary.overallHealth === 'degraded' ? 206 : 503;
+
+      res.status(statusCode).json(healthData);
+    } catch (error) {
+      console.error("Health check failed:", error);
+      res.status(503).json({ 
+        timestamp: new Date().toISOString(),
+        overall: 'critical',
+        error: 'Health check system failure',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
 
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
@@ -560,11 +606,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Generate part of speech using AI but keep teacher definition
-      const analysis = await aiService.analyzeWord(text);
+      // Generate part of speech using AI but keep teacher definition with fallback
+      const analysis = await gracefulDegradationService.withAIFallback(
+        () => aiService.analyzeWord(text),
+        () => gracefulDegradationService.generateFallbackWordAnalysis(text),
+        'openai'
+      );
       
-      // Generate morphology
-      const morphology = await aiService.analyzeMorphology(text);
+      // Generate morphology with fallback
+      let morphology;
+      try {
+        morphology = await aiService.analyzeMorphology(text);
+      } catch (error) {
+        console.warn('Morphology analysis failed, using simple fallback:', error);
+        errorRecoveryService.recordFailure('openai', error instanceof Error ? error.message : 'Morphology failed');
+        morphology = {
+          syllables: [text], // Simple fallback
+          morphemes: [text],
+          recommended: true
+        };
+      }
       
       const wordData = {
         text: text.trim(),
@@ -581,8 +642,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create word
       const word = await storage.createWord(wordData);
 
-      // Generate sentences using the teacher's definition
-      const sentences = await aiService.generateSentences(word.text, word.partOfSpeech, definition);
+      // Generate sentences using the teacher's definition with fallback
+      const sentences = await gracefulDegradationService.withAIFallback(
+        () => aiService.generateSentences(word.text, word.partOfSpeech, definition),
+        () => gracefulDegradationService.generateFallbackSentences(word.text, word.partOfSpeech, definition),
+        'openai'
+      );
       
       // Add sentences to word
       if (sentences.length > 0) {
@@ -609,7 +674,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
     } catch (error) {
       console.error("Error adding manual word:", error);
-      res.status(500).json({ message: "Failed to add word with manual definition" });
+      
+      // Check if services are in degraded state and provide appropriate message
+      const openaiDegradation = errorRecoveryService.getGracefulDegradationOptions('openai');
+      if (openaiDegradation.fallbackEnabled) {
+        res.status(503).json({ 
+          message: "AI services are temporarily unavailable. Basic word creation is still available.",
+          degraded: true,
+          fallbackMessage: gracefulDegradationService.getFallbackMessage('openai', 'teacher'),
+          retryAfter: openaiDegradation.retryAfterMs
+        });
+      } else {
+        res.status(500).json({ message: "Failed to add word with manual definition" });
+      }
     }
   });
 
@@ -758,10 +835,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Word not found" });
       }
 
-      const sentences = await aiService.generateSentences(
-        word.text,
-        word.partOfSpeech,
-        word.kidDefinition
+      const sentences = await gracefulDegradationService.withAIFallback(
+        () => aiService.generateSentences(
+          word.text,
+          word.partOfSpeech,
+          word.kidDefinition
+        ),
+        () => gracefulDegradationService.generateFallbackSentences(word.text, word.partOfSpeech, word.kidDefinition),
+        'openai'
       );
 
       const createdSentences = [];
@@ -780,7 +861,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(createdSentences);
     } catch (error) {
       console.error("Error generating sentences:", error);
-      res.status(500).json({ message: "Failed to generate sentences" });
+      
+      // Provide graceful degradation message
+      const openaiDegradation = errorRecoveryService.getGracefulDegradationOptions('openai');
+      if (openaiDegradation.fallbackEnabled) {
+        res.status(503).json({ 
+          message: "AI sentence generation is temporarily unavailable. You can add sentences manually.",
+          degraded: true,
+          fallbackMessage: gracefulDegradationService.getFallbackMessage('openai', 'teacher'),
+          retryAfter: openaiDegradation.retryAfterMs
+        });
+      } else {
+        res.status(500).json({ message: "Failed to generate sentences" });
+      }
     }
   });
 
@@ -829,8 +922,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`Cache MISS: Generating new audio for ${type}: "${text.substring(0, 50)}..."`);
       
-      // Generate new audio only when cache miss
-      const result = await ttsService.generateAudio({ text, type });
+      // Generate new audio only when cache miss with fallback
+      const result = await gracefulDegradationService.withTTSFallback(
+        () => ttsService.generateAudio({ text, type }),
+        () => gracefulDegradationService.generateFallbackTTS({ text, type }),
+        'elevenlabs'
+      );
+      
+      if (!result) {
+        // TTS service unavailable, return fallback response
+        const elevenLabsDegradation = errorRecoveryService.getGracefulDegradationOptions('elevenlabs');
+        return res.status(503).json({
+          message: "Audio generation temporarily unavailable",
+          degraded: true,
+          fallbackMessage: gracefulDegradationService.getFallbackMessage('elevenlabs', 'teacher'),
+          retryAfter: elevenLabsDegradation.retryAfterMs,
+          audioUnavailable: true
+        });
+      }
       
       // Store complete audio data and timings in cache 
       try {
