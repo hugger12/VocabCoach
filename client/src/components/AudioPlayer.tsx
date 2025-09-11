@@ -243,9 +243,10 @@ export function AudioPlayer({
       console.log("AudioPlayer starting playback for:", { type, wordId, sentenceId, text: text.substring(0, 50) });
       
       const cacheKey = generateCacheKey(text, type, speed);
-      let audioUrl = getCachedAudio(cacheKey);
+      const cachedData = getCachedAudio(cacheKey);
+      let audioUrl = cachedData?.url;
 
-      if (!audioUrl) {
+      if (!cachedData) {
         console.log("No cached audio, generating new audio for:", cacheKey);
         
         // Process text to expand abbreviations for TTS
@@ -294,7 +295,7 @@ export function AudioPlayer({
           const audioArrayBuffer = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0)).buffer;
           const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
           
-          audioUrl = cacheAudio(cacheKey, audioBlob);
+          audioUrl = cacheAudio(cacheKey, audioBlob, jsonData.wordTimings);
           console.log("Audio with timings cached with URL:", audioUrl);
           
           // Store word timings for highlighting
@@ -306,11 +307,19 @@ export function AudioPlayer({
           // Regular binary audio response (for words)
           const audioBlob = await response.blob();
           console.log("Received audio blob, size:", audioBlob.size);
-          audioUrl = cacheAudio(cacheKey, audioBlob);
+          audioUrl = cacheAudio(cacheKey, audioBlob, null);
           console.log("Audio cached with URL:", audioUrl);
         }
       } else {
         console.log("Using cached audio:", audioUrl);
+        
+        // Restore cached word timings for perfect synchronization
+        if (cachedData.wordTimings && type === "sentence") {
+          wordTimingsRef.current = cachedData.wordTimings;
+          console.log("Restored cached word timings for highlighting:", cachedData.wordTimings);
+        } else {
+          wordTimingsRef.current = null;
+        }
       }
 
       // Play the audio

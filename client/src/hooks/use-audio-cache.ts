@@ -4,11 +4,17 @@ interface AudioCacheEntry {
   url: string;
   blob: Blob;
   timestamp: number;
+  wordTimings?: Array<{ word: string; startTimeMs: number; endTimeMs: number }> | null;
+}
+
+interface CachedAudioData {
+  url: string;
+  wordTimings?: Array<{ word: string; startTimeMs: number; endTimeMs: number }> | null;
 }
 
 interface UseAudioCacheReturn {
-  getCachedAudio: (cacheKey: string) => string | null;
-  cacheAudio: (cacheKey: string, blob: Blob) => string;
+  getCachedAudio: (cacheKey: string) => CachedAudioData | null;
+  cacheAudio: (cacheKey: string, blob: Blob, wordTimings?: Array<{ word: string; startTimeMs: number; endTimeMs: number }> | null) => string;
   clearCache: () => void;
   getCacheSize: () => number;
 }
@@ -19,7 +25,7 @@ const MAX_CACHE_SIZE = 50; // Maximum number of cached audio files
 export function useAudioCache(): UseAudioCacheReturn {
   const [cache, setCache] = useState<Map<string, AudioCacheEntry>>(new Map());
 
-  const getCachedAudio = useCallback((cacheKey: string): string | null => {
+  const getCachedAudio = useCallback((cacheKey: string): CachedAudioData | null => {
     const entry = cache.get(cacheKey);
     if (!entry) return null;
 
@@ -35,15 +41,19 @@ export function useAudioCache(): UseAudioCacheReturn {
       return null;
     }
 
-    return entry.url;
+    return {
+      url: entry.url,
+      wordTimings: entry.wordTimings,
+    };
   }, [cache]);
 
-  const cacheAudio = useCallback((cacheKey: string, blob: Blob): string => {
+  const cacheAudio = useCallback((cacheKey: string, blob: Blob, wordTimings?: Array<{ word: string; startTimeMs: number; endTimeMs: number }> | null): string => {
     const url = URL.createObjectURL(blob);
     const entry: AudioCacheEntry = {
       url,
       blob,
       timestamp: Date.now(),
+      wordTimings,
     };
 
     setCache(prev => {
