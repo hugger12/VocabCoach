@@ -6,50 +6,23 @@ import { ttsService } from "./services/tts.js";
 import { schedulerService } from "./services/scheduler.js";
 import { setupAuth, isAuthenticated, isStudentAuthenticated, isInstructorOrStudentAuthenticated } from "./replitAuth";
 import { insertWordSchema, insertAttemptSchema, simpleWordInputSchema, insertVocabularyListSchema } from "@shared/schema.js";
+import { studentLoginRateLimit, createRateLimitMiddleware } from "./services/rateLimit.js";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Rate limiting for student login (prevent PIN brute forcing)
-  const studentLoginLimiter = {
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // limit each IP to 5 requests per windowMs
-    skipSuccessfulRequests: true,
+  // Redis-based distributed rate limiting for student login (prevent PIN brute forcing)
+  // Configuration is now handled in the DistributedRateLimit service
+  const rateLimitMiddleware = createRateLimitMiddleware(studentLoginRateLimit, {
     message: { message: "Too many login attempts, please try again later" },
-    standardHeaders: true,
-    legacyHeaders: false,
-  };
+    keyGenerator: (req: any) => {
+      // Use IP address as the rate limiting key (prefix handled by DistributedRateLimit)
+      const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+      return ip; // No prefix here - DistributedRateLimit already adds 'student_login:'
+    }
+  });
 
-  // In-memory store for rate limiting (simple implementation)
-  const loginAttempts = new Map<string, { count: number; resetTime: number }>();
-  
-  const rateLimitMiddleware = (req: any, res: any, next: any) => {
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
-    const now = Date.now();
-    const window = studentLoginLimiter.windowMs;
-    const maxAttempts = studentLoginLimiter.max;
-    
-    // Clean up old entries
-    Array.from(loginAttempts.entries()).forEach(([key, value]) => {
-      if (now > value.resetTime) {
-        loginAttempts.delete(key);
-      }
-    });
-    
-    const attempts = loginAttempts.get(ip) || { count: 0, resetTime: now + window };
-    
-    if (attempts.count >= maxAttempts && now < attempts.resetTime) {
-      return res.status(429).json(studentLoginLimiter.message);
-    }
-    
-    // Increment counter
-    attempts.count += 1;
-    if (attempts.count === 1) {
-      attempts.resetTime = now + window;
-    }
-    loginAttempts.set(ip, attempts);
-    
-    next();
-  };
+  // Log rate limiter status on startup
+  console.log('Rate limiter status:', studentLoginRateLimit.getStatus());
 
   // Auth middleware
   await setupAuth(app);
