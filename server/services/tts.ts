@@ -27,6 +27,81 @@ export interface TTSResult {
 export class TTSService {
   private elevenLabsApiKey = process.env.ELEVENLABS_WORD_WIZARD || process.env.ELEVENLABS_API_KEY || process.env.ELEVEN_LABS_KEY || "";
   private elevenLabsVoiceId = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM"; // Default child-friendly voice
+  
+  // Global concurrency limiter for ElevenLabs API
+  private static activeConcurrentRequests = 0;
+  private static readonly MAX_CONCURRENT_REQUESTS = 6; // Conservative limit
+  private static requestQueue: (() => void)[] = [];
+  
+  private static async acquireSlot(): Promise<void> {
+    return new Promise((resolve) => {
+      if (TTSService.activeConcurrentRequests < TTSService.MAX_CONCURRENT_REQUESTS) {
+        TTSService.activeConcurrentRequests++;
+        console.log(`ElevenLabs request slot acquired (${TTSService.activeConcurrentRequests}/${TTSService.MAX_CONCURRENT_REQUESTS})`);
+        resolve();
+      } else {
+        console.log(`ElevenLabs request queued (${TTSService.requestQueue.length + 1} in queue)`);
+        TTSService.requestQueue.push(resolve);
+      }
+    });
+  }
+  
+  private static releaseSlot(): void {
+    TTSService.activeConcurrentRequests--;
+    console.log(`ElevenLabs request slot released (${TTSService.activeConcurrentRequests}/${TTSService.MAX_CONCURRENT_REQUESTS})`);
+    
+    if (TTSService.requestQueue.length > 0) {
+      const nextResolve = TTSService.requestQueue.shift()!;
+      TTSService.activeConcurrentRequests++;
+      console.log(`ElevenLabs request dequeued (${TTSService.activeConcurrentRequests}/${TTSService.MAX_CONCURRENT_REQUESTS}, ${TTSService.requestQueue.length} remaining)`);
+      nextResolve();
+    }
+  }
+
+  // Retry wrapper for handling ElevenLabs rate limits
+  private async retryWithExponentialBackoff<T>(
+    operation: () => Promise<T>,
+    maxRetries = 3,
+    baseDelayMs = 1000
+  ): Promise<T> {
+    let lastError: Error;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error as Error;
+        
+        // Check if it's a rate limit error (429) - more comprehensive detection
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const isRateLimit = errorMessage.includes('429') || 
+                           errorMessage.includes('Too Many Requests') || 
+                           errorMessage.includes('too_many_concurrent_requests');
+        
+        if (isRateLimit) {
+          if (attempt < maxRetries) {
+            const delayMs = baseDelayMs * Math.pow(2, attempt) + Math.random() * 1000; // Add jitter
+            console.log(`Rate limit detected, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries + 1}) - Error: ${errorMessage.substring(0, 100)}`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            continue;
+          }
+          console.log(`Rate limit retry exhausted after ${maxRetries} attempts`);
+        }
+        
+        // For non-rate-limit errors, fail immediately
+        if (attempt === 0 && !isRateLimit) {
+          throw error;
+        }
+        
+        // If we've exhausted retries or it's not a rate limit error, throw
+        if (attempt === maxRetries) {
+          throw error;
+        }
+      }
+    }
+    
+    throw lastError!;
+  }
 
   async generateAudio(options: TTSOptions): Promise<TTSResult> {
     const cacheKey = this.generateCacheKey(options);
@@ -35,10 +110,15 @@ export class TTSService {
       throw new Error("ElevenLabs API key is required. Please configure ELEVENLABS_API_KEY environment variable.");
     }
 
+    // Acquire global concurrency slot before making any API requests
+    await TTSService.acquireSlot();
+    
     try {
       // Use ElevenLabs exclusively with timestamps for sentences
       if (options.type === "sentence") {
-        const result = await this.generateElevenLabsAudioWithTimestamps(options);
+        const result = await this.retryWithExponentialBackoff(() => 
+          this.generateElevenLabsAudioWithTimestamps(options)
+        );
         return {
           ...result,
           provider: "elevenlabs",
@@ -46,7 +126,9 @@ export class TTSService {
         };
       } else {
         // For individual words, use regular ElevenLabs without timestamps
-        const audioBuffer = await this.generateElevenLabsAudio(options);
+        const audioBuffer = await this.retryWithExponentialBackoff(() => 
+          this.generateElevenLabsAudio(options)
+        );
         return {
           audioBuffer,
           provider: "elevenlabs",
@@ -54,8 +136,11 @@ export class TTSService {
         };
       }
     } catch (error) {
-      console.error("ElevenLabs TTS failed:", error);
+      console.error("ElevenLabs TTS failed after retries:", error);
       throw new Error(`ElevenLabs TTS failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      // Always release the slot, even if there was an error
+      TTSService.releaseSlot();
     }
   }
 

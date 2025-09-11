@@ -826,7 +826,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Audio Pre-caching API
+  // Concurrency limiter utility for ElevenLabs API rate limiting
+  async function processConcurrently<T>(
+    tasks: (() => Promise<T>)[],
+    concurrencyLimit = 5 // Conservative limit to work with global TTS concurrency limiter
+  ): Promise<T[]> {
+    const results: T[] = [];
+    
+    for (let i = 0; i < tasks.length; i += concurrencyLimit) {
+      const batch = tasks.slice(i, i + concurrencyLimit);
+      console.log(`Processing batch ${Math.floor(i / concurrencyLimit) + 1}/${Math.ceil(tasks.length / concurrencyLimit)} (${batch.length} requests)`);
+      
+      const batchResults = await Promise.allSettled(
+        batch.map(task => task())
+      );
+      
+      for (const result of batchResults) {
+        if (result.status === 'fulfilled') {
+          results.push(result.value);
+        } else {
+          console.error('Batch task failed:', result.reason);
+        }
+      }
+      
+      // Add small delay between batches to be extra safe with rate limits
+      if (i + concurrencyLimit < tasks.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    return results;
+  }
+
+  // Audio Pre-caching API with concurrency control
   app.post("/api/audio/precache", async (req, res) => {
     try {
       const { listId, instructorId } = req.body;
@@ -839,68 +871,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get all words from the vocabulary list
       const words = await storage.getWords(listId, instructorId);
-      const cachePromises: Promise<any>[] = [];
+      const cacheTasks: (() => Promise<any>)[] = [];
 
       for (const word of words) {
         // Pre-cache word definition audio
-        cachePromises.push(
-          ttsService.generateAudio({ 
-            text: word.kidDefinition, 
-            type: "word" 
-          }).then(result => {
+        cacheTasks.push(async () => {
+          try {
+            const result = await ttsService.generateAudio({ 
+              text: word.kidDefinition, 
+              type: "word" 
+            });
             const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
-            return storage.createAudioCache({
+            return await storage.createAudioCache({
               wordId: word.id,
               sentenceId: null,
               type: "word",
               provider: result.provider,
               audioUrl: null,
-              audioData: base64Audio, // Store actual audio data
+              audioData: base64Audio,
               cacheKey: result.cacheKey,
               durationMs: result.duration || null,
-              wordTimings: null, // No timings for word definitions
+              wordTimings: null,
             });
-          }).catch(error => {
+          } catch (error) {
             console.error(`Failed to pre-cache word ${word.text} definition:`, error);
-          })
-        );
+            throw error;
+          }
+        });
 
         // Get sentences for this word and pre-cache them
         const sentences = await storage.getSentences(word.id);
         for (const sentence of sentences) {
-          cachePromises.push(
-            ttsService.generateAudio({ 
-              text: sentence.text, 
-              type: "sentence" 
-            }).then(result => {
+          cacheTasks.push(async () => {
+            try {
+              const result = await ttsService.generateAudio({ 
+                text: sentence.text, 
+                type: "sentence" 
+              });
               const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
-              return storage.createAudioCache({
+              return await storage.createAudioCache({
                 wordId: word.id,
                 sentenceId: sentence.id,
                 type: "sentence", 
                 provider: result.provider,
                 audioUrl: null,
-                audioData: base64Audio, // Store actual audio data
+                audioData: base64Audio,
                 cacheKey: result.cacheKey,
                 durationMs: result.duration || (result.wordTimings ? Math.max(...result.wordTimings.map(w => w.endTimeMs)) : null),
-                wordTimings: result.wordTimings || null, // Store word timings for sentences
+                wordTimings: result.wordTimings || null,
               });
-            }).catch(error => {
+            } catch (error) {
               console.error(`Failed to pre-cache sentence for word ${word.text}:`, error);
-            })
-          );
+              throw error;
+            }
+          });
         }
       }
 
-      // Wait for all pre-caching to complete
-      await Promise.allSettled(cachePromises);
+      // Process audio generation with concurrency control
+      console.log(`Processing ${cacheTasks.length} audio generation tasks with concurrency control`);
+      const results = await processConcurrently(cacheTasks, 8);
       
-      console.log(`Completed audio pre-caching for ${words.length} words with ${cachePromises.length} total audio files`);
+      console.log(`Completed audio pre-caching for ${words.length} words with ${results.length} successful audio files`);
       
       res.json({ 
-        message: "Audio pre-caching completed", 
+        message: "Audio pre-caching completed with concurrency control", 
         wordsCount: words.length,
-        audioFilesCount: cachePromises.length
+        audioFilesCount: results.length,
+        totalTasks: cacheTasks.length
       });
     } catch (error) {
       console.error("Error pre-caching audio:", error);
