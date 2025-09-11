@@ -1,4 +1,8 @@
-// TTS service for ElevenLabs with word-level timing synchronization
+// Enhanced TTS service with persistent caching, deduplication, and file system storage
+import { createHash } from 'crypto';
+import { writeFile, readFile, mkdir, access, stat, unlink } from 'fs/promises';
+import { join, dirname } from 'path';
+import { constants as fsConstants } from 'fs';
 
 export interface TTSOptions {
   text: string;
@@ -27,6 +31,8 @@ export interface TTSResult {
 export class TTSService {
   private elevenLabsApiKey = process.env.ELEVENLABS_WORD_WIZARD || process.env.ELEVENLABS_API_KEY || process.env.ELEVEN_LABS_KEY || "";
   private elevenLabsVoiceId = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM"; // Default child-friendly voice
+  private readonly cacheDir = join(process.cwd(), 'server', 'audio-cache');
+  private readonly modelId = "eleven_flash_v2_5"; // Consistent model for caching
   
   // Global concurrency limiter for ElevenLabs API
   private static activeConcurrentRequests = 0;
@@ -296,14 +302,153 @@ export class TTSService {
     return wordTimings;
   }
 
+  /**
+   * Generate robust content-based cache key for optimal deduplication
+   * Uses crypto hashing and content normalization to ensure identical content
+   * produces identical cache keys across users and sessions
+   */
   generateCacheKey(options: TTSOptions): string {
     const { text, type, voiceSettings = {} } = options;
-    const settingsStr = JSON.stringify(voiceSettings);
-    const withTimestamps = type === "sentence" ? "timestamps" : "notimestamps";
     
-    // Simple hash for cache key
-    const content = `elevenlabs-${withTimestamps}-${text}-${settingsStr}`;
-    return Buffer.from(content).toString('base64url');
+    // Normalize text content for consistent hashing
+    const normalizedText = this.normalizeTextForCaching(text);
+    
+    // Create consistent voice settings object
+    const normalizedSettings = {
+      stability: voiceSettings.stability ?? 0.5,
+      clarity: voiceSettings.clarity ?? 0.75,
+      speed: voiceSettings.speed ?? 1.0
+    };
+    
+    // Create content hash with all factors that affect audio generation
+    const contentForHashing = {
+      provider: "elevenlabs",
+      voiceId: this.elevenLabsVoiceId,
+      model: this.modelId,
+      text: normalizedText,
+      type: type,
+      withTimestamps: type === "sentence",
+      voiceSettings: normalizedSettings
+    };
+    
+    // Generate SHA-256 hash for robust content identification
+    const contentString = JSON.stringify(contentForHashing, Object.keys(contentForHashing).sort());
+    const hash = createHash('sha256').update(contentString, 'utf8').digest('hex');
+    
+    // Create readable cache key with hash
+    return `elevenlabs_${type}_${hash.substring(0, 16)}`;
+  }
+
+  /**
+   * Generate content hash for deduplication (separate from cache key)
+   */
+  generateContentHash(options: TTSOptions): string {
+    const { text, type, voiceSettings = {} } = options;
+    const normalizedText = this.normalizeTextForCaching(text);
+    
+    const normalizedSettings = {
+      stability: voiceSettings.stability ?? 0.5,
+      clarity: voiceSettings.clarity ?? 0.75,
+      speed: voiceSettings.speed ?? 1.0
+    };
+    
+    const contentForHashing = {
+      provider: "elevenlabs",
+      voiceId: this.elevenLabsVoiceId,
+      model: this.modelId,
+      text: normalizedText,
+      type: type,
+      withTimestamps: type === "sentence",
+      voiceSettings: normalizedSettings
+    };
+    
+    const contentString = JSON.stringify(contentForHashing, Object.keys(contentForHashing).sort());
+    return createHash('sha256').update(contentString, 'utf8').digest('hex');
+  }
+
+  /**
+   * Normalize text content for consistent caching
+   * Removes variations that don't affect audio generation
+   */
+  private normalizeTextForCaching(text: string): string {
+    return text
+      .trim()
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .toLowerCase() // Normalize case for definition text
+      .replace(/[""'']/g, '"') // Normalize quotes
+      .replace(/[\u2013\u2014]/g, '-'); // Normalize dashes
+  }
+
+  /**
+   * Get file path for cached audio file
+   */
+  private getAudioFilePath(cacheKey: string, type: string): string {
+    // Organize by type and then by first two chars of cache key for distribution
+    const subDir = cacheKey.substring(cacheKey.lastIndexOf('_') + 1, cacheKey.lastIndexOf('_') + 3);
+    return join(this.cacheDir, type, subDir, `${cacheKey}.mp3`);
+  }
+
+  /**
+   * Ensure cache directory structure exists
+   */
+  private async ensureCacheDir(filePath: string): Promise<void> {
+    const dir = dirname(filePath);
+    try {
+      await access(dir, fsConstants.F_OK);
+    } catch {
+      await mkdir(dir, { recursive: true });
+    }
+  }
+
+  /**
+   * Save audio buffer to persistent file storage
+   */
+  async saveAudioToFile(audioBuffer: ArrayBuffer, cacheKey: string, type: string): Promise<string> {
+    const filePath = this.getAudioFilePath(cacheKey, type);
+    await this.ensureCacheDir(filePath);
+    
+    const buffer = Buffer.from(audioBuffer);
+    await writeFile(filePath, buffer);
+    
+    console.log(`Saved audio cache file: ${filePath} (${buffer.length} bytes)`);
+    return filePath;
+  }
+
+  /**
+   * Load audio buffer from persistent file storage
+   */
+  async loadAudioFromFile(filePath: string): Promise<ArrayBuffer | null> {
+    try {
+      await access(filePath, fsConstants.F_OK);
+      const buffer = await readFile(filePath);
+      return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get file size for cleanup metrics
+   */
+  async getFileSize(filePath: string): Promise<number> {
+    try {
+      const stats = await stat(filePath);
+      return stats.size;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Delete audio file from persistent storage
+   */
+  async deleteAudioFile(filePath: string): Promise<void> {
+    try {
+      await unlink(filePath);
+      console.log(`Deleted audio cache file: ${filePath}`);
+    } catch (error) {
+      console.warn(`Failed to delete audio file ${filePath}:`, error);
+    }
   }
 
   async generateSlowAudio(text: string): Promise<TTSResult> {

@@ -977,8 +977,155 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Text is required" });
       }
 
+      // Generate cache key for slow audio (with special voice settings)
+      const slowOptions = {
+        text,
+        type: "word" as const,
+        voiceSettings: {
+          speed: 0.7,
+          stability: 0.7,
+          clarity: 0.8,
+        }
+      };
+      
+      const cacheKey = ttsService.generateCacheKey(slowOptions);
+      const contentHash = ttsService.generateContentHash(slowOptions);
+      
+      // Check for existing cache (including deduplication by content hash)
+      let cachedAudio = await storage.getAudioCache(cacheKey);
+      
+      if (!cachedAudio) {
+        // Check for content deduplication - same content with same settings
+        cachedAudio = await storage.getAudioCacheByContentHash(contentHash);
+        if (cachedAudio) {
+          console.log(`🔄 DEDUPLICATION HIT: Found existing audio for slow text "${text.substring(0, 30)}..." with content hash ${contentHash.substring(0, 8)}`);
+          // EFFICIENCY FIX: Update hit tracking for deduplicated content to preserve popular cache entries
+          await storage.updateAudioCacheHit(cachedAudio.id);
+        }
+      }
+      
+      if (cachedAudio && (cachedAudio.audioData || cachedAudio.filePath)) {
+        console.log(`💾 Cache HIT: Using cached slow audio for "${text.substring(0, 50)}..."`);
+        
+        // Load audio from file system if available, otherwise use database
+        let audioBuffer: Buffer;
+        if (cachedAudio.filePath) {
+          const fileAudio = await ttsService.loadAudioFromFile(cachedAudio.filePath);
+          audioBuffer = fileAudio ? Buffer.from(fileAudio) : Buffer.from(cachedAudio.audioData!, 'base64');
+        } else {
+          audioBuffer = Buffer.from(cachedAudio.audioData!, 'base64');
+        }
+        
+        const etag = `"${cacheKey}-${audioBuffer.byteLength}"`;
+        const fileSize = audioBuffer.byteLength;
+        
+        // EFFICIENCY FIX: Check If-None-Match header for HTTP 304 Not Modified response
+        if (req.headers['if-none-match'] === etag) {
+          console.log(`🚀 CACHE HIT: ETag match for slow audio ${text.substring(0, 30)}...`);
+          return res.status(304).end();
+        }
+
+        // EFFICIENCY FIX: Parse Range header for HTTP 206 partial content support
+        const range = req.headers.range;
+        
+        if (range) {
+          console.log(`🎵 RANGE REQUEST: ${range} for slow audio ${text.substring(0, 30)}...`);
+          
+          // Parse range header (format: "bytes=start-end")
+          const parts = range.replace(/bytes=/, "").split("-");
+          const start = parseInt(parts[0], 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+          
+          // Validate range
+          if (start >= fileSize || end >= fileSize || start > end) {
+            res.status(416).set({
+              'Content-Range': `bytes */${fileSize}`
+            });
+            return res.end();
+          }
+          
+          const chunkSize = (end - start) + 1;
+          const chunk = audioBuffer.subarray(start, end + 1);
+          
+          // Send 206 Partial Content with proper headers
+          res.status(206).set({
+            'Content-Type': 'audio/mpeg',
+            'Content-Length': chunkSize.toString(),
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'public, max-age=3600',
+            'ETag': etag,
+            'Last-Modified': cachedAudio.createdAt ? new Date(cachedAudio.createdAt).toUTCString() : new Date().toUTCString(),
+            'X-Audio-Provider': cachedAudio.provider,
+            'X-Cache-Status': 'partial-streamed',
+            'X-Content-Hash': contentHash.substring(0, 16),
+            'X-Range': `${start}-${end}/${fileSize}`
+          });
+          
+          console.log(`📦 PARTIAL CONTENT: Serving bytes ${start}-${end}/${fileSize} (${chunkSize} bytes)`);
+          return res.send(chunk);
+        }
+        
+        // Full file response with enhanced caching headers
+        console.log(`🎵 FULL SLOW AUDIO: Serving complete file ${text.substring(0, 30)}... (${fileSize} bytes)`);
+        
+        res.set({
+          'Content-Type': 'audio/mpeg',
+          'Content-Length': fileSize.toString(),
+          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'public, max-age=3600',
+          'ETag': etag,
+          'Last-Modified': cachedAudio.createdAt ? new Date(cachedAudio.createdAt).toUTCString() : new Date().toUTCString(),
+          'X-Audio-Provider': cachedAudio.provider,
+          'X-Cache-Status': 'persistent-cached',
+          'X-Content-Hash': contentHash.substring(0, 16),
+        });
+        
+        return res.send(audioBuffer);
+      }
+
+      console.log(`🎵 Cache MISS: Generating new slow audio for "${text.substring(0, 50)}..."`);
+      
+      // Generate new slow audio
       const result = await ttsService.generateSlowAudio(text);
       const audioBuffer = Buffer.from(result.audioBuffer);
+      
+      // Store in persistent cache with both database and optional file system
+      try {
+        const base64Audio = audioBuffer.toString('base64');
+        let filePath: string | null = null;
+        let fileSize: number = audioBuffer.byteLength;
+        
+        // Save to file system for larger files (optional optimization)
+        if (audioBuffer.byteLength > 50000) { // 50KB threshold
+          filePath = await ttsService.saveAudioToFile(result.audioBuffer, result.cacheKey, "word");
+          console.log(`💾 Saved slow audio to file system: ${filePath}`);
+        }
+        
+        await storage.createAudioCache({
+          wordId: req.body.wordId || null,
+          sentenceId: null,
+          type: "word",
+          provider: result.provider,
+          audioUrl: null,
+          // EFFICIENCY FIX: Eliminate storage duplication - don't store base64 when filePath exists
+          audioData: filePath ? null : base64Audio,
+          cacheKey: result.cacheKey,
+          contentHash,
+          filePath,
+          fileSize,
+          durationMs: result.duration ? Math.round(result.duration) : null,
+          wordTimings: null,
+          hitCount: 1,
+          lastAccessedAt: new Date(),
+        });
+        
+        console.log(`✅ Stored slow audio in persistent cache: ${result.cacheKey} (${fileSize} bytes)`);
+      } catch (cacheError) {
+        console.error("Failed to cache slow audio:", cacheError);
+        // Continue serving the audio even if caching fails
+      }
+      
       const etag = `"slow-${text.slice(0, 20)}-${audioBuffer.byteLength}"`;
       
       res.set({
@@ -989,6 +1136,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'Last-Modified': new Date().toUTCString(),
         'Accept-Ranges': 'bytes',
         'X-Audio-Provider': result.provider,
+        'X-Cache-Status': 'newly-generated',
+        'X-Content-Hash': contentHash.substring(0, 16),
       });
 
       res.send(audioBuffer);
@@ -1786,6 +1935,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching quiz data:", error);
       res.status(500).json({ message: "Failed to fetch quiz data" });
+    }
+  });
+
+  // Enhanced Cache Management Endpoints for Cost Optimization
+
+  // Get comprehensive cache statistics and performance metrics
+  app.get("/api/audio/cache/stats", isAuthenticated, async (req: any, res) => {
+    try {
+      console.log(`📊 Retrieving cache statistics for admin dashboard`);
+      
+      const stats = await storage.getAudioCacheStats();
+      
+      // Format file size for readability
+      const formatBytes = (bytes: number) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      };
+      
+      res.json({
+        cacheStats: {
+          totalEntries: stats.totalEntries,
+          totalSize: stats.totalSize,
+          totalSizeFormatted: formatBytes(stats.totalSize),
+          averageHitCount: stats.avgHitCount,
+          estimatedCostSavings: stats.totalEntries * 0.018, // Approximate ElevenLabs cost per request
+        },
+        systemInfo: {
+          cacheDirectory: "server/audio-cache",
+          deduplicationEnabled: true,
+          hybridStorageEnabled: true,
+          contentHashingEnabled: true,
+        }
+      });
+    } catch (error) {
+      console.error("Error retrieving cache statistics:", error);
+      res.status(500).json({ message: "Failed to retrieve cache statistics" });
+    }
+  });
+
+  // Cleanup old and unused audio cache entries
+  app.post("/api/audio/cache/cleanup", isAuthenticated, async (req: any, res) => {
+    try {
+      const { olderThanDays = 30, maxHitCount = 2 } = req.body;
+      
+      console.log(`🧹 Starting cache cleanup: removing entries older than ${olderThanDays} days with hit count <= ${maxHitCount}`);
+      
+      const deletedCount = await storage.cleanupOldAudioCache(olderThanDays, maxHitCount);
+      
+      console.log(`✅ Cache cleanup completed: removed ${deletedCount} old entries`);
+      
+      res.json({
+        message: "Cache cleanup completed successfully",
+        deletedEntries: deletedCount,
+        criteria: {
+          olderThanDays,
+          maxHitCount
+        }
+      });
+    } catch (error) {
+      console.error("Error during cache cleanup:", error);
+      res.status(500).json({ message: "Failed to cleanup cache" });
+    }
+  });
+
+  // Cache health check and integrity verification
+  app.get("/api/audio/cache/health", isAuthenticated, async (req: any, res) => {
+    try {
+      console.log(`🔍 Performing cache health check`);
+      
+      const stats = await storage.getAudioCacheStats();
+      const healthStatus = {
+        status: "healthy",
+        issues: [] as string[],
+        recommendations: [] as string[]
+      };
+      
+      // Check for potential issues
+      if (stats.totalEntries === 0) {
+        healthStatus.issues.push("No cached audio entries found");
+        healthStatus.recommendations.push("Consider running audio pre-caching for active vocabulary lists");
+      }
+      
+      if (stats.avgHitCount < 2) {
+        healthStatus.issues.push("Low average hit count indicates poor cache efficiency");
+        healthStatus.recommendations.push("Review vocabulary usage patterns and consider cache warming");
+      }
+      
+      if (stats.totalSize > 1000000000) { // 1GB
+        healthStatus.issues.push("Large cache size may impact performance");
+        healthStatus.recommendations.push("Consider running cache cleanup to remove old entries");
+      }
+      
+      res.json({
+        health: healthStatus,
+        statistics: stats,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error during cache health check:", error);
+      res.status(500).json({ 
+        health: { status: "unhealthy", error: error.message },
+        timestamp: new Date().toISOString()
+      });
     }
   });
 

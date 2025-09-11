@@ -37,7 +37,7 @@ import {
   passageBlanks
 } from "@shared/schema.js";
 import { randomUUID } from "crypto";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, lte } from "drizzle-orm";
 import { db } from "./db";
 
 export interface IStorage {
@@ -75,10 +75,14 @@ export interface IStorage {
   createSentence(sentence: InsertSentence): Promise<Sentence>;
   deleteSentence(id: string): Promise<void>;
 
-  // Audio Cache
+  // Enhanced Audio Cache with hybrid storage
   getAudioCache(cacheKey: string): Promise<AudioCache | undefined>;
+  getAudioCacheByContentHash(contentHash: string): Promise<AudioCache | undefined>;
   createAudioCache(audio: Omit<AudioCache, 'id' | 'createdAt'>): Promise<AudioCache>;
+  updateAudioCacheHit(id: string): Promise<void>;
   deleteAudioCache(id: string): Promise<void>;
+  cleanupOldAudioCache(olderThanDays: number, maxHitCount: number): Promise<number>;
+  getAudioCacheStats(): Promise<{ totalEntries: number; totalSize: number; avgHitCount: number }>;
 
   // Attempts (now student-scoped)
   getAttempts(wordId: string, studentId?: string): Promise<Attempt[]>;
@@ -387,9 +391,20 @@ export class DatabaseStorage implements IStorage {
     await db.delete(sentences).where(eq(sentences.id, id));
   }
 
-  // Audio Cache
+  // Enhanced Audio Cache with hit tracking
   async getAudioCache(cacheKey: string): Promise<AudioCache | undefined> {
     const [audio] = await db.select().from(audioCacheTable).where(eq(audioCacheTable.cacheKey, cacheKey));
+    
+    if (audio) {
+      // Update hit count and last accessed timestamp
+      await this.updateAudioCacheHit(audio.id);
+    }
+    
+    return audio;
+  }
+
+  async getAudioCacheByContentHash(contentHash: string): Promise<AudioCache | undefined> {
+    const [audio] = await db.select().from(audioCacheTable).where(eq(audioCacheTable.contentHash, contentHash));
     return audio;
   }
 
@@ -397,7 +412,9 @@ export class DatabaseStorage implements IStorage {
     // Handle null sentenceId for fallback sentences
     const audioData = {
       ...audio,
-      sentenceId: audio.sentenceId || null
+      sentenceId: audio.sentenceId || null,
+      hitCount: audio.hitCount ?? 0,
+      lastAccessedAt: audio.lastAccessedAt ?? new Date()
     };
     
     const [created] = await db
@@ -407,8 +424,54 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
+  async updateAudioCacheHit(id: string): Promise<void> {
+    await db
+      .update(audioCacheTable)
+      .set({ 
+        hitCount: sql`${audioCacheTable.hitCount} + 1`,
+        lastAccessedAt: new Date()
+      })
+      .where(eq(audioCacheTable.id, id));
+  }
+
   async deleteAudioCache(id: string): Promise<void> {
     await db.delete(audioCacheTable).where(eq(audioCacheTable.id, id));
+  }
+
+  async cleanupOldAudioCache(olderThanDays: number, maxHitCount: number = 0): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+    
+    // EFFICIENCY FIX: Delete old entries with low hit counts using correct comparison operators
+    // Previously used eq() which only matched exact values, now uses lte() for proper range cleanup
+    const deleteResult = await db
+      .delete(audioCacheTable)
+      .where(
+        and(
+          lte(audioCacheTable.lastAccessedAt, cutoffDate), // Delete entries older than cutoff
+          lte(audioCacheTable.hitCount, maxHitCount)       // Delete entries with low hit counts
+        )
+      );
+    
+    console.log(`🧹 Cache cleanup: removed ${deleteResult.rowCount || 0} entries older than ${olderThanDays} days with hit count <= ${maxHitCount}`);
+    return deleteResult.rowCount || 0;
+  }
+
+  async getAudioCacheStats(): Promise<{ totalEntries: number; totalSize: number; avgHitCount: number }> {
+    const stats = await db
+      .select({
+        count: sql<number>`count(*)`,
+        totalSize: sql<number>`sum(coalesce(${audioCacheTable.fileSize}, 0))`,
+        avgHitCount: sql<number>`avg(${audioCacheTable.hitCount})`
+      })
+      .from(audioCacheTable);
+    
+    const result = stats[0];
+    return {
+      totalEntries: result.count || 0,
+      totalSize: result.totalSize || 0,
+      avgHitCount: Math.round(result.avgHitCount || 0)
+    };
   }
 
   // Attempts (now student-scoped)

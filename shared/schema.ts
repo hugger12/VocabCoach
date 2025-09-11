@@ -82,13 +82,30 @@ export const audioCache = pgTable("audio_cache", {
   sentenceId: varchar("sentence_id").references(() => sentences.id, { onDelete: "cascade" }),
   type: text("type").notNull(), // "word" | "sentence"
   provider: text("provider").notNull(), // "elevenlabs" | "openai"
-  audioUrl: text("audio_url"),
-  audioData: text("audio_data"), // Base64 encoded audio data
-  cacheKey: text("cache_key").notNull(),
+  audioUrl: text("audio_url"), // URL for file system storage
+  audioData: text("audio_data"), // Base64 encoded audio data (legacy)
+  cacheKey: text("cache_key").notNull(), // Content-based hash for deduplication
+  contentHash: varchar("content_hash", { length: 64 }), // SHA-256 hash of normalized content
+  filePath: text("file_path"), // Persistent file system path
+  fileSize: integer("file_size"), // File size in bytes for cleanup
   durationMs: integer("duration_ms"),
   wordTimings: jsonb("word_timings"), // Store word timing data for sentences
+  hitCount: integer("hit_count").notNull().default(0), // Track cache usage for cleanup
+  lastAccessedAt: timestamp("last_accessed_at").defaultNow().notNull(), // Track access for cleanup
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  // Optimize cache lookups - this is the most critical index
+  index("idx_audio_cache_key").on(table.cacheKey),
+  // Optimize deduplication lookups
+  index("idx_audio_cache_content_hash").on(table.contentHash),
+  // Optimize cleanup queries
+  index("idx_audio_cache_cleanup").on(table.lastAccessedAt, table.hitCount),
+  // Optimize provider-based queries
+  index("idx_audio_cache_provider_type").on(table.provider, table.type),
+  // Optimize word/sentence association lookups
+  index("idx_audio_cache_word_id").on(table.wordId),
+  index("idx_audio_cache_sentence_id").on(table.sentenceId),
+]);
 
 export const attempts = pgTable("attempts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
