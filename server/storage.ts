@@ -23,6 +23,14 @@ import {
   type InsertPassageQuestion,
   type PassageBlank,
   type InsertPassageBlank,
+  type PerformanceMetric,
+  type InsertPerformanceMetric,
+  type StructuredLog,
+  type InsertStructuredLog,
+  type SystemHealthMetric,
+  type InsertSystemHealthMetric,
+  type StudentSession,
+  type InsertStudentSession,
   users,
   students,
   vocabularyLists,
@@ -34,7 +42,11 @@ import {
   settings,
   clozeQuestions,
   passageQuestions,
-  passageBlanks
+  passageBlanks,
+  performanceMetrics,
+  structuredLogs,
+  systemHealthMetrics,
+  studentSessions
 } from "@shared/schema.js";
 import { randomUUID } from "crypto";
 import { eq, desc, and, inArray, sql, lte } from "drizzle-orm";
@@ -112,6 +124,62 @@ export interface IStorage {
   createPassageBlank(blank: InsertPassageBlank): Promise<PassageBlank>;
   getPassageQuestionByList(listId: string): Promise<{ passage: PassageQuestion; blanks: PassageBlank[] } | null>;
   getPassageQuestionByWordIds(wordIds: string, listId: string): Promise<{ id: string; passageText: string; title: string; blanks: PassageBlank[] } | null>;
+
+  // OBSERVABILITY SYSTEM OPERATIONS
+
+  // Performance Metrics
+  createPerformanceMetric(metric: InsertPerformanceMetric): Promise<PerformanceMetric>;
+  getPerformanceMetrics(filters?: {
+    metricType?: string;
+    operation?: string;
+    status?: string;
+    correlationId?: string;
+    startTime?: Date;
+    endTime?: Date;
+    limit?: number;
+  }): Promise<PerformanceMetric[]>;
+  getPerformanceStats(timeRange?: { startTime: Date; endTime: Date }): Promise<{
+    avgResponseTime: number;
+    errorRate: number;
+    requestCount: number;
+    cacheHitRatio: number;
+    slowestEndpoints: Array<{ operation: string; avgDuration: number }>;
+  }>;
+
+  // Structured Logs
+  createStructuredLog(log: InsertStructuredLog): Promise<StructuredLog>;
+  getStructuredLogs(filters?: {
+    level?: string;
+    service?: string;
+    correlationId?: string;
+    sessionId?: string;
+    startTime?: Date;
+    endTime?: Date;
+    limit?: number;
+  }): Promise<StructuredLog[]>;
+  getErrorLogs(timeRange?: { startTime: Date; endTime: Date }, limit?: number): Promise<StructuredLog[]>;
+
+  // System Health Metrics
+  createSystemHealthMetric(metric: InsertSystemHealthMetric): Promise<SystemHealthMetric>;
+  getLatestSystemHealth(): Promise<SystemHealthMetric | undefined>;
+  getSystemHealthHistory(timeRange?: { startTime: Date; endTime: Date }): Promise<SystemHealthMetric[]>;
+
+  // Student Session Tracking
+  createStudentSession(session: InsertStudentSession): Promise<StudentSession>;
+  updateStudentSession(sessionId: string, updates: Partial<StudentSession>): Promise<StudentSession>;
+  getActiveStudentSessions(): Promise<StudentSession[]>;
+  getStudentSession(sessionId: string): Promise<StudentSession | undefined>;
+  endStudentSession(sessionId: string): Promise<void>;
+  getSessionStats(): Promise<{
+    activeSessions: number;
+    activeStudents: number;
+    avgSessionDuration: number;
+    totalSessions: number;
+  }>;
+
+  // Observability cleanup operations
+  cleanupOldMetrics(olderThanDays: number): Promise<number>;
+  cleanupOldLogs(olderThanDays: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -787,6 +855,384 @@ export class DatabaseStorage implements IStorage {
       title: passage.title,
       blanks,
     };
+  }
+  // OBSERVABILITY SYSTEM IMPLEMENTATIONS
+
+  // Performance Metrics
+  async createPerformanceMetric(metric: InsertPerformanceMetric): Promise<PerformanceMetric> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [result] = await db.insert(performanceMetrics).values(metric).returning();
+        return result;
+      },
+      'createPerformanceMetric',
+      `metricType: ${metric.metricType}, operation: ${metric.operation}`
+    );
+  }
+
+  async getPerformanceMetrics(filters?: {
+    metricType?: string;
+    operation?: string;
+    status?: string;
+    correlationId?: string;
+    startTime?: Date;
+    endTime?: Date;
+    limit?: number;
+  }): Promise<PerformanceMetric[]> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        let query = db.select().from(performanceMetrics);
+        const conditions = [];
+
+        if (filters?.metricType) {
+          conditions.push(eq(performanceMetrics.metricType, filters.metricType));
+        }
+        if (filters?.operation) {
+          conditions.push(eq(performanceMetrics.operation, filters.operation));
+        }
+        if (filters?.status) {
+          conditions.push(eq(performanceMetrics.status, filters.status));
+        }
+        if (filters?.correlationId) {
+          conditions.push(eq(performanceMetrics.correlationId, filters.correlationId));
+        }
+        if (filters?.startTime) {
+          conditions.push(sql`${performanceMetrics.createdAt} >= ${filters.startTime}`);
+        }
+        if (filters?.endTime) {
+          conditions.push(sql`${performanceMetrics.createdAt} <= ${filters.endTime}`);
+        }
+
+        if (conditions.length > 0) {
+          query = query.where(and(...conditions));
+        }
+
+        query = query.orderBy(desc(performanceMetrics.createdAt));
+
+        if (filters?.limit) {
+          query = query.limit(filters.limit);
+        } else {
+          query = query.limit(1000); // Default limit
+        }
+
+        return await query;
+      },
+      'getPerformanceMetrics',
+      `filters: ${JSON.stringify(filters)}`
+    );
+  }
+
+  async getPerformanceStats(timeRange?: { startTime: Date; endTime: Date }): Promise<{
+    avgResponseTime: number;
+    errorRate: number;
+    requestCount: number;
+    cacheHitRatio: number;
+    slowestEndpoints: Array<{ operation: string; avgDuration: number }>;
+  }> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const conditions = [];
+        if (timeRange?.startTime) {
+          conditions.push(sql`${performanceMetrics.createdAt} >= ${timeRange.startTime}`);
+        }
+        if (timeRange?.endTime) {
+          conditions.push(sql`${performanceMetrics.createdAt} <= ${timeRange.endTime}`);
+        }
+
+        const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+        // Get basic stats
+        const [basicStats] = await db
+          .select({
+            avgResponseTime: sql<number>`AVG(${performanceMetrics.durationMs})::int`,
+            requestCount: sql<number>`COUNT(*)::int`,
+            errorCount: sql<number>`COUNT(CASE WHEN ${performanceMetrics.status} = 'error' THEN 1 END)::int`,
+            cacheHits: sql<number>`COUNT(CASE WHEN ${performanceMetrics.cacheHit} = true THEN 1 END)::int`,
+            totalCacheRequests: sql<number>`COUNT(CASE WHEN ${performanceMetrics.cacheHit} IS NOT NULL THEN 1 END)::int`
+          })
+          .from(performanceMetrics)
+          .where(whereClause);
+
+        // Get slowest endpoints
+        const slowestEndpoints = await db
+          .select({
+            operation: performanceMetrics.operation,
+            avgDuration: sql<number>`AVG(${performanceMetrics.durationMs})::int`
+          })
+          .from(performanceMetrics)
+          .where(whereClause)
+          .groupBy(performanceMetrics.operation)
+          .orderBy(desc(sql`AVG(${performanceMetrics.durationMs})`))
+          .limit(5);
+
+        const errorRate = basicStats.requestCount > 0 
+          ? Math.round((basicStats.errorCount / basicStats.requestCount) * 100) 
+          : 0;
+
+        const cacheHitRatio = basicStats.totalCacheRequests > 0 
+          ? Math.round((basicStats.cacheHits / basicStats.totalCacheRequests) * 100) 
+          : 0;
+
+        return {
+          avgResponseTime: basicStats.avgResponseTime || 0,
+          errorRate,
+          requestCount: basicStats.requestCount || 0,
+          cacheHitRatio,
+          slowestEndpoints: slowestEndpoints || []
+        };
+      },
+      'getPerformanceStats',
+      timeRange ? `timeRange: ${timeRange.startTime} to ${timeRange.endTime}` : 'no time range'
+    );
+  }
+
+  // Structured Logs
+  async createStructuredLog(log: InsertStructuredLog): Promise<StructuredLog> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [result] = await db.insert(structuredLogs).values(log).returning();
+        return result;
+      },
+      'createStructuredLog',
+      `level: ${log.level}, service: ${log.service}`
+    );
+  }
+
+  async getStructuredLogs(filters?: {
+    level?: string;
+    service?: string;
+    correlationId?: string;
+    sessionId?: string;
+    startTime?: Date;
+    endTime?: Date;
+    limit?: number;
+  }): Promise<StructuredLog[]> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        let query = db.select().from(structuredLogs);
+        const conditions = [];
+
+        if (filters?.level) {
+          conditions.push(eq(structuredLogs.level, filters.level));
+        }
+        if (filters?.service) {
+          conditions.push(eq(structuredLogs.service, filters.service));
+        }
+        if (filters?.correlationId) {
+          conditions.push(eq(structuredLogs.correlationId, filters.correlationId));
+        }
+        if (filters?.sessionId) {
+          conditions.push(eq(structuredLogs.sessionId, filters.sessionId));
+        }
+        if (filters?.startTime) {
+          conditions.push(sql`${structuredLogs.createdAt} >= ${filters.startTime}`);
+        }
+        if (filters?.endTime) {
+          conditions.push(sql`${structuredLogs.createdAt} <= ${filters.endTime}`);
+        }
+
+        if (conditions.length > 0) {
+          query = query.where(and(...conditions));
+        }
+
+        query = query.orderBy(desc(structuredLogs.createdAt));
+
+        const limit = filters?.limit || 500;
+        query = query.limit(limit);
+
+        return await query;
+      },
+      'getStructuredLogs',
+      `filters: ${JSON.stringify(filters)}`
+    );
+  }
+
+  async getErrorLogs(timeRange?: { startTime: Date; endTime: Date }, limit = 100): Promise<StructuredLog[]> {
+    return this.getStructuredLogs({
+      level: 'error',
+      startTime: timeRange?.startTime,
+      endTime: timeRange?.endTime,
+      limit
+    });
+  }
+
+  // System Health Metrics
+  async createSystemHealthMetric(metric: InsertSystemHealthMetric): Promise<SystemHealthMetric> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [result] = await db.insert(systemHealthMetrics).values(metric).returning();
+        return result;
+      },
+      'createSystemHealthMetric',
+      `overallHealth: ${metric.overallHealth}`
+    );
+  }
+
+  async getLatestSystemHealth(): Promise<SystemHealthMetric | undefined> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [result] = await db
+          .select()
+          .from(systemHealthMetrics)
+          .orderBy(desc(systemHealthMetrics.createdAt))
+          .limit(1);
+        return result;
+      },
+      'getLatestSystemHealth'
+    );
+  }
+
+  async getSystemHealthHistory(timeRange?: { startTime: Date; endTime: Date }): Promise<SystemHealthMetric[]> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        let query = db.select().from(systemHealthMetrics);
+
+        const conditions = [];
+        if (timeRange?.startTime) {
+          conditions.push(sql`${systemHealthMetrics.createdAt} >= ${timeRange.startTime}`);
+        }
+        if (timeRange?.endTime) {
+          conditions.push(sql`${systemHealthMetrics.createdAt} <= ${timeRange.endTime}`);
+        }
+
+        if (conditions.length > 0) {
+          query = query.where(and(...conditions));
+        }
+
+        return await query.orderBy(desc(systemHealthMetrics.createdAt)).limit(100);
+      },
+      'getSystemHealthHistory',
+      timeRange ? `timeRange: ${timeRange.startTime} to ${timeRange.endTime}` : 'no time range'
+    );
+  }
+
+  // Student Session Tracking
+  async createStudentSession(session: InsertStudentSession): Promise<StudentSession> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [result] = await db.insert(studentSessions).values(session).returning();
+        return result;
+      },
+      'createStudentSession',
+      `sessionId: ${session.sessionId}`
+    );
+  }
+
+  async updateStudentSession(sessionId: string, updates: Partial<StudentSession>): Promise<StudentSession> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [result] = await db
+          .update(studentSessions)
+          .set(updates)
+          .where(eq(studentSessions.sessionId, sessionId))
+          .returning();
+        return result;
+      },
+      'updateStudentSession',
+      `sessionId: ${sessionId}`
+    );
+  }
+
+  async getActiveStudentSessions(): Promise<StudentSession[]> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        return await db
+          .select()
+          .from(studentSessions)
+          .where(eq(studentSessions.status, 'active'))
+          .orderBy(desc(studentSessions.lastActivity));
+      },
+      'getActiveStudentSessions'
+    );
+  }
+
+  async getStudentSession(sessionId: string): Promise<StudentSession | undefined> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [result] = await db
+          .select()
+          .from(studentSessions)
+          .where(eq(studentSessions.sessionId, sessionId));
+        return result;
+      },
+      'getStudentSession',
+      `sessionId: ${sessionId}`
+    );
+  }
+
+  async endStudentSession(sessionId: string): Promise<void> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        await db
+          .update(studentSessions)
+          .set({
+            status: 'ended',
+            endedAt: new Date()
+          })
+          .where(eq(studentSessions.sessionId, sessionId));
+      },
+      'endStudentSession',
+      `sessionId: ${sessionId}`
+    );
+  }
+
+  async getSessionStats(): Promise<{
+    activeSessions: number;
+    activeStudents: number;
+    avgSessionDuration: number;
+    totalSessions: number;
+  }> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [stats] = await db
+          .select({
+            activeSessions: sql<number>`COUNT(CASE WHEN ${studentSessions.status} = 'active' THEN 1 END)::int`,
+            activeStudents: sql<number>`COUNT(DISTINCT CASE WHEN ${studentSessions.status} = 'active' THEN ${studentSessions.studentId} END)::int`,
+            avgSessionDuration: sql<number>`AVG(${studentSessions.totalDurationMs})::int`,
+            totalSessions: sql<number>`COUNT(*)::int`
+          })
+          .from(studentSessions);
+
+        return {
+          activeSessions: stats.activeSessions || 0,
+          activeStudents: stats.activeStudents || 0,
+          avgSessionDuration: stats.avgSessionDuration || 0,
+          totalSessions: stats.totalSessions || 0
+        };
+      },
+      'getSessionStats'
+    );
+  }
+
+  // Observability cleanup operations
+  async cleanupOldMetrics(olderThanDays: number): Promise<number> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const cutoffDate = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
+        const result = await db
+          .delete(performanceMetrics)
+          .where(lte(performanceMetrics.createdAt, cutoffDate));
+        
+        return result.rowCount || 0;
+      },
+      'cleanupOldMetrics',
+      `olderThanDays: ${olderThanDays}`
+    );
+  }
+
+  async cleanupOldLogs(olderThanDays: number): Promise<number> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const cutoffDate = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
+        const result = await db
+          .delete(structuredLogs)
+          .where(lte(structuredLogs.createdAt, cutoffDate));
+        
+        return result.rowCount || 0;
+      },
+      'cleanupOldLogs',
+      `olderThanDays: ${olderThanDays}`
+    );
   }
 }
 

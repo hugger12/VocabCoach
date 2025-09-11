@@ -12,6 +12,7 @@ import { Students } from "@/pages/instructor/Students";
 import { Words } from "@/pages/instructor/Words";
 import { Progress } from "@/pages/instructor/Progress";
 import { StudentInterface } from "@/pages/StudentInterface";
+import MonitoringDashboard from "@/pages/MonitoringDashboard";
 
 import NotFound from "@/pages/not-found";
 
@@ -40,6 +41,7 @@ function Router() {
           <Route path="/instructor/students" component={Students} />
           <Route path="/instructor/words" component={Words} />
           <Route path="/instructor/progress" component={Progress} />
+          <Route path="/monitoring" component={MonitoringDashboard} />
         </>
       )}
       <Route path="*" component={NotFound} />

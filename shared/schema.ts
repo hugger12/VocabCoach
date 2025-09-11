@@ -136,6 +136,107 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// OBSERVABILITY SYSTEM TABLES
+
+// Performance Metrics - tracks API response times, audio generation, quiz metrics
+export const performanceMetrics = pgTable("performance_metrics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  metricType: text("metric_type").notNull(), // 'api_endpoint', 'audio_generation', 'quiz_generation', 'database_query'
+  operation: text("operation").notNull(), // endpoint path or operation name
+  durationMs: integer("duration_ms").notNull(),
+  status: text("status").notNull(), // 'success', 'error', 'timeout'
+  payloadSize: integer("payload_size"), // bytes for requests/responses
+  cacheHit: boolean("cache_hit"), // for audio/quiz cache tracking
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  studentId: varchar("student_id").references(() => students.id, { onDelete: "set null" }),
+  correlationId: varchar("correlation_id"), // for request tracing
+  errorType: text("error_type"), // classification of errors
+  metadata: jsonb("metadata"), // flexible additional data
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_perf_metrics_type_operation").on(table.metricType, table.operation),
+  index("idx_perf_metrics_created_at").on(table.createdAt),
+  index("idx_perf_metrics_correlation_id").on(table.correlationId),
+  index("idx_perf_metrics_status").on(table.status),
+]);
+
+// Structured Logs - comprehensive logging with correlation IDs
+export const structuredLogs = pgTable("structured_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  level: text("level").notNull(), // 'debug', 'info', 'warn', 'error', 'critical'
+  message: text("message").notNull(),
+  service: text("service").notNull(), // 'api', 'audio', 'quiz', 'database', 'auth'
+  operation: text("operation"), // specific operation within service
+  correlationId: varchar("correlation_id"), // traces requests across services
+  sessionId: varchar("session_id"), // student/instructor session tracking
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  studentId: varchar("student_id").references(() => students.id, { onDelete: "set null" }),
+  context: jsonb("context"), // structured context data
+  errorStack: text("error_stack"), // full stack traces for errors
+  httpMethod: text("http_method"), // GET, POST, etc.
+  httpPath: text("http_path"), // API endpoint path
+  httpStatus: integer("http_status"), // response status code
+  userAgent: text("user_agent"), // for debugging client issues
+  ipAddress: varchar("ip_address"), // for network debugging
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_logs_level_created_at").on(table.level, table.createdAt),
+  index("idx_logs_correlation_id").on(table.correlationId),
+  index("idx_logs_session_id").on(table.sessionId),
+  index("idx_logs_service_operation").on(table.service, table.operation),
+  index("idx_logs_error_stack").on(table.errorStack),
+]);
+
+// System Health Metrics - tracks overall system health over time
+export const systemHealthMetrics = pgTable("system_health_metrics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  overallHealth: text("overall_health").notNull(), // 'healthy', 'degraded', 'critical'
+  activeStudents: integer("active_students").notNull().default(0),
+  activeSessions: integer("active_sessions").notNull().default(0),
+  apiResponseTime: integer("api_response_time"), // average ms
+  databaseResponseTime: integer("database_response_time"), // average ms
+  audioGenerationTime: integer("audio_generation_time"), // average ms
+  quizGenerationTime: integer("quiz_generation_time"), // average ms
+  cacheHitRatio: integer("cache_hit_ratio"), // percentage (0-100)
+  errorRate: integer("error_rate"), // errors per minute
+  circuitBreakerStatus: jsonb("circuit_breaker_status"), // all breaker states
+  serviceStatus: jsonb("service_status"), // external service health
+  memoryUsage: integer("memory_usage"), // MB
+  cpuUsage: integer("cpu_usage"), // percentage
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_system_health_created_at").on(table.createdAt),
+  index("idx_system_health_overall").on(table.overallHealth),
+]);
+
+// Student Session Tracking - detailed session monitoring for debugging
+export const studentSessions = pgTable("student_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull().unique(), // unique session identifier
+  studentId: varchar("student_id").references(() => students.id, { onDelete: "cascade" }),
+  instructorId: varchar("instructor_id").references(() => users.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("active"), // 'active', 'idle', 'disconnected', 'ended'
+  loginTime: timestamp("login_time").notNull().defaultNow(),
+  lastActivity: timestamp("last_activity").notNull().defaultNow(),
+  ipAddress: varchar("ip_address"),
+  userAgent: text("user_agent"),
+  deviceInfo: jsonb("device_info"), // browser, OS, etc.
+  activityCount: integer("activity_count").notNull().default(0), // number of actions
+  wordsStudied: integer("words_studied").notNull().default(0),
+  quizzesCompleted: integer("quizzes_completed").notNull().default(0),
+  audioPlayed: integer("audio_played").notNull().default(0),
+  totalDurationMs: integer("total_duration_ms").notNull().default(0),
+  networkLatency: integer("network_latency"), // average ms
+  errors: integer("errors").notNull().default(0), // error count in session
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  endedAt: timestamp("ended_at"),
+}, (table) => [
+  index("idx_student_sessions_student_id").on(table.studentId),
+  index("idx_student_sessions_status").on(table.status),
+  index("idx_student_sessions_login_time").on(table.loginTime),
+  index("idx_student_sessions_last_activity").on(table.lastActivity),
+]);
+
 // Cloze quiz questions (Section 1: dual sentences with same word)
 export const clozeQuestions = pgTable("cloze_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -247,6 +348,27 @@ export const insertQuizAttemptSchema = createInsertSchema(quizAttempts).omit({
   attemptedAt: true,
 });
 
+// Observability insert schemas
+export const insertPerformanceMetricSchema = createInsertSchema(performanceMetrics).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertStructuredLogSchema = createInsertSchema(structuredLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSystemHealthMetricSchema = createInsertSchema(systemHealthMetrics).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertStudentSessionSchema = createInsertSchema(studentSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -273,6 +395,16 @@ export type PassageBlank = typeof passageBlanks.$inferSelect;
 export type InsertPassageBlank = z.infer<typeof insertPassageBlankSchema>;
 export type QuizAttempt = typeof quizAttempts.$inferSelect;
 export type InsertQuizAttempt = z.infer<typeof insertQuizAttemptSchema>;
+
+// Observability types
+export type PerformanceMetric = typeof performanceMetrics.$inferSelect;
+export type InsertPerformanceMetric = z.infer<typeof insertPerformanceMetricSchema>;
+export type StructuredLog = typeof structuredLogs.$inferSelect;
+export type InsertStructuredLog = z.infer<typeof insertStructuredLogSchema>;
+export type SystemHealthMetric = typeof systemHealthMetrics.$inferSelect;
+export type InsertSystemHealthMetric = z.infer<typeof insertSystemHealthMetricSchema>;
+export type StudentSession = typeof studentSessions.$inferSelect;
+export type InsertStudentSession = z.infer<typeof insertStudentSessionSchema>;
 
 // Extended types for frontend
 export interface WordWithProgress extends Word {

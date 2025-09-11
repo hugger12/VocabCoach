@@ -12,6 +12,9 @@ import { circuitBreakerManager } from "./services/circuitBreakerManager.js";
 import { errorRecoveryService } from "./services/errorRecovery.js";
 import { databaseResilienceService } from "./services/databaseResilience.js";
 import { z } from "zod";
+import { metricsCollector } from "./services/metricsCollector.js";
+import { structuredLogger } from "./services/structuredLogger.js";
+import { studentSessionManager } from "./services/studentSessionManager.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Redis-based distributed rate limiting for student login (prevent PIN brute forcing)
@@ -31,14 +34,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
-  // Health check endpoint for monitoring system resilience
-  app.get('/api/health', async (req, res) => {
+  // OBSERVABILITY SYSTEM ENDPOINTS FOR CLASSROOM DEPLOYMENT MONITORING
+
+  // Comprehensive system health endpoint - INSTRUCTOR/ADMIN ONLY
+  app.get('/api/health', isAuthenticated, async (req, res) => {
+    // Add correlation ID header for debugging
+    res.setHeader('X-Correlation-Id', (req as any).correlationId || 'unknown');
     try {
       const circuitBreakerStatus = circuitBreakerManager.getHealthStatus();
       const circuitBreakerStats = circuitBreakerManager.getStatistics();
       const serviceHealthStatus = errorRecoveryService.getHealthStatus();
       const systemHealthSummary = errorRecoveryService.getSystemHealthSummary();
       const databaseHealth = await databaseResilienceService.getHealthStatus();
+      const sessionStats = await studentSessionManager.getSessionStatistics();
+      const latestSystemHealth = await storage.getLatestSystemHealth();
 
       const healthData = {
         timestamp: new Date().toISOString(),
@@ -52,9 +61,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           recovery: {
             services: serviceHealthStatus,
             summary: systemHealthSummary
-          }
+          },
+          sessions: sessionStats
         },
-        version: '1.0.0'
+        systemMetrics: latestSystemHealth || null,
+        version: '1.0.0',
+        classroomReady: systemHealthSummary.overallHealth !== 'critical' && databaseHealth.isHealthy
       };
 
       // Set appropriate HTTP status based on overall health
@@ -68,6 +80,289 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timestamp: new Date().toISOString(),
         overall: 'critical',
         error: 'Health check system failure',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        classroomReady: false
+      });
+    }
+  });
+
+  // Real-time performance metrics endpoint - INSTRUCTOR/ADMIN ONLY
+  app.get('/api/metrics/performance', isAuthenticated, async (req, res) => {
+    // Add correlation ID header for debugging
+    res.setHeader('X-Correlation-Id', (req as any).correlationId || 'unknown');
+    try {
+      const timeRangeMinutes = parseInt(req.query.timeRange as string) || 60;
+      const performanceStats = await metricsCollector.getSystemPerformanceStats(timeRangeMinutes);
+      const cacheStats = await metricsCollector.getCacheEffectiveness(timeRangeMinutes);
+      
+      res.json({
+        timestamp: new Date().toISOString(),
+        timeRangeMinutes,
+        performance: performanceStats,
+        cache: cacheStats,
+        classroomOptimal: performanceStats.overallHealth === 'healthy' && 
+                         cacheStats.audioCache.hitRatio > 60 &&
+                         performanceStats.apiStats.avgResponseTime < 1000
+      });
+    } catch (error) {
+      console.error("Performance metrics failed:", error);
+      res.status(500).json({ 
+        error: "Failed to get performance metrics",
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Student session monitoring for classroom debugging - INSTRUCTOR/ADMIN ONLY
+  app.get('/api/metrics/sessions', isAuthenticated, async (req, res) => {
+    // Add correlation ID header for debugging
+    res.setHeader('X-Correlation-Id', (req as any).correlationId || 'unknown');
+    try {
+      const activeSessions = await studentSessionManager.getActiveSessions();
+      const sessionStats = await studentSessionManager.getSessionStatistics();
+      
+      res.json({
+        timestamp: new Date().toISOString(),
+        stats: sessionStats,
+        activeSessions: activeSessions.map(session => ({
+          sessionId: session.sessionId,
+          studentId: session.studentId,
+          status: session.status,
+          loginTime: session.loginTime,
+          lastActivity: session.lastActivity,
+          activityCount: session.activityCount,
+          wordsStudied: session.wordsStudied,
+          quizzesCompleted: session.quizzesCompleted,
+          audioPlayed: session.audioPlayed,
+          errors: session.errors,
+          deviceInfo: session.deviceInfo,
+          networkLatency: session.networkLatency
+        })),
+        classroomActivity: {
+          highActivity: activeSessions.filter(s => s.activityCount > 10).length,
+          recentErrors: activeSessions.filter(s => s.errors > 0).length,
+          longSessions: activeSessions.filter(s => 
+            Date.now() - new Date(s.loginTime).getTime() > 30 * 60 * 1000
+          ).length
+        }
+      });
+    } catch (error) {
+      console.error("Session metrics failed:", error);
+      res.status(500).json({ 
+        error: "Failed to get session metrics",
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // System health history for trend analysis - INSTRUCTOR/ADMIN ONLY
+  app.get('/api/metrics/history', isAuthenticated, async (req, res) => {
+    // Add correlation ID header for debugging
+    res.setHeader('X-Correlation-Id', (req as any).correlationId || 'unknown');
+    try {
+      const hours = parseInt(req.query.hours as string) || 24;
+      const endTime = new Date();
+      const startTime = new Date(endTime.getTime() - hours * 60 * 60 * 1000);
+      
+      const healthHistory = await storage.getSystemHealthHistory({ startTime, endTime });
+      
+      res.json({
+        timestamp: new Date().toISOString(),
+        timeRange: { startTime, endTime, hours },
+        history: healthHistory,
+        trends: {
+          avgResponseTime: healthHistory.reduce((sum, h) => sum + (h.apiResponseTime || 0), 0) / Math.max(healthHistory.length, 1),
+          maxActiveStudents: Math.max(...healthHistory.map(h => h.activeStudents)),
+          avgCacheHitRatio: healthHistory.reduce((sum, h) => sum + (h.cacheHitRatio || 0), 0) / Math.max(healthHistory.length, 1),
+          errorRateSpikes: healthHistory.filter(h => (h.errorRate || 0) > 5).length
+        }
+      });
+    } catch (error) {
+      console.error("Health history failed:", error);
+      res.status(500).json({ 
+        error: "Failed to get health history",
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Detailed performance metrics with filtering - INSTRUCTOR/ADMIN ONLY
+  app.get('/api/metrics/detailed', isAuthenticated, async (req, res) => {
+    // Add correlation ID header for debugging
+    res.setHeader('X-Correlation-Id', (req as any).correlationId || 'unknown');
+    try {
+      const {
+        metricType,
+        operation,
+        status,
+        startTime,
+        endTime,
+        limit = '100'
+      } = req.query;
+
+      const filters: any = {
+        limit: parseInt(limit as string)
+      };
+
+      if (metricType) filters.metricType = metricType as string;
+      if (operation) filters.operation = operation as string;
+      if (status) filters.status = status as string;
+      if (startTime) filters.startTime = new Date(startTime as string);
+      if (endTime) filters.endTime = new Date(endTime as string);
+
+      const metrics = await storage.getPerformanceMetrics(filters);
+      const stats = await storage.getPerformanceStats(
+        filters.startTime && filters.endTime ? 
+        { startTime: filters.startTime, endTime: filters.endTime } : 
+        undefined
+      );
+      
+      res.json({
+        timestamp: new Date().toISOString(),
+        filters,
+        metrics,
+        stats,
+        classroomInsights: {
+          slowEndpoints: stats.slowestEndpoints,
+          errorHotspots: metrics.filter(m => m.status === 'error')
+            .reduce((acc, m) => {
+              acc[m.operation] = (acc[m.operation] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>)
+        }
+      });
+    } catch (error) {
+      console.error("Detailed metrics failed:", error);
+      res.status(500).json({ 
+        error: "Failed to get detailed metrics",
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Recent error logs for debugging classroom issues - INSTRUCTOR/ADMIN ONLY
+  app.get('/api/metrics/errors', isAuthenticated, async (req, res) => {
+    // Add correlation ID header for debugging
+    res.setHeader('X-Correlation-Id', (req as any).correlationId || 'unknown');
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const hours = parseInt(req.query.hours as string) || 2;
+      
+      const endTime = new Date();
+      const startTime = new Date(endTime.getTime() - hours * 60 * 60 * 1000);
+      
+      const errorLogs = await storage.getErrorLogs({ startTime, endTime }, limit);
+      
+      res.json({
+        timestamp: new Date().toISOString(),
+        timeRange: { startTime, endTime, hours },
+        errors: errorLogs.map(log => ({
+          timestamp: log.createdAt,
+          level: log.level,
+          message: log.message,
+          service: log.service,
+          operation: log.operation,
+          correlationId: log.correlationId,
+          sessionId: log.sessionId,
+          studentId: log.studentId,
+          errorStack: log.errorStack ? log.errorStack.substring(0, 200) + '...' : null,
+          context: log.context
+        })),
+        errorSummary: {
+          byService: errorLogs.reduce((acc, log) => {
+            acc[log.service] = (acc[log.service] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>),
+          byLevel: errorLogs.reduce((acc, log) => {
+            acc[log.level] = (acc[log.level] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+        }
+      });
+    } catch (error) {
+      console.error("Error logs failed:", error);
+      res.status(500).json({ 
+        error: "Failed to get error logs",
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Log search by correlation ID for request tracing - INSTRUCTOR/ADMIN ONLY
+  app.get('/api/metrics/trace/:correlationId', isAuthenticated, async (req, res) => {
+    // Add correlation ID header for debugging
+    res.setHeader('X-Correlation-Id', (req as any).correlationId || 'unknown');
+    try {
+      const { correlationId } = req.params;
+      const logs = await structuredLogger.getLogsByCorrelationId(correlationId);
+      
+      res.json({
+        timestamp: new Date().toISOString(),
+        correlationId,
+        logs: logs.map(log => ({
+          timestamp: log.createdAt,
+          level: log.level,
+          message: log.message,
+          service: log.service,
+          operation: log.operation,
+          httpMethod: log.httpMethod,
+          httpPath: log.httpPath,
+          httpStatus: log.httpStatus,
+          context: log.context
+        })),
+        requestFlow: logs.length > 0 ? {
+          totalSteps: logs.length,
+          services: [...new Set(logs.map(l => l.service))],
+          duration: logs.length > 1 ? 
+            new Date(logs[logs.length - 1].createdAt).getTime() - new Date(logs[0].createdAt).getTime() 
+            : 0,
+          errors: logs.filter(l => l.level === 'error').length
+        } : null
+      });
+    } catch (error) {
+      console.error("Request trace failed:", error);
+      res.status(500).json({ 
+        error: "Failed to trace request",
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Student session logs for classroom debugging - INSTRUCTOR/ADMIN ONLY
+  app.get('/api/metrics/student-session/:sessionId', isAuthenticated, async (req, res) => {
+    // Add correlation ID header for debugging
+    res.setHeader('X-Correlation-Id', (req as any).correlationId || 'unknown');
+    try {
+      const { sessionId } = req.params;
+      const logs = await structuredLogger.getLogsBySessionId(sessionId);
+      const sessionData = await storage.getStudentSession(sessionId);
+      
+      res.json({
+        timestamp: new Date().toISOString(),
+        sessionId,
+        sessionData,
+        logs: logs.map(log => ({
+          timestamp: log.createdAt,
+          level: log.level,
+          message: log.message,
+          service: log.service,
+          operation: log.operation,
+          context: log.context
+        })),
+        sessionInsights: {
+          totalLogs: logs.length,
+          errors: logs.filter(l => l.level === 'error').length,
+          activities: logs.filter(l => l.service === 'session').length,
+          timespan: logs.length > 0 ? {
+            start: Math.min(...logs.map(l => new Date(l.createdAt).getTime())),
+            end: Math.max(...logs.map(l => new Date(l.createdAt).getTime()))
+          } : null
+        }
+      });
+    } catch (error) {
+      console.error("Student session logs failed:", error);
+      res.status(500).json({ 
+        error: "Failed to get student session logs",
         message: error instanceof Error ? error.message : 'Unknown error'
       });
     }
@@ -160,15 +455,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
         
         // Regenerate session to prevent session fixation
-        req.session.regenerate((err) => {
+        req.session.regenerate(async (err) => {
           if (err) {
             console.error("Session regeneration error:", err);
+            await structuredLogger.error("Session regeneration failed during demo login", 'auth', {
+              correlationId: (req as any).correlationId,
+              metadata: { error: err.message }
+            });
             return res.status(500).json({ message: "Login failed" });
           }
           
           // Store student session for subsequent API calls
           (req.session as any).studentId = student.id;
           (req.session as any).student = student;
+          
+          // Create observability session tracking
+          try {
+            await studentSessionManager.createSession(
+              student.id,
+              student.instructorId,
+              req.sessionID,
+              req.ip || req.connection?.remoteAddress,
+              req.get('user-agent')
+            );
+          } catch (error) {
+            console.error("Failed to create session tracking:", error);
+          }
           
           res.json({ 
             student: student, 
@@ -186,15 +498,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Regenerate session to prevent session fixation attacks
-      req.session.regenerate((err) => {
+      req.session.regenerate(async (err) => {
         if (err) {
           console.error("Session regeneration error:", err);
+          await structuredLogger.error("Session regeneration failed during student login", 'auth', {
+            correlationId: (req as any).correlationId,
+            studentId: student.id,
+            metadata: { pin: pin.substring(0, 2) + '**', error: err.message }
+          });
           return res.status(500).json({ message: "Login failed" });
         }
         
         // Store student session for subsequent API calls
         (req.session as any).studentId = student.id;
         (req.session as any).student = student;
+        
+        // Create comprehensive observability session tracking
+        try {
+          await studentSessionManager.createSession(
+            student.id,
+            student.instructorId,
+            req.sessionID,
+            req.ip || req.connection?.remoteAddress,
+            req.get('user-agent')
+          );
+          
+          await structuredLogger.logAuthEvent('login', student.instructorId, student.id, {
+            correlationId: (req as any).correlationId,
+            sessionId: req.sessionID,
+            ipAddress: req.ip || req.connection?.remoteAddress,
+            userAgent: req.get('user-agent'),
+            metadata: {
+              studentGrade: student.grade,
+              sessionCreated: true
+            }
+          });
+        } catch (error) {
+          console.error("Failed to create session tracking:", error);
+          await structuredLogger.error("Failed to create student session tracking", 'auth', {
+            correlationId: (req as any).correlationId,
+            studentId: student.id,
+            metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
+          });
+        }
         
         res.json({ student, success: true });
       });
@@ -227,10 +573,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Student logout endpoint with session cleanup
+  // Student logout endpoint with comprehensive session cleanup and tracking
   app.post('/api/student/logout', async (req, res) => {
     try {
       const session = req.session as any;
+      const sessionId = req.sessionID;
+      const studentId = session?.studentId;
+      
+      // End session tracking before destroying session
+      if (studentId && sessionId) {
+        try {
+          await studentSessionManager.endSession(sessionId, 'logout');
+          await structuredLogger.logAuthEvent('logout', session.student?.instructorId, studentId, {
+            correlationId: (req as any).correlationId,
+            sessionId,
+            ipAddress: req.ip || req.connection?.remoteAddress,
+            userAgent: req.get('user-agent'),
+            metadata: {
+              logoutMethod: 'explicit'
+            }
+          });
+        } catch (error) {
+          console.error("Failed to end session tracking:", error);
+          await structuredLogger.error("Failed to end student session tracking", 'auth', {
+            correlationId: (req as any).correlationId,
+            studentId,
+            sessionId,
+            metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
+          });
+        }
+      }
       
       // Clear student session data
       if (session) {
@@ -251,6 +623,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error("Error during student logout:", error);
+      await structuredLogger.error("Student logout failed", 'auth', {
+        correlationId: (req as any).correlationId,
+        metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
+      });
       res.status(500).json({ message: "Logout failed" });
     }
   });
