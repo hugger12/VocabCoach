@@ -765,7 +765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           audioUrl: null,
           audioData: base64Audio, // Store actual audio data
           cacheKey: result.cacheKey,
-          durationMs: result.duration || (result.wordTimings ? Math.max(...result.wordTimings.map(w => w.endTimeMs)) : null),
+          durationMs: result.duration ? Math.round(result.duration) : (result.wordTimings ? Math.round(Math.max(...result.wordTimings.map(w => w.endTimeMs))) : null),
           wordTimings: result.wordTimings || null, // Store word timings for sentences
         });
         console.log(`Audio cached successfully for ${type}: "${text.substring(0, 50)}..."`);
@@ -890,7 +890,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               audioUrl: null,
               audioData: base64Audio,
               cacheKey: result.cacheKey,
-              durationMs: result.duration || null,
+              durationMs: result.duration ? Math.round(result.duration) : null,
               wordTimings: null,
             });
           } catch (error) {
@@ -917,7 +917,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 audioUrl: null,
                 audioData: base64Audio,
                 cacheKey: result.cacheKey,
-                durationMs: result.duration || (result.wordTimings ? Math.max(...result.wordTimings.map(w => w.endTimeMs)) : null),
+                durationMs: result.duration ? Math.round(result.duration) : (result.wordTimings ? Math.round(Math.max(...result.wordTimings.map(w => w.endTimeMs))) : null),
                 wordTimings: result.wordTimings || null,
               });
             } catch (error) {
@@ -1112,7 +1112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     audioUrl: null,
                     audioData: base64Audio, // Store actual audio data
                     cacheKey: result.cacheKey,
-                    durationMs: result.duration || null,
+                    durationMs: result.duration ? Math.round(result.duration) : null,
                     wordTimings: null, // No timings for word definitions
                   });
                 })
@@ -1134,7 +1134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       audioUrl: null,
                       audioData: base64Audio, // Store actual audio data
                       cacheKey: result.cacheKey,
-                      durationMs: result.duration || (result.wordTimings ? Math.max(...result.wordTimings.map(w => w.endTimeMs)) : null),
+                      durationMs: result.duration ? Math.round(result.duration) : (result.wordTimings ? Math.round(Math.max(...result.wordTimings.map(w => w.endTimeMs))) : null),
                       wordTimings: result.wordTimings || null, // Store word timings for sentences
                     });
                   })
