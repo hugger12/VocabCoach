@@ -19,6 +19,7 @@ interface AudioPlayerProps {
   onError?: (error: string) => void;
   onWordHighlight?: (wordIndex: number) => void;
   "data-testid"?: string;
+  useRealtimeSync?: boolean; // Feature flag for real-time sync system
 }
 
 export function AudioPlayer({
@@ -35,18 +36,131 @@ export function AudioPlayer({
   onError,
   onWordHighlight,
   "data-testid": testId,
+  useRealtimeSync = import.meta.env.VITE_REALTIME_SYNC === 'false' ? false : true,
 }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const highlightTimeoutRef = useRef<NodeJS.Timeout[]>([]);
   const wordTimingsRef = useRef<Array<{ word: string; startTimeMs: number; endTimeMs: number }> | null>(null);
+  
+  // Real-time sync system refs
+  const wordBoundariesRef = useRef<Array<{ start: number; end: number }>>([]);
+  const rafIdRef = useRef<number | null>(null);
+  const lastIndexRef = useRef<number>(-1);
   const { getCachedAudio, cacheAudio } = useAudioCache();
 
   const generateCacheKey = useCallback((text: string, type: string, speed: string) => {
     return `${type}-${speed}-${text}`.replace(/[^a-zA-Z0-9]/g, "_");
   }, []);
+
+  // Compute word boundaries for real-time highlighting
+  const computeBoundaries = useCallback((text: string, timings?: Array<{ word: string; startTimeMs: number; endTimeMs: number }>, duration?: number) => {
+    // Tokenize exactly like DyslexicReader - split by lines first, then words
+    const textLines = text.split(/\r?\n/);
+    const allWords: string[] = [];
+    
+    textLines.forEach(line => {
+      const lineWords = line.split(/\s+/).filter(word => word.length > 0);
+      allWords.push(...lineWords);
+    });
+
+    if (allWords.length === 0) {
+      return [];
+    }
+
+    // Use ElevenLabs timings when available (convert ms to seconds)
+    if (timings && timings.length > 0) {
+      // Guard: Verify timing count matches our tokenized word count
+      if (timings.length !== allWords.length) {
+        console.warn(`TokenizationMismatch: ElevenLabs returned ${timings.length} word timings but we tokenized ${allWords.length} words. Falling back to proportional distribution.`);
+        // Fall through to proportional distribution
+      } else {
+        return timings.map(timing => ({
+          start: timing.startTimeMs / 1000, // Convert ms to seconds
+          end: timing.endTimeMs / 1000,     // Convert ms to seconds
+        }));
+      }
+    }
+
+    // Fallback to proportional word length distribution
+    // Calculate total character count for proportional distribution
+    const totalChars = allWords.reduce((sum, word) => sum + word.length, 0);
+    const audioDuration = duration || (allWords.length * 0.4); // fallback estimate
+    
+    const boundaries: Array<{ start: number; end: number }> = [];
+    let currentTime = 0;
+    
+    allWords.forEach((word, index) => {
+      // Proportional time based on word length
+      const wordProportion = word.length / totalChars;
+      const wordDuration = audioDuration * wordProportion;
+      
+      boundaries.push({
+        start: currentTime,
+        end: currentTime + wordDuration,
+      });
+      
+      currentTime += wordDuration;
+    });
+    
+    return boundaries;
+  }, []);
+
+  // Real-time highlighting using requestAnimationFrame + audio.currentTime
+  const startRealtimeHighlighting = useCallback((audio: HTMLAudioElement) => {
+    if (type !== "sentence" || !onWordHighlight) return;
+    
+    // Reset tracking state
+    lastIndexRef.current = -1;
+    
+    const syncLoop = () => {
+      if (audio.paused || audio.ended) {
+        rafIdRef.current = null;
+        return;
+      }
+      
+      const currentTime = audio.currentTime;
+      const boundaries = wordBoundariesRef.current;
+      
+      if (boundaries.length === 0) {
+        rafIdRef.current = requestAnimationFrame(syncLoop);
+        return;
+      }
+      
+      // Binary search to find active word index
+      let activeIndex = -1;
+      let left = 0;
+      let right = boundaries.length - 1;
+      
+      while (left <= right) {
+        const mid = Math.floor((left + right) / 2);
+        const boundary = boundaries[mid];
+        
+        if (currentTime >= boundary.start && currentTime < boundary.end) {
+          activeIndex = mid;
+          break;
+        } else if (currentTime < boundary.start) {
+          right = mid - 1;
+        } else {
+          left = mid + 1;
+        }
+      }
+      
+      // Only call onWordHighlight when index changes (performance optimization)
+      if (activeIndex !== lastIndexRef.current) {
+        lastIndexRef.current = activeIndex;
+        onWordHighlight(activeIndex);
+      }
+      
+      // Schedule next frame
+      rafIdRef.current = requestAnimationFrame(syncLoop);
+    };
+    
+    // Start the sync loop
+    rafIdRef.current = requestAnimationFrame(syncLoop);
+  }, [type, onWordHighlight]);
 
   const stopCurrentAudio = useCallback(() => {
     if (audioRef.current) {
@@ -59,11 +173,17 @@ export function AudioPlayer({
     setIsLoading(false);
     setHasError(false);
     
-    // Clear word highlighting timeout
-    if (highlightTimeoutRef.current) {
-      clearTimeout(highlightTimeoutRef.current);
-      highlightTimeoutRef.current = null;
+    // Clean up real-time sync system
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
     }
+    lastIndexRef.current = -1;
+    wordBoundariesRef.current = [];
+    
+    // Clear legacy timeout system (fallback)
+    highlightTimeoutRef.current.forEach(id => clearTimeout(id));
+    highlightTimeoutRef.current = [];
     // Clear word timings
     wordTimingsRef.current = null;
     // Reset highlighting
@@ -76,11 +196,17 @@ export function AudioPlayer({
     setIsLoading(false);
     setHasError(false);
     
-    // Clear word highlighting timeout
-    if (highlightTimeoutRef.current) {
-      clearTimeout(highlightTimeoutRef.current);
-      highlightTimeoutRef.current = null;
+    // Clean up real-time sync system
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
     }
+    lastIndexRef.current = -1;
+    wordBoundariesRef.current = [];
+    
+    // Clear legacy timeout system (fallback)
+    highlightTimeoutRef.current.forEach(id => clearTimeout(id));
+    highlightTimeoutRef.current = [];
     // Clear word timings
     wordTimingsRef.current = null;
   }, [text]);
@@ -91,9 +217,12 @@ export function AudioPlayer({
       if (audioRef.current) {
         audioManager.unregisterAudio(audioRef.current);
       }
-      if (highlightTimeoutRef.current) {
-        clearTimeout(highlightTimeoutRef.current);
+      // Clean up real-time sync system
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
       }
+      // Clean up legacy timeout system
+      highlightTimeoutRef.current.forEach(id => clearTimeout(id));
     };
   }, []);
 
@@ -193,28 +322,49 @@ export function AudioPlayer({
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
 
+      // Precompute word boundaries when audio metadata is available
+      audio.onloadedmetadata = () => {
+        if (type === "sentence" && onWordHighlight) {
+          const boundaries = computeBoundaries(text, wordTimingsRef.current || undefined, audio.duration);
+          wordBoundariesRef.current = boundaries;
+        }
+      };
+
       audio.onplay = () => {
-        console.log('Audio started playing:', type, text.substring(0, 50));
         setIsPlaying(true);
         setIsLoading(false);
         onPlay?.();
         
         // Start word highlighting for sentences only
         if (type === "sentence" && onWordHighlight) {
-          startWordHighlighting(audio);
+          if (useRealtimeSync) {
+            // Ensure boundaries are computed before starting real-time highlighting
+            if (wordBoundariesRef.current.length === 0) {
+              const boundaries = computeBoundaries(text, wordTimingsRef.current || undefined, audio.duration);
+              wordBoundariesRef.current = boundaries;
+            }
+            startRealtimeHighlighting(audio);
+          } else {
+            // Fallback to legacy setTimeout system
+            startWordHighlighting(audio);
+          }
         }
       };
 
       audio.onended = () => {
-        console.log('Audio ended:', type, text.substring(0, 50));
         setIsPlaying(false);
         onEnded?.();
         
-        // Clear highlighting when audio ends
-        if (highlightTimeoutRef.current) {
-          clearTimeout(highlightTimeoutRef.current);
-          highlightTimeoutRef.current = null;
+        // Clean up real-time sync system
+        if (rafIdRef.current) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafIdRef.current = null;
         }
+        lastIndexRef.current = -1;
+        
+        // Clear legacy highlighting when audio ends
+        highlightTimeoutRef.current.forEach(id => clearTimeout(id));
+        highlightTimeoutRef.current = [];
         onWordHighlight?.(-1);
         
         // Unregister when audio ends naturally
@@ -223,14 +373,18 @@ export function AudioPlayer({
 
       // Listen for pause events (when audio is stopped externally)
       audio.onpause = () => {
-        console.log('Audio paused externally:', type, text.substring(0, 50));
         setIsPlaying(false);
         
-        // Clear highlighting when audio is paused
-        if (highlightTimeoutRef.current) {
-          clearTimeout(highlightTimeoutRef.current);
-          highlightTimeoutRef.current = null;
+        // Clean up real-time sync system
+        if (rafIdRef.current) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafIdRef.current = null;
         }
+        lastIndexRef.current = -1;
+        
+        // Clear legacy highlighting when audio is paused
+        highlightTimeoutRef.current.forEach(id => clearTimeout(id));
+        highlightTimeoutRef.current = [];
         onWordHighlight?.(-1);
       };
 
@@ -252,8 +406,6 @@ export function AudioPlayer({
       audioManager.stopAllAudio();
       audioManager.registerAudio(audio);
       
-      // Call onPlay to notify parent
-      onPlay?.();
       
       const playPromise = audio.play();
       console.log("Audio.play() promise created");
@@ -281,27 +433,33 @@ export function AudioPlayer({
     onEnded,
     onError,
     onWordHighlight,
+    computeBoundaries,
+    startRealtimeHighlighting,
+    useRealtimeSync,
   ]);
 
   // Word highlighting function for sentences using ElevenLabs precise timing
   const startWordHighlighting = useCallback((audio: HTMLAudioElement) => {
     if (type !== "sentence" || !onWordHighlight) return;
     
+    // Clear previous timeouts
+    highlightTimeoutRef.current.forEach(id => clearTimeout(id));
+    highlightTimeoutRef.current = [];
+    
     // Use ElevenLabs word timings if available
     if (wordTimingsRef.current && wordTimingsRef.current.length > 0) {
-      console.log(`Starting ElevenLabs word highlighting with ${wordTimingsRef.current.length} precise timings`);
+      const timeoutIds: NodeJS.Timeout[] = [];
       
       wordTimingsRef.current.forEach((wordTiming, index) => {
         const delay = wordTiming.startTimeMs; // ElevenLabs provides precise start time in milliseconds
         
         const timeoutId = setTimeout(() => {
           if (audio.paused || audio.ended) return; // Don't highlight if audio stopped
-          console.log(`Highlighting word ${index}: "${wordTiming.word}" at ${wordTiming.startTimeMs}ms`);
           onWordHighlight(index);
           
           // Clear highlighting when word ends
           const clearDelay = wordTiming.endTimeMs - wordTiming.startTimeMs;
-          setTimeout(() => {
+          const clearTimeoutId = setTimeout(() => {
             if (!audio.paused && !audio.ended) {
               // Only clear if we're not already highlighting the next word
               const nextWord = wordTimingsRef.current?.[index + 1];
@@ -311,14 +469,13 @@ export function AudioPlayer({
             }
           }, clearDelay);
           
+          timeoutIds.push(clearTimeoutId);
         }, delay);
         
-        // Store timeout for cleanup
-        if (index === 0) {
-          highlightTimeoutRef.current = timeoutId;
-        }
+        timeoutIds.push(timeoutId);
       });
       
+      highlightTimeoutRef.current = timeoutIds;
       return;
     }
     
@@ -329,21 +486,20 @@ export function AudioPlayer({
     const estimatedDuration = audio.duration || (words.length * 0.4);
     const timePerWord = estimatedDuration / words.length;
     
-    console.log(`Using estimated word highlighting: ${words.length} words, ${estimatedDuration}s duration, ${timePerWord}s per word`);
+    const timeoutIds: NodeJS.Timeout[] = [];
     
     words.forEach((word, index) => {
       const delay = index * timePerWord * 1000;
       
       const timeoutId = setTimeout(() => {
         if (audio.paused || audio.ended) return;
-        console.log(`Highlighting word ${index}: ${word} (estimated)`);
         onWordHighlight(index);
       }, delay);
       
-      if (index === 0) {
-        highlightTimeoutRef.current = timeoutId;
-      }
+      timeoutIds.push(timeoutId);
     });
+    
+    highlightTimeoutRef.current = timeoutIds;
   }, [text, type, onWordHighlight]);
 
   const getIcon = () => {
