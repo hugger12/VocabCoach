@@ -9,8 +9,8 @@ export interface QuizInterfaceProps {
   words: WordWithProgress[];
   onClose: () => void;
   onComplete?: (score: number) => void;
-  instructorId?: string;
   listId?: string;
+  // SECURITY: Removed instructorId prop - now using server session auth
 }
 
 interface ClozeQuizQuestion extends ClozeQuestion {
@@ -35,7 +35,7 @@ interface QuizAttempt {
   isCorrect: boolean;
 }
 
-export function QuizInterface({ words, onClose, onComplete, instructorId, listId }: QuizInterfaceProps) {
+export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterfaceProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);

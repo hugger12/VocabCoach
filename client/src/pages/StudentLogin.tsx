@@ -10,6 +10,7 @@ import { Link } from "wouter";
 
 export function StudentLogin() {
   const [pin, setPin] = useState("");
+  const [classCode, setClassCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -23,20 +24,34 @@ export function StudentLogin() {
       return;
     }
 
+    if (!classCode.trim()) {
+      toast({
+        title: "Class Code Required",
+        description: "Please enter your class code",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Student login with PIN only
+      // SECURITY: Send both class code (instructorId) and PIN for scoped authentication
       const response = await fetch("/api/student-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin }),
+        credentials: "include", // Include session cookies
+        body: JSON.stringify({ 
+          pin, 
+          instructorId: classCode.trim() 
+        }),
       });
 
       const data = await response.json();
 
       if (response.ok && data.success && data.student) {
-        // Store student info in localStorage for the session
-        localStorage.setItem("currentStudent", JSON.stringify(data.student));
+        // SECURITY: Don't store sensitive data in localStorage - use server session
+        // Remove PIN storage for security
+        sessionStorage.setItem("studentLoggedIn", "true");
         
         // Redirect to student interface
         window.location.href = "/student";
@@ -46,7 +61,7 @@ export function StudentLogin() {
     } catch (error: any) {
       toast({
         title: "Login Failed",
-        description: error.message || "Invalid PIN. Please try again.",
+        description: error.message || "Invalid class code or PIN. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -59,8 +74,12 @@ export function StudentLogin() {
     setPin(value);
   };
 
+  const handleClassCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setClassCode(e.target.value);
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && pin.length === 4) {
+    if (e.key === "Enter" && pin.length === 4 && classCode.trim()) {
       handleLogin();
     }
   };
@@ -76,7 +95,7 @@ export function StudentLogin() {
             className="w-[100px] h-[100px] object-contain mx-auto mb-8"
           />
           <h1 className="text-3xl font-bold text-foreground mb-2 dyslexia-text-2xl">Student Login</h1>
-          <p className="text-lg text-muted-foreground dyslexia-text-lg">Enter your 4-digit PIN</p>
+          <p className="text-lg text-muted-foreground dyslexia-text-lg">Enter your class code and PIN</p>
         </div>
 
         {/* PIN Entry */}
@@ -88,24 +107,39 @@ export function StudentLogin() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={pin}
-                onChange={handlePinChange}
-                onKeyPress={handleKeyPress}
-                placeholder="0000"
-                className="text-center text-2xl font-mono tracking-widest h-16 border-border bg-background"
-                maxLength={4}
-                data-testid="input-student-pin"
-              />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Class Code</label>
+                <Input
+                  type="text"
+                  value={classCode}
+                  onChange={handleClassCodeChange}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Enter your class code"
+                  className="text-center text-lg h-12 border-border bg-background"
+                  data-testid="input-class-code"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">PIN</label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={pin}
+                  onChange={handlePinChange}
+                  onKeyPress={handleKeyPress}
+                  placeholder="0000"
+                  className="text-center text-2xl font-mono tracking-widest h-16 border-border bg-background"
+                  maxLength={4}
+                  data-testid="input-student-pin"
+                />
+              </div>
             </div>
 
             <Button
               onClick={handleLogin}
-              disabled={pin.length !== 4 || isLoading}
+              disabled={pin.length !== 4 || !classCode.trim() || isLoading}
               className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 h-12 tap-target dyslexia-text-base"
               data-testid="button-student-submit"
             >
@@ -129,12 +163,15 @@ export function StudentLogin() {
         {/* Help Text */}
         <div className="text-center mt-8">
           <p className="text-sm text-muted-foreground dyslexia-text-base mb-4">
-            Need help? Ask your teacher or parent for your PIN.
+            Need help? Ask your teacher for your class code and PIN.
           </p>
-          <div className="bg-card border border-border rounded-lg p-4">
-            <p className="text-xs text-muted-foreground mb-2">For testing, try PIN:</p>
-            <p className="font-mono text-lg font-bold text-foreground">1234</p>
-          </div>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="bg-card border border-border rounded-lg p-4">
+              <p className="text-xs text-muted-foreground mb-2">For testing:</p>
+              <p className="font-mono text-sm text-foreground">Class: demo-instructor</p>
+              <p className="font-mono text-sm text-foreground">PIN: 1234</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

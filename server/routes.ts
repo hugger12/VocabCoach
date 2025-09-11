@@ -4,11 +4,53 @@ import { storage } from "./storage.js";
 import { aiService } from "./services/ai.js";
 import { ttsService } from "./services/tts.js";
 import { schedulerService } from "./services/scheduler.js";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, isStudentAuthenticated, isInstructorOrStudentAuthenticated } from "./replitAuth";
 import { insertWordSchema, insertAttemptSchema, simpleWordInputSchema, insertVocabularyListSchema } from "@shared/schema.js";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Rate limiting for student login (prevent PIN brute forcing)
+  const studentLoginLimiter = {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per windowMs
+    skipSuccessfulRequests: true,
+    message: { message: "Too many login attempts, please try again later" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  };
+
+  // In-memory store for rate limiting (simple implementation)
+  const loginAttempts = new Map<string, { count: number; resetTime: number }>();
+  
+  const rateLimitMiddleware = (req: any, res: any, next: any) => {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const now = Date.now();
+    const window = studentLoginLimiter.windowMs;
+    const maxAttempts = studentLoginLimiter.max;
+    
+    // Clean up old entries
+    Array.from(loginAttempts.entries()).forEach(([key, value]) => {
+      if (now > value.resetTime) {
+        loginAttempts.delete(key);
+      }
+    });
+    
+    const attempts = loginAttempts.get(ip) || { count: 0, resetTime: now + window };
+    
+    if (attempts.count >= maxAttempts && now < attempts.resetTime) {
+      return res.status(429).json(studentLoginLimiter.message);
+    }
+    
+    // Increment counter
+    attempts.count += 1;
+    if (attempts.count === 1) {
+      attempts.resetTime = now + window;
+    }
+    loginAttempts.set(ip, attempts);
+    
+    next();
+  };
+
   // Auth middleware
   await setupAuth(app);
 
@@ -72,8 +114,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Student authentication route (PIN-based login)
-  app.post('/api/student-login', async (req, res) => {
+  // Student authentication route (PIN-based login) with rate limiting
+  app.post('/api/student-login', rateLimitMiddleware, async (req, res) => {
     try {
       const { pin, instructorId } = req.body;
       
@@ -81,8 +123,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "PIN is required" });
       }
 
-      // For demo purposes, create a test student if PIN is 1234
-      if (pin === "1234") {
+      if (!instructorId) {
+        return res.status(400).json({ message: "Instructor ID is required" });
+      }
+
+      // SECURITY: Demo PIN only allowed in development environment
+      if (pin === "1234" && process.env.NODE_ENV === "development") {
         const student = {
           id: "demo-student",
           firstName: "Test",
@@ -94,32 +140,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isActive: true
         };
         
-        // Store student session for subsequent API calls
-        (req.session as any).studentId = student.id;
-        (req.session as any).student = student;
-        
-        res.json({ 
-          student: student, 
-          success: true 
+        // Regenerate session to prevent session fixation
+        req.session.regenerate((err) => {
+          if (err) {
+            console.error("Session regeneration error:", err);
+            return res.status(500).json({ message: "Login failed" });
+          }
+          
+          // Store student session for subsequent API calls
+          (req.session as any).studentId = student.id;
+          (req.session as any).student = student;
+          
+          res.json({ 
+            student: student, 
+            success: true 
+          });
         });
         return;
       }
 
-      // Try to find student by PIN across all instructors
-      const student = await storage.getStudentByPin(pin);
+      // SECURITY FIX: Scope PIN search to specific instructor to prevent cross-class access
+      const student = await storage.getStudentByPin(pin, instructorId);
       
       if (!student || !student.isActive) {
         return res.status(401).json({ message: "Invalid PIN or inactive student" });
       }
 
-      // Store student session for subsequent API calls
-      (req.session as any).studentId = student.id;
-      (req.session as any).student = student;
-      
-      res.json({ student, success: true });
+      // Regenerate session to prevent session fixation attacks
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error("Session regeneration error:", err);
+          return res.status(500).json({ message: "Login failed" });
+        }
+        
+        // Store student session for subsequent API calls
+        (req.session as any).studentId = student.id;
+        (req.session as any).student = student;
+        
+        res.json({ student, success: true });
+      });
     } catch (error) {
       console.error("Error during student login:", error);
       res.status(500).json({ message: "Failed to authenticate student" });
+    }
+  });
+
+  // Student session validation endpoint
+  app.get('/api/student/session', isStudentAuthenticated, async (req: any, res) => {
+    try {
+      // Student data is already validated and attached by middleware
+      const student = req.student;
+      res.json({ 
+        student: {
+          id: student.id,
+          firstName: student.firstName,
+          lastName: student.lastName,
+          displayName: student.displayName,
+          instructorId: student.instructorId,
+          grade: student.grade,
+          isActive: student.isActive
+        },
+        success: true 
+      });
+    } catch (error) {
+      console.error("Error fetching student session:", error);
+      res.status(500).json({ message: "Failed to fetch student session" });
+    }
+  });
+
+  // Student logout endpoint with session cleanup
+  app.post('/api/student/logout', async (req, res) => {
+    try {
+      const session = req.session as any;
+      
+      // Clear student session data
+      if (session) {
+        delete session.student;
+        delete session.studentId;
+        
+        // Destroy the entire session for security
+        req.session.destroy((err) => {
+          if (err) {
+            console.error("Session destruction error:", err);
+            return res.status(500).json({ message: "Logout failed" });
+          }
+          res.clearCookie('connect.sid'); // Clear session cookie
+          res.json({ success: true, message: "Logged out successfully" });
+        });
+      } else {
+        res.json({ success: true, message: "Already logged out" });
+      }
+    } catch (error) {
+      console.error("Error during student logout:", error);
+      res.status(500).json({ message: "Logout failed" });
     }
   });
 
@@ -135,23 +248,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/vocabulary-lists/current', async (req: any, res) => {
+  app.get('/api/vocabulary-lists/current', isInstructorOrStudentAuthenticated, async (req: any, res) => {
     try {
-      let userId;
+      // SECURITY: Use validated instructor ID from authenticated session, not client data
+      const instructorId = req.instructorId; // Set by authentication middleware
       
-      // Check for instructor authentication
-      if (req.isAuthenticated() && req.user) {
-        userId = req.user.claims.sub;
-      } 
-      // Check for student session
-      else if ((req.session as any)?.student) {
-        userId = (req.session as any).student.instructorId || "demo-instructor";
-      } 
-      else {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      const currentList = await storage.getCurrentVocabularyList(userId);
+      const currentList = await storage.getCurrentVocabularyList(instructorId);
       res.json(currentList);
     } catch (error) {
       console.error("Error fetching current vocabulary list:", error);
@@ -417,7 +519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Student words API (no auth required - uses student ID)
-  app.get("/api/student/:studentId/words", async (req, res) => {
+  app.get("/api/student/:studentId/words", isStudentAuthenticated, async (req, res) => {
     try {
       const { studentId } = req.params;
       const listId = req.query.list as string;
@@ -1002,13 +1104,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Study Session API
-  app.get("/api/study/session", async (req, res) => {
+  // Study Session API - Now secured with proper authentication
+  app.get("/api/study/session", isStudentAuthenticated, async (req: any, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
       const quizMode = req.query.quiz === 'true'; // Check if this is for quiz (need all words)
-      const instructorId = req.query.instructor as string;
       const listId = req.query.list as string;
+      
+      // SECURITY: Use validated instructor ID from student session, NOT client-provided query params
+      const instructorId = req.instructorId; // This comes from the validated student session
       
       console.log(`Study Session API: instructor=${instructorId}, quiz=${quizMode}, limit=${limit}, listId=${listId}`);
       
@@ -1159,9 +1263,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Practice API
-  app.post("/api/practice/attempt", async (req, res) => {
+  app.post("/api/practice/attempt", isStudentAuthenticated, async (req: any, res) => {
     try {
-      const attemptData = insertAttemptSchema.parse(req.body);
+      // SECURITY: Add student-specific validation
+      const attemptData = insertAttemptSchema.parse({
+        ...req.body,
+        studentId: req.student?.id // Use authenticated student ID, not client data
+      });
+      
+      // Additional validation: Ensure the word belongs to the student's instructor
+      const word = await storage.getWord(attemptData.wordId);
+      if (!word || word.instructorId !== req.instructorId) {
+        return res.status(403).json({ message: "Access denied to this word" });
+      }
+      
       const attempt = await storage.createAttempt(attemptData);
       
       // Update schedule based on success
@@ -1174,12 +1289,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(attempt);
     } catch (error) {
       console.error("Error recording attempt:", error);
-      res.status(400).json({ message: "Invalid attempt data" });
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid attempt data", 
+          errors: error.errors.map(e => e.message) 
+        });
+      }
+      res.status(500).json({ message: "Failed to record practice attempt" });
     }
   });
 
   // Progress API
-  app.get("/api/progress", async (req, res) => {
+  app.get("/api/progress", isInstructorOrStudentAuthenticated, async (req: any, res) => {
     try {
       const weekId = req.query.week as string;
       const words = await storage.getWordsWithProgress(weekId);
@@ -1238,7 +1359,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Export API
-  app.get("/api/export/progress", async (req, res) => {
+  app.get("/api/export/progress", isAuthenticated, async (req: any, res) => {
     try {
       const words = await storage.getWordsWithProgress();
       const schedules = await storage.getAllSchedules();
@@ -1316,12 +1437,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Generate cloze quiz questions (Section 1: dual sentences) - OPTIMIZED VERSION
-  app.post("/api/quiz/cloze/generate", async (req, res) => {
+  app.post("/api/quiz/cloze/generate", isStudentAuthenticated, async (req: any, res) => {
     try {
       const { words } = req.body; // Array of word objects with text, partOfSpeech, definition
       
       if (!words || !Array.isArray(words) || words.length === 0) {
         return res.status(400).json({ message: "Words array is required" });
+      }
+      
+      // SECURITY: Validate that all words belong to the student's instructor
+      for (const wordData of words) {
+        if (!wordData.id) {
+          return res.status(400).json({ message: "Word ID is required" });
+        }
+        const word = await storage.getWord(wordData.id);
+        if (!word || word.instructorId !== req.instructorId) {
+          return res.status(403).json({ message: "Access denied to requested words" });
+        }
       }
 
       console.log(`Generating ${words.length} cloze questions in parallel (optimized)...`);
@@ -1383,7 +1515,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Generate passage quiz (Section 2: reading passage with blanks)
-  app.post("/api/quiz/passage/generate", async (req, res) => {
+  app.post("/api/quiz/passage/generate", isStudentAuthenticated, async (req: any, res) => {
     try {
       const { words, listId } = req.body; // Array of 6 words for blanks 7-12
       
@@ -1393,6 +1525,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!listId) {
         return res.status(400).json({ message: "List ID is required" });
+      }
+      
+      // SECURITY: Validate list ownership and word access
+      const vocabularyList = await storage.getVocabularyList(listId);
+      if (!vocabularyList || vocabularyList.instructorId !== req.instructorId) {
+        return res.status(403).json({ message: "Access denied to this vocabulary list" });
+      }
+      
+      // Validate that all words belong to the student's instructor
+      for (const wordData of words) {
+        if (!wordData.id) {
+          return res.status(400).json({ message: "Word ID is required" });
+        }
+        const word = await storage.getWord(wordData.id);
+        if (!word || word.instructorId !== req.instructorId) {
+          return res.status(403).json({ message: "Access denied to requested words" });
+        }
       }
 
       console.log(`Generating passage quiz with optimized validation for ${words.length} words...`);
@@ -1444,7 +1593,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get quiz data for a vocabulary list (both cloze and passage questions)
-  app.get("/api/quiz/:listId", async (req, res) => {
+  app.get("/api/quiz/:listId", isStudentAuthenticated, async (req, res) => {
     try {
       const { listId } = req.params;
       

@@ -10,7 +10,7 @@ import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
 
 export interface StudyInterfaceProps {
   onClose: () => void;
-  instructorId?: string;
+  // SECURITY: Removed instructorId prop - now using server session auth
 }
 
 // Simple header component
@@ -35,7 +35,7 @@ const StudyHeader = ({ onClose }: { onClose: () => void }) => (
   </header>
 );
 
-export function StudyInterface({ onClose, instructorId }: StudyInterfaceProps) {
+export function StudyInterface({ onClose }: StudyInterfaceProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
@@ -45,16 +45,18 @@ export function StudyInterface({ onClose, instructorId }: StudyInterfaceProps) {
   const [currentSentenceHighlightIndex, setCurrentSentenceHighlightIndex] = useState(-1);
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
 
-  // Fetch study session
+  // Fetch study session - now using secure session-based auth
   const { data: session, isLoading, error } = useQuery<StudySession>({
-    queryKey: ["/api/study/session", instructorId],
+    queryKey: ["/api/study/session"],
     queryFn: async () => {
-      if (!instructorId) throw new Error("No instructor ID");
-      const response = await fetch(`/api/study/session?instructor=${instructorId}`);
+      // SECURITY: Removed instructor query parameter - now using server session auth
+      const response = await fetch(`/api/study/session`, {
+        credentials: 'include' // Include session cookies for authentication
+      });
       if (!response.ok) throw new Error("Failed to fetch session");
       return response.json();
     },
-    enabled: !sessionComplete && !!instructorId,
+    enabled: !sessionComplete,
   });
 
   // Store session words when first loaded
@@ -64,12 +66,12 @@ export function StudyInterface({ onClose, instructorId }: StudyInterfaceProps) {
       setTotalSessionWords(session.totalWords);
       
       // Start generating quiz in background for faster access later
-      generateQuizInBackground(session.words, instructorId);
+      generateQuizInBackground(session.words);
     }
-  }, [session?.words, sessionWords.length, session?.totalWords, instructorId]);
+  }, [session?.words, sessionWords.length, session?.totalWords]);
 
   // Background quiz generation function - now generates multiple variants for the week
-  const generateQuizInBackground = async (words: WordWithProgress[], instructorId?: string) => {
+  const generateQuizInBackground = async (words: WordWithProgress[]) => {
     try {
       console.log("🎯 Starting background quiz generation with", words.length, "words...");
       console.log("📚 Generating 3 quiz variants for the week...");
@@ -152,7 +154,6 @@ export function StudyInterface({ onClose, instructorId }: StudyInterfaceProps) {
               clozeData,
               passageData,
               words: shuffledWords,
-              instructorId,
               listId: currentListId,
               generatedAt: Date.now(),
               variant,

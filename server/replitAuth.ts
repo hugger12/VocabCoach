@@ -36,9 +36,11 @@ export function getSession() {
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
+    name: 'sessionId', // Don't use default connect.sid name
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production', // Secure in production, allow HTTP in dev
+      sameSite: 'strict', // CSRF protection
       maxAge: sessionTtl,
     },
   });
@@ -154,4 +156,84 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
+};
+
+// Student authentication middleware - validates server-side student sessions
+export const isStudentAuthenticated: RequestHandler = async (req, res, next) => {
+  try {
+    const session = req.session as any;
+    
+    // Check if student session exists and has required data
+    if (!session?.student || !session?.studentId) {
+      return res.status(401).json({ message: "Student authentication required" });
+    }
+
+    // Validate that the student record is still active
+    const student = await storage.getStudent(session.studentId);
+    if (!student || !student.isActive) {
+      // Clear invalid session
+      delete session.student;
+      delete session.studentId;
+      return res.status(401).json({ message: "Student account inactive or not found" });
+    }
+
+    // Attach validated student data to request for downstream use
+    (req as any).student = student;
+    (req as any).instructorId = student.instructorId;
+    
+    return next();
+  } catch (error) {
+    console.error("Student authentication error:", error);
+    return res.status(500).json({ message: "Authentication failed" });
+  }
+};
+
+// Combined middleware for routes that can be accessed by both instructors and students
+export const isInstructorOrStudentAuthenticated: RequestHandler = async (req, res, next) => {
+  // Try instructor authentication first
+  if (req.isAuthenticated() && req.user) {
+    const user = req.user as any;
+    if (user.expires_at) {
+      const now = Math.floor(Date.now() / 1000);
+      if (now <= user.expires_at) {
+        // Valid instructor session
+        (req as any).userType = 'instructor';
+        (req as any).instructorId = user.claims.sub;
+        return next();
+      }
+      
+      // Try to refresh instructor token
+      const refreshToken = user.refresh_token;
+      if (refreshToken) {
+        try {
+          const config = await getOidcConfig();
+          const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
+          updateUserSession(user, tokenResponse);
+          (req as any).userType = 'instructor';
+          (req as any).instructorId = user.claims.sub;
+          return next();
+        } catch (error) {
+          // Fall through to try student authentication
+        }
+      }
+    }
+  }
+
+  // Try student authentication
+  try {
+    const session = req.session as any;
+    if (session?.student && session?.studentId) {
+      const student = await storage.getStudent(session.studentId);
+      if (student && student.isActive) {
+        (req as any).userType = 'student';
+        (req as any).student = student;
+        (req as any).instructorId = student.instructorId;
+        return next();
+      }
+    }
+  } catch (error) {
+    console.error("Authentication error:", error);
+  }
+
+  return res.status(401).json({ message: "Authentication required" });
 };

@@ -22,55 +22,76 @@ export function StudentInterface() {
   const [student, setStudent] = useState<StudentData | null>(null);
   const [showStudy, setShowStudy] = useState(false); // Show welcome screen first
   const [showQuiz, setShowQuiz] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get student data from localStorage
-    const savedStudent = localStorage.getItem("currentStudent");
-    if (savedStudent) {
+    // SECURITY: Use server session instead of localStorage
+    const checkAuth = async () => {
       try {
-        setStudent(JSON.parse(savedStudent));
+        const response = await fetch("/api/student/session", {
+          credentials: "include"
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setStudent(data.student);
+        } else {
+          // Not authenticated, redirect to login
+          window.location.href = "/student-login";
+        }
       } catch (error) {
-        console.error("Error parsing student data:", error);
-        // Redirect back to login if data is corrupted
+        console.error("Error checking student authentication:", error);
         window.location.href = "/student-login";
+      } finally {
+        setLoading(false);
       }
-    } else {
-      // No student data, redirect to login
-      window.location.href = "/student-login";
-    }
+    };
+
+    checkAuth();
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("currentStudent");
-    window.location.href = "/";
+  const handleLogout = async () => {
+    try {
+      // SECURITY: Server-side logout with session cleanup
+      await fetch("/api/student/logout", {
+        method: "POST",
+        credentials: "include"
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      // Clear any client-side session data
+      sessionStorage.removeItem("studentLoggedIn");
+      window.location.href = "/";
+    }
   };
 
-  // Fetch current vocabulary list for instructor
+  // Fetch current vocabulary list - now using secure session-based auth
   const { data: currentList } = useQuery({
-    queryKey: ["/api/vocabulary-lists/current", student?.instructorId],
+    queryKey: ["/api/vocabulary-lists/current"],
     queryFn: async () => {
-      if (!student?.instructorId) throw new Error("No instructor ID");
+      // SECURITY: Removed insecure Authorization header - now using server session auth
       const response = await fetch("/api/vocabulary-lists/current", {
-        headers: {
-          'Authorization': `Bearer ${student.instructorId}` // This will need proper auth
-        }
+        credentials: 'include' // Include session cookies for authentication
       });
       if (!response.ok) return null; // No current list
       return response.json();
     },
-    enabled: !!student?.instructorId,
+    enabled: !!student,
   });
 
-  // Fetch study session data for quiz purposes
+  // Fetch study session data for quiz purposes - now secure
   const { data: session } = useQuery<StudySession>({
-    queryKey: ["/api/study/session", student?.instructorId],
+    queryKey: ["/api/study/session", "quiz"],
     queryFn: async () => {
-      if (!student?.instructorId) throw new Error("No instructor ID");
-      const response = await fetch(`/api/study/session?instructor=${student.instructorId}&quiz=true`);
+      // SECURITY: Removed instructor query parameter spoofing - now using server session auth
+      const response = await fetch(`/api/study/session?quiz=true`, {
+        credentials: 'include' // Include session cookies for authentication
+      });
       if (!response.ok) throw new Error("Failed to fetch session");
       return response.json();
     },
-    enabled: showQuiz && !!student?.instructorId, // Only fetch when quiz is needed and instructor ID is available
+    enabled: showQuiz && !!student, // Only fetch when quiz is needed and student is authenticated
   });
 
   const handleStartStudy = () => {
@@ -94,7 +115,7 @@ export function StudentInterface() {
     // Could save score or show additional feedback here
   };
 
-  if (!student) {
+  if (loading || !student) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -106,7 +127,8 @@ export function StudentInterface() {
   }
 
   if (showStudy) {
-    return <StudyInterface onClose={handleCloseStudy} instructorId={student?.instructorId} />;
+    // SECURITY: Remove instructor ID prop - StudyInterface will use server session auth
+    return <StudyInterface onClose={handleCloseStudy} />;
   }
 
   if (showQuiz) {
@@ -126,7 +148,6 @@ export function StudentInterface() {
         words={session.words}
         onClose={handleCloseQuiz}
         onComplete={handleQuizComplete}
-        instructorId={student?.instructorId}
         listId={currentList?.id}
       />
     );
