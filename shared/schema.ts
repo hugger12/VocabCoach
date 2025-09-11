@@ -83,8 +83,10 @@ export const audioCache = pgTable("audio_cache", {
   type: text("type").notNull(), // "word" | "sentence"
   provider: text("provider").notNull(), // "elevenlabs" | "openai"
   audioUrl: text("audio_url"),
+  audioData: text("audio_data"), // Base64 encoded audio data
   cacheKey: text("cache_key").notNull(),
   durationMs: integer("duration_ms"),
+  wordTimings: jsonb("word_timings"), // Store word timing data for sentences
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

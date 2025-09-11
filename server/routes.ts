@@ -722,67 +722,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cacheKey = ttsService.generateCacheKey({ text, type });
       const cachedAudio = await storage.getAudioCache(cacheKey);
       
-      if (cachedAudio) {
-        console.log(`Using pre-cached audio for ${type}: "${text.substring(0, 50)}..."`);
+      if (cachedAudio && cachedAudio.audioData) {
+        console.log(`Cache HIT: Using cached audio for ${type}: "${text.substring(0, 50)}..."`);
         
-        // If it's a sentence and we have cached timings, we need to regenerate for word timings
-        // For now, we'll regenerate sentences with timing data since the cache doesn't store the timings
+        // Actually use cached audio data - NO REGENERATION!
+        const audioBuffer = Buffer.from(cachedAudio.audioData, 'base64');
+        
+        // For sentences, return JSON with cached timing data
         if (type === "sentence") {
-          // Re-generate to get word timings (this is a limitation we can improve later)
-          const result = await ttsService.generateAudio({ text, type });
-          
-          const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
           return res.json({
-            audioData: `data:audio/mpeg;base64,${base64Audio}`,
-            wordTimings: result.wordTimings || [],
-            duration: result.wordTimings ? Math.max(...result.wordTimings.map(w => w.endTimeMs)) / 1000 : null,
-            provider: result.provider
+            audioData: `data:audio/mpeg;base64,${cachedAudio.audioData}`,
+            wordTimings: cachedAudio.wordTimings || [],
+            duration: cachedAudio.durationMs ? cachedAudio.durationMs / 1000 : 0,
+            provider: cachedAudio.provider
           });
         }
         
-        // For word definitions, we can use cached audio directly
-        // Generate fresh audio for consistent response format
+        // For definitions, return binary audio directly from cache
+        res.set({
+          'Content-Type': 'audio/mpeg',
+          'Content-Length': audioBuffer.byteLength.toString(),
+          'Cache-Control': 'public, max-age=3600',
+          'X-Audio-Provider': cachedAudio.provider,
+          'X-Cache-Status': 'cached',
+        });
+        return res.send(audioBuffer);
       }
 
+      console.log(`Cache MISS: Generating new audio for ${type}: "${text.substring(0, 50)}..."`);
+      
+      // Generate new audio only when cache miss
       const result = await ttsService.generateAudio({ text, type });
       
-      // Store in cache if not already cached
-      if (!cachedAudio) {
-        try {
-          await storage.createAudioCache({
-            wordId: req.body.wordId || null,
-            sentenceId: req.body.sentenceId || null,
-            type,
-            provider: result.provider,
-            audioUrl: null, // In memory storage
-            cacheKey: result.cacheKey,
-            durationMs: result.duration || null,
-          });
-        } catch (error) {
-          // Don't fail if caching fails - cache entry might already exist
-          console.log(`Cache entry may already exist for ${type}: "${text.substring(0, 30)}..."`);
-        }
+      // Store complete audio data and timings in cache 
+      try {
+        const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
+        await storage.createAudioCache({
+          wordId: req.body.wordId || null,
+          sentenceId: req.body.sentenceId || null,
+          type,
+          provider: result.provider,
+          audioUrl: null,
+          audioData: base64Audio, // Store actual audio data
+          cacheKey: result.cacheKey,
+          durationMs: result.duration || (result.wordTimings ? Math.max(...result.wordTimings.map(w => w.endTimeMs)) : null),
+          wordTimings: result.wordTimings || null, // Store word timings for sentences
+        });
+        console.log(`Audio cached successfully for ${type}: "${text.substring(0, 50)}..."`);
+      } catch (error) {
+        console.warn(`Failed to cache audio for ${type}: "${text.substring(0, 30)}...":`, error);
       }
 
       // For sentences with word timings, return JSON with timing data
-      if (type === "sentence" && result.wordTimings) {
-        console.log(`Generated ${result.wordTimings.length} word timings from ElevenLabs for text: "${text.substring(0, 50)}..."`);
+      if (type === "sentence") {
+        console.log(`Generated ${result.wordTimings?.length || 0} word timings from ElevenLabs for text: "${text.substring(0, 50)}..."`);
         
         const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
         return res.json({
           audioData: `data:audio/mpeg;base64,${base64Audio}`,
-          wordTimings: result.wordTimings,
-          duration: Math.max(...result.wordTimings.map(w => w.endTimeMs)) / 1000, // Duration in seconds
+          wordTimings: result.wordTimings || [],
+          duration: result.wordTimings ? Math.max(...result.wordTimings.map(w => w.endTimeMs)) / 1000 : 0,
           provider: result.provider
         });
       }
 
+      // For definitions, return binary audio
       res.set({
         'Content-Type': 'audio/mpeg',
         'Content-Length': result.audioBuffer.byteLength.toString(),
         'Cache-Control': 'public, max-age=3600',
         'X-Audio-Provider': result.provider,
-        'X-Cache-Status': cachedAudio ? 'pre-cached' : 'generated',
+        'X-Cache-Status': 'generated',
       });
 
       res.send(Buffer.from(result.audioBuffer));
@@ -838,14 +848,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             text: word.kidDefinition, 
             type: "word" 
           }).then(result => {
+            const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
             return storage.createAudioCache({
               wordId: word.id,
               sentenceId: null,
               type: "word",
               provider: result.provider,
               audioUrl: null,
+              audioData: base64Audio, // Store actual audio data
               cacheKey: result.cacheKey,
               durationMs: result.duration || null,
+              wordTimings: null, // No timings for word definitions
             });
           }).catch(error => {
             console.error(`Failed to pre-cache word ${word.text} definition:`, error);
@@ -860,14 +873,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
               text: sentence.text, 
               type: "sentence" 
             }).then(result => {
+              const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
               return storage.createAudioCache({
                 wordId: word.id,
                 sentenceId: sentence.id,
                 type: "sentence", 
                 provider: result.provider,
                 audioUrl: null,
+                audioData: base64Audio, // Store actual audio data
                 cacheKey: result.cacheKey,
-                durationMs: result.duration || null,
+                durationMs: result.duration || (result.wordTimings ? Math.max(...result.wordTimings.map(w => w.endTimeMs)) : null),
+                wordTimings: result.wordTimings || null, // Store word timings for sentences
               });
             }).catch(error => {
               console.error(`Failed to pre-cache sentence for word ${word.text}:`, error);
@@ -1048,15 +1064,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Pre-cache word definition audio
             cachePromises.push(
               ttsService.generateAudio({ text: word.kidDefinition, type: "word" })
-                .then(result => storage.createAudioCache({
-                  wordId: word.id,
-                  sentenceId: null,
-                  type: "word",
-                  provider: result.provider,
-                  audioUrl: null,
-                  cacheKey: result.cacheKey,
-                  durationMs: result.duration || null,
-                }))
+                .then(result => {
+                  const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
+                  return storage.createAudioCache({
+                    wordId: word.id,
+                    sentenceId: null,
+                    type: "word",
+                    provider: result.provider,
+                    audioUrl: null,
+                    audioData: base64Audio, // Store actual audio data
+                    cacheKey: result.cacheKey,
+                    durationMs: result.duration || null,
+                    wordTimings: null, // No timings for word definitions
+                  });
+                })
                 .catch(error => console.error(`Pre-cache failed for word ${word.text}:`, error))
             );
 
@@ -1065,15 +1086,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             for (const sentence of sentences) {
               cachePromises.push(
                 ttsService.generateAudio({ text: sentence.text, type: "sentence" })
-                  .then(result => storage.createAudioCache({
-                    wordId: word.id,
-                    sentenceId: sentence.id,
-                    type: "sentence",
-                    provider: result.provider,
-                    audioUrl: null,
-                    cacheKey: result.cacheKey,
-                    durationMs: result.duration || null,
-                  }))
+                  .then(result => {
+                    const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
+                    return storage.createAudioCache({
+                      wordId: word.id,
+                      sentenceId: sentence.id,
+                      type: "sentence",
+                      provider: result.provider,
+                      audioUrl: null,
+                      audioData: base64Audio, // Store actual audio data
+                      cacheKey: result.cacheKey,
+                      durationMs: result.duration || (result.wordTimings ? Math.max(...result.wordTimings.map(w => w.endTimeMs)) : null),
+                      wordTimings: result.wordTimings || null, // Store word timings for sentences
+                    });
+                  })
                   .catch(error => console.error(`Pre-cache failed for sentence in word ${word.text}:`, error))
               );
             }
