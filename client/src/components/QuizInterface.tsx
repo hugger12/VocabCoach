@@ -166,13 +166,47 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
         // Use the pre-generated data
         const { clozeData, passageData, words: shuffledWords } = preGeneratedQuiz;
         
-        // Process cached data using same logic as fresh generation
-        const processedData = processQuizData(clozeData, passageData);
+        // CRITICAL: Validate cached quiz has exactly 12 unique words before using
+        const cachedClozeAnswers = clozeData.questions?.map((q: any) => q.correctAnswer) || [];
+        const cachedPassageAnswers = passageData.blanks?.map((b: any) => b.correctAnswer) || [];
+        const cachedAllAnswers = [...cachedClozeAnswers, ...cachedPassageAnswers];
+        const cachedExpectedWords = shuffledWords.map(w => w.text);
         
-        setClozeQuestions(processedData.clozeQuestions);
-        setPassageQuestion(processedData.passageQuestion);
-        setIsLoading(false);
-        return;
+        console.log("🔍 Validating cached quiz for word uniqueness...");
+        console.log("Cached cloze answers:", cachedClozeAnswers);
+        console.log("Cached passage answers:", cachedPassageAnswers);
+        
+        // Check for exact match between expected and actual words in cache
+        const cachedAnswerSet = new Set(cachedAllAnswers);
+        const cachedExpectedSet = new Set(cachedExpectedWords);
+        
+        if (cachedAllAnswers.length !== 12 || cachedAnswerSet.size !== 12 || 
+            !Array.from(cachedAnswerSet).every(word => cachedExpectedSet.has(word))) {
+          console.warn("⚠️ Cached quiz failed validation - contains duplicates or missing words!");
+          console.warn("Expected words:", cachedExpectedWords);
+          console.warn("Cached answers:", cachedAllAnswers);
+          console.warn("Discarding invalid cache and generating fresh quiz...");
+          
+          // Remove the invalid cache entry and fall through to fresh generation
+          const wordIds = words.map(w => w.id).sort().join(',');
+          for (let variant = 1; variant <= 3; variant++) {
+            const cacheKey = `preGeneratedQuiz_${wordIds}_variant_${variant}`;
+            if (localStorage.getItem(cacheKey)) {
+              localStorage.removeItem(cacheKey);
+              console.log(`Removed invalid cache variant ${variant}`);
+            }
+          }
+        } else {
+          console.log("✅ Cached quiz validation passed: All 12 words used exactly once");
+          
+          // Process cached data using same logic as fresh generation
+          const processedData = processQuizData(clozeData, passageData);
+          
+          setClozeQuestions(processedData.clozeQuestions);
+          setPassageQuestion(processedData.passageQuestion);
+          setIsLoading(false);
+          return;
+        }
       }
 
       console.log("⏳ No pre-generated quiz found, generating new quiz...");
@@ -237,15 +271,15 @@ export function QuizInterface({ words, onClose, onComplete, instructorId, listId
       }
 
       // CRITICAL VALIDATION: Ensure all 12 words are used exactly once across entire quiz
-      const clozeWords = clozeData.questions.map((q: any) => q.correctAnswer);
-      const passageWords = passageData.blanks.map((b: any) => b.correctAnswer);
-      const allAnswers = [...clozeWords, ...passageWords];
+      const clozeAnswers = clozeData.questions.map((q: any) => q.correctAnswer);
+      const passageAnswers = passageData.blanks.map((b: any) => b.correctAnswer);
+      const allAnswers = [...clozeAnswers, ...passageAnswers];
       const expectedWords = shuffledWords.map(w => w.text);
       
       console.log("🔍 Validating word uniqueness across entire quiz...");
       console.log("Expected words:", expectedWords);
-      console.log("Cloze answers:", clozeWords);
-      console.log("Passage answers:", passageWords);
+      console.log("Cloze answers:", clozeAnswers);
+      console.log("Passage answers:", passageAnswers);
       
       // Check for exact match between expected and actual words
       const answerSet = new Set(allAnswers);
