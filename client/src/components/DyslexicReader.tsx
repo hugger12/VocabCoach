@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { tokenizeText } from "@/utils/tokenization";
 
 interface DyslexicReaderProps {
   text: string;
@@ -17,23 +18,11 @@ export function DyslexicReader({
   const [words, setWords] = useState<string[]>([]);
   const [lines, setLines] = useState<string[][]>([]);
 
-  // Split text into lines first, then words - preserve line breaks exactly as entered
+  // Use shared tokenization utility to ensure perfect sync with AudioPlayer
   useEffect(() => {
-    // Split by line breaks to preserve formatting
-    const textLines = text.split(/\r?\n/);
-    
-    // For each line, split into words
-    const linesWithWords: string[][] = [];
-    const allWords: string[] = [];
-    
-    textLines.forEach(line => {
-      const lineWords = line.split(/\s+/).filter(word => word.length > 0);
-      linesWithWords.push(lineWords);
-      allWords.push(...lineWords);
-    });
-    
-    setLines(linesWithWords);
-    setWords(allWords);
+    const tokenized = tokenizeText(text);
+    setLines(tokenized.linesWithWords);
+    setWords(tokenized.allWords);
   }, [text]);
 
   useEffect(() => {

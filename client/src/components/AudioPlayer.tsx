@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useAudioCache } from "@/hooks/use-audio-cache";
 import { cn } from "@/lib/utils";
 import { audioManager } from "@/lib/audioManager";
+import { getWordsArray } from "@/utils/tokenization";
 
 interface AudioPlayerProps {
   text: string;
@@ -57,14 +58,8 @@ export function AudioPlayer({
 
   // Compute word boundaries for real-time highlighting
   const computeBoundaries = useCallback((text: string, timings?: Array<{ word: string; startTimeMs: number; endTimeMs: number }>, duration?: number) => {
-    // Tokenize exactly like DyslexicReader - split by lines first, then words
-    const textLines = text.split(/\r?\n/);
-    const allWords: string[] = [];
-    
-    textLines.forEach(line => {
-      const lineWords = line.split(/\s+/).filter(word => word.length > 0);
-      allWords.push(...lineWords);
-    });
+    // Use shared tokenization utility to ensure perfect sync with DyslexicReader
+    const allWords = getWordsArray(text);
 
     if (allWords.length === 0) {
       return [];
@@ -488,8 +483,8 @@ export function AudioPlayer({
       return;
     }
     
-    // Fallback to estimated timing if no ElevenLabs data
-    const words = text.split(/\s+/).filter(word => word.length > 0);
+    // Fallback to estimated timing if no ElevenLabs data - use shared tokenization
+    const words = getWordsArray(text);
     if (words.length === 0) return;
     
     const estimatedDuration = audio.duration || (words.length * 0.4);
