@@ -37,7 +37,7 @@ import {
   passageBlanks
 } from "@shared/schema.js";
 import { randomUUID } from "crypto";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
 import { db } from "./db";
 
 export interface IStorage {
@@ -101,9 +101,11 @@ export interface IStorage {
   getWordsByList(listId: string): Promise<Word[]>;
   createClozeQuestion(question: InsertClozeQuestion): Promise<ClozeQuestion>;
   getClozeQuestionsByList(listId: string): Promise<ClozeQuestion[]>;
+  getClozeQuestionsByWordIds(wordIds: string): Promise<ClozeQuestion[]>;
   createPassageQuestion(passage: InsertPassageQuestion): Promise<PassageQuestion>;
   createPassageBlank(blank: InsertPassageBlank): Promise<PassageBlank>;
   getPassageQuestionByList(listId: string): Promise<{ passage: PassageQuestion; blanks: PassageBlank[] } | null>;
+  getPassageQuestionByWordIds(wordIds: string, listId: string): Promise<{ id: string; passageText: string; title: string; blanks: PassageBlank[] } | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -534,6 +536,23 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(words, eq(words.id, clozeQuestions.wordId))
       .where(eq(words.listId, listId));
   }
+  
+  // SERVER CACHE: Get cloze questions by specific word IDs for caching optimization
+  async getClozeQuestionsByWordIds(wordIds: string): Promise<ClozeQuestion[]> {
+    const wordIdArray = wordIds.split(',');
+    return await db
+      .select({
+        id: clozeQuestions.id,
+        wordId: clozeQuestions.wordId,
+        sentence1: clozeQuestions.sentence1,
+        sentence2: clozeQuestions.sentence2,
+        correctAnswer: clozeQuestions.correctAnswer,
+        distractors: clozeQuestions.distractors,
+        createdAt: clozeQuestions.createdAt,
+      })
+      .from(clozeQuestions)
+      .where(inArray(clozeQuestions.wordId, wordIdArray));
+  }
 
   async createPassageQuestion(passage: InsertPassageQuestion): Promise<PassageQuestion> {
     const [savedPassage] = await db
@@ -567,6 +586,58 @@ export class DatabaseStorage implements IStorage {
       .where(eq(passageBlanks.passageId, passage.id));
 
     return { passage, blanks };
+  }
+  
+  // SERVER CACHE: Get passage question by specific word IDs for caching optimization
+  async getPassageQuestionByWordIds(wordIds: string, listId: string): Promise<{ id: string; passageText: string; title: string; blanks: PassageBlank[] } | null> {
+    const wordIdArray = wordIds.split(',');
+    
+    // Find passage that contains exactly these word IDs
+    const passageWithBlanks = await db
+      .select({
+        passageId: passageQuestions.id,
+        passageText: passageQuestions.passageText,
+        title: passageQuestions.title,
+        blankWordId: passageBlanks.wordId,
+        blankId: passageBlanks.id,
+        blankNumber: passageBlanks.blankNumber,
+        correctAnswer: passageBlanks.correctAnswer,
+        distractors: passageBlanks.distractors,
+      })
+      .from(passageQuestions)
+      .innerJoin(passageBlanks, eq(passageBlanks.passageId, passageQuestions.id))
+      .where(and(
+        eq(passageQuestions.listId, listId),
+        inArray(passageBlanks.wordId, wordIdArray)
+      ));
+    
+    if (passageWithBlanks.length === 0 || passageWithBlanks.length !== wordIdArray.length) {
+      return null;
+    }
+    
+    // Group blanks and check if word IDs match exactly
+    const foundWordIds = passageWithBlanks.map(p => p.blankWordId).sort().join(',');
+    if (foundWordIds !== wordIds) {
+      return null;
+    }
+    
+    const passage = passageWithBlanks[0];
+    const blanks = passageWithBlanks.map(p => ({
+      id: p.blankId,
+      passageId: passage.passageId,
+      blankNumber: p.blankNumber,
+      wordId: p.blankWordId,
+      correctAnswer: p.correctAnswer,
+      distractors: p.distractors,
+      createdAt: new Date(), // Placeholder
+    }));
+    
+    return {
+      id: passage.passageId,
+      passageText: passage.passageText,
+      title: passage.title,
+      blanks,
+    };
   }
 }
 

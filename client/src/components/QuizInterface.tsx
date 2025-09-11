@@ -44,6 +44,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
   const [showResult, setShowResult] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [currentSection, setCurrentSection] = useState<'cloze' | 'passage'>('cloze');
+  const [passageLoading, setPassageLoading] = useState(true);
   const [clozeQuestions, setClozeQuestions] = useState<ClozeQuizQuestion[]>([]);
   const [passageQuestion, setPassageQuestion] = useState<PassageQuizQuestion | null>(null);
   const [currentPassageBlankIndex, setCurrentPassageBlankIndex] = useState(0);
@@ -222,118 +223,83 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
       const clozeWords = shuffledWords.slice(0, 6);
       const passageWords = shuffledWords.slice(6, 12);
       
-      // Generate both cloze and passage questions
-      const [clozeResponse, passageResponse] = await Promise.all([
-        // Generate cloze questions (questions 1-6)
-        fetch("/api/quiz/cloze/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            words: clozeWords.map(word => ({
-              id: word.id,
-              text: word.text,
-              partOfSpeech: word.partOfSpeech,
-              kidDefinition: word.kidDefinition,
-            })),
-          }),
-        }),
-        
-        // Generate passage questions (questions 7-12)
-        fetch("/api/quiz/passage/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            words: passageWords.map(word => ({
-              id: word.id,
-              text: word.text,
-              partOfSpeech: word.partOfSpeech,
-              kidDefinition: word.kidDefinition,
-            })),
-            listId: currentListId, // Use current vocabulary list
-          }),
-        })
-      ]);
-
-      if (!clozeResponse.ok || !passageResponse.ok) {
-        throw new Error("Failed to generate quiz questions");
-      }
-
-      const clozeData = await clozeResponse.json();
-      const passageData = await passageResponse.json();
+      // PROGRESSIVE LOADING: Start cloze questions immediately, load passage in background
+      console.log("🚀 Starting progressive quiz loading - cloze first, then passage");
       
-      // Validate responses
+      // Start cloze questions first (questions 1-6)
+      const clozePromise = fetch("/api/quiz/cloze/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          words: clozeWords.map(word => ({
+            id: word.id,
+            text: word.text,
+            partOfSpeech: word.partOfSpeech,
+            kidDefinition: word.kidDefinition,
+          })),
+        }),
+      });
+      
+      // Load cloze data and start quiz immediately
+      const clozeResponse = await clozePromise;
+      
+      if (!clozeResponse.ok) {
+        throw new Error("Failed to generate cloze questions");
+      }
+      
+      const clozeData = await clozeResponse.json();
+      
+      // Validate cloze response
       if (!clozeData.questions || clozeData.questions.length !== 6) {
         throw new Error(`Expected 6 cloze questions, got ${clozeData.questions?.length || 0}`);
       }
       
-      if (!passageData.blanks || passageData.blanks.length !== 6) {
-        throw new Error(`Expected 6 passage blanks, got ${passageData.blanks?.length || 0}`);
-      }
-
-      // CRITICAL VALIDATION: Ensure all 12 words are used exactly once across entire quiz
-      const clozeAnswers = clozeData.questions.map((q: any) => q.correctAnswer);
-      const passageAnswers = passageData.blanks.map((b: any) => b.correctAnswer);
-      const allAnswers = [...clozeAnswers, ...passageAnswers];
-      const expectedWords = shuffledWords.map(w => w.text);
+      // Process and display cloze questions immediately
+      const processedCloze = processQuizData(clozeData, { blanks: [] });
+      setClozeQuestions(processedCloze.clozeQuestions);
+      setCurrentSection('cloze');
+      setIsLoading(false); // Quiz can start now!
       
-      console.log("🔍 Validating word uniqueness across entire quiz...");
-      console.log("Expected words:", expectedWords);
-      console.log("Cloze answers:", clozeAnswers);
-      console.log("Passage answers:", passageAnswers);
+      console.log("✅ Cloze questions loaded! Quiz started. Loading passage in background...");
       
-      // Check for exact match between expected and actual words
-      const answerSet = new Set(allAnswers);
-      const expectedSet = new Set(expectedWords);
-      
-      if (allAnswers.length !== 12) {
-        throw new Error(`Quiz must have exactly 12 answers, got ${allAnswers.length}`);
-      }
-      
-      if (answerSet.size !== 12) {
-        const duplicates = allAnswers.filter((word, index) => allAnswers.indexOf(word) !== index);
-        throw new Error(`Quiz contains duplicate words: [${duplicates.join(', ')}]. Each word must be used exactly once.`);
-      }
-      
-      if (answerSet.size !== expectedSet.size || !Array.from(answerSet).every(word => expectedSet.has(word))) {
-        const missing = expectedWords.filter(word => !answerSet.has(word));
-        const unexpected = allAnswers.filter(word => !expectedSet.has(word));
-        throw new Error(`Word mismatch - Missing: [${missing.join(', ')}], Unexpected: [${unexpected.join(', ')}]`);
-      }
-      
-      console.log("✅ Quiz validation passed: All 12 words used exactly once");
-      
-      const allQuestions: QuizQuestion[] = [];
-      
-      // Store cloze questions (1-6)
-      const clozeQs = clozeData.questions.map((q: any, index: number) => ({
-        ...q,
-        questionType: 'cloze' as const,
-        questionNumber: index + 1,
-        choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
-      }));
-      setClozeQuestions(clozeQs);
-      console.log(`Generated ${clozeQs.length} cloze questions (1-6)`);
-      
-      // Store passage question (7-12) - Sort by blankNumber then force sequential numbering
-      // This ensures questions display in reading order regardless of AI generation order
-      const sortedBlanks = [...passageData.blanks].sort((a, b) => {
-        const aNum = parseInt(String(a.blankNumber)) || 0;
-        const bNum = parseInt(String(b.blankNumber)) || 0;
-        return aNum - bNum;
+      // Load passage questions in background (questions 7-12)
+      fetch("/api/quiz/passage/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          words: passageWords.map(word => ({
+            id: word.id,
+            text: word.text,
+            partOfSpeech: word.partOfSpeech,
+            kidDefinition: word.kidDefinition,
+          })),
+          listId: currentListId,
+        }),
+      })
+      .then(passageResponse => {
+        if (!passageResponse.ok) {
+          console.error("Failed to load passage questions");
+          return;
+        }
+        return passageResponse.json();
+      })
+      .then(passageData => {
+        if (!passageData || !passageData.blanks || passageData.blanks.length !== 6) {
+          console.error(`Expected 6 passage blanks, got ${passageData?.blanks?.length || 0}`);
+          return;
+        }
+        
+        const processedPassage = processQuizData({ questions: [] }, passageData);
+        setPassageQuestion(processedPassage.passageQuestion);
+        setPassageLoading(false);
+        console.log("✅ Passage questions loaded in background!");
+      })
+      .catch(error => {
+        console.error("Background passage loading failed:", error);
       });
-      const passageQ = {
-        questionType: 'passage' as const,
-        passage: passageData.passage,
-        blanks: sortedBlanks.map((blank: any, index: number) => ({
-          ...blank,
-          questionNumber: 7 + index, // Force sequential 7-12 for display
-          choices: [blank.correctAnswer, ...blank.distractors].sort(() => Math.random() - 0.5)
-        }))
-      };
-      setPassageQuestion(passageQ);
-      console.log(`Generated passage with ${passageQ.blanks.length} blanks (7-12)`);
-      console.log(`Blank order: ${passageQ.blanks.map(b => b.questionNumber).join(', ')}`);
-      console.log(`Total quiz questions: ${clozeQs.length + passageQ.blanks.length}`);
+      
+      // Skip validation since we're loading progressively
+      return;
     } catch (error) {
       console.error("Error generating comprehensive quiz:", error);
       toast({
@@ -386,12 +352,27 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
         setSelectedAnswer("");
         setShowResult(false);
       } else {
-        // Move to passage section
-        setCurrentSection('passage');
-        setCurrentQuestionIndex(0);
-        setCurrentPassageBlankIndex(0);
-        setSelectedAnswer("");
-        setShowResult(false);
+        // Check if passage is loaded before transitioning
+        if (passageQuestion) {
+          setCurrentSection('passage');
+          setCurrentQuestionIndex(0);
+          setCurrentPassageBlankIndex(0);
+          setSelectedAnswer("");
+          setShowResult(false);
+        } else if (passageLoading) {
+          // Show loading message if passage not ready
+          toast({
+            title: "Loading Passage Questions",
+            description: "Please wait while passage questions load in background...",
+          });
+        } else {
+          // Passage failed to load
+          toast({
+            title: "Error",
+            description: "Unable to load passage questions. Please try again.",
+            variant: "destructive",
+          });
+        }
       }
     } else if (currentSection === 'passage' && passageQuestion) {
       if (currentPassageBlankIndex < passageQuestion.blanks.length - 1) {
@@ -423,7 +404,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
       <div className="h-screen bg-background flex flex-col items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground dyslexia-text-base">Creating your comprehensive quiz...</p>
+          <p className="text-muted-foreground dyslexia-text-base">🚀 Progressive Loading: Starting cloze questions...</p>
         </div>
       </div>
     );

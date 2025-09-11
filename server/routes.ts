@@ -784,7 +784,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Audio API with ElevenLabs word timings
+  // OPTIMIZED: Audio metadata API (returns URLs, not embedded data)
   app.post("/api/audio/generate", async (req, res) => {
     try {
       const { text, type } = req.body;
@@ -800,24 +800,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (cachedAudio && cachedAudio.audioData) {
         console.log(`Cache HIT: Using cached audio for ${type}: "${text.substring(0, 50)}..."`);
         
-        // Actually use cached audio data - NO REGENERATION!
-        const audioBuffer = Buffer.from(cachedAudio.audioData, 'base64');
-        
-        // For sentences, return JSON with cached timing data
+        // OPTIMIZATION: Return URL reference instead of embedded audio data
         if (type === "sentence") {
           return res.json({
-            audioData: `data:audio/mpeg;base64,${cachedAudio.audioData}`,
+            audioUrl: `/api/audio/stream/${encodeURIComponent(cacheKey)}`,
             wordTimings: cachedAudio.wordTimings || [],
             duration: cachedAudio.durationMs ? cachedAudio.durationMs / 1000 : 0,
-            provider: cachedAudio.provider
+            provider: cachedAudio.provider,
+            optimized: true
           });
         }
         
         // For definitions, return binary audio directly from cache
+        const audioBuffer = Buffer.from(cachedAudio.audioData, 'base64');
+        const etag = `"${cacheKey}-${audioBuffer.byteLength}"`;
+        
         res.set({
           'Content-Type': 'audio/mpeg',
           'Content-Length': audioBuffer.byteLength.toString(),
           'Cache-Control': 'public, max-age=3600',
+          'ETag': etag,
+          'Last-Modified': cachedAudio.createdAt ? new Date(cachedAudio.createdAt).toUTCString() : new Date().toUTCString(),
           'X-Audio-Provider': cachedAudio.provider,
           'X-Cache-Status': 'cached',
         });
@@ -848,32 +851,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn(`Failed to cache audio for ${type}: "${text.substring(0, 30)}...":`, error);
       }
 
-      // For sentences with word timings, return JSON with timing data
+      // OPTIMIZATION: For sentences, return URL reference instead of embedded data
       if (type === "sentence") {
         console.log(`Generated ${result.wordTimings?.length || 0} word timings from ElevenLabs for text: "${text.substring(0, 50)}..."`);
         
-        const base64Audio = Buffer.from(result.audioBuffer).toString('base64');
         return res.json({
-          audioData: `data:audio/mpeg;base64,${base64Audio}`,
+          audioUrl: `/api/audio/stream/${encodeURIComponent(cacheKey)}`,
           wordTimings: result.wordTimings || [],
           duration: result.wordTimings ? Math.max(...result.wordTimings.map(w => w.endTimeMs)) / 1000 : 0,
-          provider: result.provider
+          provider: result.provider,
+          optimized: true
         });
       }
 
-      // For definitions, return binary audio
+      // For definitions, return binary audio with enhanced caching headers
+      const audioBuffer = Buffer.from(result.audioBuffer);
+      const etag = `"${result.cacheKey}-${audioBuffer.byteLength}"`;
+      
       res.set({
         'Content-Type': 'audio/mpeg',
-        'Content-Length': result.audioBuffer.byteLength.toString(),
+        'Content-Length': audioBuffer.byteLength.toString(),
         'Cache-Control': 'public, max-age=3600',
+        'ETag': etag,
+        'Last-Modified': new Date().toUTCString(),
         'X-Audio-Provider': result.provider,
         'X-Cache-Status': 'generated',
       });
 
-      res.send(Buffer.from(result.audioBuffer));
+      res.send(audioBuffer);
     } catch (error) {
       console.error("Error generating audio:", error);
       res.status(500).json({ message: "Failed to generate audio" });
+    }
+  });
+
+  // OPTIMIZATION: Audio streaming endpoint with HTTP 206 Range support for better performance
+  app.get("/api/audio/stream/:cacheKey", async (req, res) => {
+    try {
+      const cacheKey = decodeURIComponent(req.params.cacheKey);
+      
+      const cachedAudio = await storage.getAudioCache(cacheKey);
+      
+      if (!cachedAudio || !cachedAudio.audioData) {
+        return res.status(404).json({ message: "Audio not found" });
+      }
+      
+      const audioBuffer = Buffer.from(cachedAudio.audioData, 'base64');
+      const fileSize = audioBuffer.byteLength;
+      
+      // Generate ETag based on cache key and file size for better caching
+      const etag = `"${cacheKey}-${fileSize}"`;
+      
+      // Check If-None-Match header for conditional requests
+      if (req.headers['if-none-match'] === etag) {
+        console.log(`🚀 CACHE HIT: ETag match for audio ${cacheKey.substring(0, 30)}...`);
+        return res.status(304).end();
+      }
+
+      // Parse Range header for HTTP 206 partial content support
+      const range = req.headers.range;
+      
+      if (range) {
+        console.log(`🎵 RANGE REQUEST: ${range} for audio ${cacheKey.substring(0, 30)}...`);
+        
+        // Parse range header (format: "bytes=start-end")
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        
+        // Validate range
+        if (start >= fileSize || end >= fileSize || start > end) {
+          res.status(416).set({
+            'Content-Range': `bytes */${fileSize}`
+          });
+          return res.end();
+        }
+        
+        const chunkSize = (end - start) + 1;
+        const chunk = audioBuffer.subarray(start, end + 1);
+        
+        // Send 206 Partial Content with proper headers
+        res.status(206).set({
+          'Content-Type': 'audio/mpeg',
+          'Content-Length': chunkSize.toString(),
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'public, max-age=3600',
+          'ETag': etag,
+          'Last-Modified': cachedAudio.createdAt ? new Date(cachedAudio.createdAt).toUTCString() : new Date().toUTCString(),
+          'X-Audio-Provider': cachedAudio.provider,
+          'X-Cache-Status': 'partial-streamed',
+          'X-Range': `${start}-${end}/${fileSize}`
+        });
+        
+        console.log(`📦 PARTIAL CONTENT: Serving bytes ${start}-${end}/${fileSize} (${chunkSize} bytes)`);
+        return res.send(chunk);
+      }
+      
+      // Full file response with enhanced caching headers
+      console.log(`🎵 FULL AUDIO: Serving complete file ${cacheKey.substring(0, 30)}... (${fileSize} bytes)`);
+      
+      res.set({
+        'Content-Type': 'audio/mpeg',
+        'Content-Length': fileSize.toString(),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=3600',
+        'ETag': etag,
+        'Last-Modified': cachedAudio.createdAt ? new Date(cachedAudio.createdAt).toUTCString() : new Date().toUTCString(),
+        'X-Audio-Provider': cachedAudio.provider,
+        'X-Cache-Status': 'full-streamed'
+      });
+
+      res.send(audioBuffer);
+    } catch (error) {
+      console.error("Error streaming audio:", error);
+      res.status(500).json({ message: "Failed to stream audio" });
     }
   });
 
@@ -886,15 +978,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const result = await ttsService.generateSlowAudio(text);
+      const audioBuffer = Buffer.from(result.audioBuffer);
+      const etag = `"slow-${text.slice(0, 20)}-${audioBuffer.byteLength}"`;
       
       res.set({
         'Content-Type': 'audio/mpeg',
-        'Content-Length': result.audioBuffer.byteLength.toString(),
+        'Content-Length': audioBuffer.byteLength.toString(),
         'Cache-Control': 'public, max-age=3600',
+        'ETag': etag,
+        'Last-Modified': new Date().toUTCString(),
+        'Accept-Ranges': 'bytes',
         'X-Audio-Provider': result.provider,
       });
 
-      res.send(Buffer.from(result.audioBuffer));
+      res.send(audioBuffer);
     } catch (error) {
       console.error("Error generating slow audio:", error);
       res.status(500).json({ message: "Failed to generate slow audio" });
@@ -1409,13 +1506,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Generate cloze quiz questions (Section 1: dual sentences) - OPTIMIZED VERSION
+  // Generate cloze quiz questions (Section 1: dual sentences) - OPTIMIZED WITH SERVER CACHING
   app.post("/api/quiz/cloze/generate", isStudentAuthenticated, async (req: any, res) => {
     try {
       const { words } = req.body; // Array of word objects with text, partOfSpeech, definition
       
       if (!words || !Array.isArray(words) || words.length === 0) {
         return res.status(400).json({ message: "Words array is required" });
+      }
+      
+      // SERVER CACHE: Check if we already have questions for these exact words
+      const wordIds = words.map(w => w.id).sort().join(',');
+      const existingQuestions = await storage.getClozeQuestionsByWordIds(wordIds);
+      
+      if (existingQuestions && existingQuestions.length === words.length) {
+        console.log(`🚀 SERVER CACHE HIT: Found ${existingQuestions.length} existing cloze questions`);
+        
+        // Add HTTP caching headers for browser caching
+        res.set({
+          'Cache-Control': 'public, max-age=3600', // 1 hour cache
+          'ETag': `"cloze-${wordIds}"`,
+          'X-Cache-Status': 'server-hit'
+        });
+        
+        const clozeQuestions = existingQuestions.map(q => ({
+          id: q.id,
+          wordId: q.wordId,
+          sentence1: q.sentence1,
+          sentence2: q.sentence2,
+          choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
+        }));
+        
+        return res.json({ questions: clozeQuestions });
       }
       
       // SECURITY: Validate that all words belong to the student's instructor
@@ -1429,7 +1551,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      console.log(`Generating ${words.length} cloze questions in parallel (optimized)...`);
+      console.log(`🔄 SERVER CACHE MISS: Generating ${words.length} cloze questions in parallel...`);
       const startTime = Date.now();
       
       // OPTIMIZATION: Use parallel generation instead of sequential for loop
@@ -1443,7 +1565,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Generated ${questions.length} questions in ${Date.now() - startTime}ms`);
       
-      // Save all questions to database in parallel
+      // Save all questions to database in parallel (enables server-side caching)
       const savePromises = questions.map((question, index) => {
         const wordData = words[index];
         if (!wordData) return null;
@@ -1462,6 +1584,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const savedQuestions = await Promise.all(savePromises);
       
+      // Add HTTP caching headers for browser caching
+      res.set({
+        'Cache-Control': 'public, max-age=3600', // 1 hour cache
+        'ETag': `"cloze-${wordIds}"`,
+        'X-Cache-Status': 'server-generated'
+      });
+      
       // Format response
       const clozeQuestions = savedQuestions
         .filter(Boolean)
@@ -1470,24 +1599,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!question) return null;
           
           return {
-            ...savedQuestion,
+            id: savedQuestion.id,
+            wordId: savedQuestion.wordId,
+            sentence1: savedQuestion.sentence1,
+            sentence2: savedQuestion.sentence2,
             choices: [question.correctAnswer, ...question.distractors].sort(() => Math.random() - 0.5)
           };
         })
         .filter(Boolean);
       
-      res.json({ 
-        questions: clozeQuestions,
-        generationTime: Date.now() - startTime,
-        optimized: true
-      });
+      res.json({ questions: clozeQuestions });
     } catch (error) {
       console.error("Error generating optimized cloze quiz:", error);
       res.status(500).json({ message: "Failed to generate cloze quiz" });
     }
   });
 
-  // Generate passage quiz (Section 2: reading passage with blanks)
+  // Generate passage quiz (Section 2: reading passage with blanks) - OPTIMIZED WITH SERVER CACHING
   app.post("/api/quiz/passage/generate", isStudentAuthenticated, async (req: any, res) => {
     try {
       const { words, listId } = req.body; // Array of 6 words for blanks 7-12
@@ -1498,6 +1626,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!listId) {
         return res.status(400).json({ message: "List ID is required" });
+      }
+      
+      // SERVER CACHE: Check if we already have a passage for this exact set of words
+      const wordIds = words.map(w => w.id).sort().join(',');
+      const existingPassage = await storage.getPassageQuestionByWordIds(wordIds, listId);
+      
+      if (existingPassage) {
+        console.log(`🚀 SERVER CACHE HIT: Found existing passage for words ${wordIds}`);
+        
+        // Add HTTP caching headers
+        res.set({
+          'Cache-Control': 'public, max-age=3600', // 1 hour cache
+          'ETag': `"passage-${wordIds}"`,
+          'X-Cache-Status': 'server-hit'
+        });
+        
+        const optimizedBlanks = existingPassage.blanks.map(b => ({
+          id: b.id,
+          blankNumber: b.blankNumber,
+          wordId: b.wordId,
+          choices: [b.correctAnswer, ...b.distractors].sort(() => Math.random() - 0.5)
+        }));
+        
+        return res.json({
+          passage: {
+            id: existingPassage.id,
+            passageText: existingPassage.passageText,
+            title: existingPassage.title
+          },
+          blanks: optimizedBlanks
+        });
       }
       
       // SECURITY: Validate list ownership and word access
@@ -1517,13 +1676,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      console.log(`Generating passage quiz with optimized validation for ${words.length} words...`);
+      console.log(`🔄 SERVER CACHE MISS: Generating passage quiz for ${words.length} words...`);
       const startTime = Date.now();
       
       // OPTIMIZATION: Uses the optimized generateValidatedPassageQuiz with batch validation
       const passageData = await aiService.generateValidatedPassageQuiz(words);
       
       console.log(`Generated passage quiz in ${Date.now() - startTime}ms with optimizations`);
+      
+      // Add HTTP caching headers
+      res.set({
+        'Cache-Control': 'public, max-age=3600', // 1 hour cache
+        'ETag': `"passage-${wordIds}"`,
+        'X-Cache-Status': 'server-generated'
+      });
       
       // Save passage to database
       const savedPassage = await storage.createPassageQuestion({
@@ -1552,12 +1718,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // OPTIMIZATION: Streamlined response, removed debug metadata
       res.json({
-        passage: savedPassage,
-        blanks: blanks,
-        generationTime: Date.now() - startTime,
-        optimized: true,
-        validationScore: passageData.validationScore
+        passage: {
+          id: savedPassage.id,
+          passageText: savedPassage.passageText,
+          title: savedPassage.title
+        },
+        blanks: blanks.map(b => ({
+          id: b.id,
+          blankNumber: b.blankNumber,
+          wordId: b.wordId,
+          choices: b.choices // Pre-shuffled choices only
+        }))
       });
     } catch (error) {
       console.error("Error generating passage quiz:", error);
@@ -1583,18 +1756,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get passage questions for next 6 words (questions 7-12)  
       const passageData = await storage.getPassageQuestionByList(listId);
       
+      // OPTIMIZATION: Pre-compute choices and return minimal data
+      const optimizedCloze = clozeQuestions.map(q => ({
+        id: q.id,
+        wordId: q.wordId,
+        sentence1: q.sentence1,
+        sentence2: q.sentence2,
+        choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
+      }));
+      
+      const optimizedPassage = passageData ? {
+        passage: {
+          id: passageData.passage.id,
+          passageText: passageData.passage.passageText,
+          title: passageData.passage.title
+        },
+        blanks: passageData.blanks.map(b => ({
+          id: b.id,
+          blankNumber: b.blankNumber,
+          wordId: b.wordId,
+          choices: [b.correctAnswer, ...b.distractors].sort(() => Math.random() - 0.5)
+        }))
+      } : null;
+
       res.json({
-        clozeQuestions: clozeQuestions.map(q => ({
-          ...q,
-          choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
-        })),
-        passageData: passageData ? {
-          passage: passageData.passage,
-          blanks: passageData.blanks.map(b => ({
-            ...b,
-            choices: [b.correctAnswer, ...b.distractors].sort(() => Math.random() - 0.5)
-          }))
-        } : null
+        cloze: optimizedCloze,
+        passage: optimizedPassage
       });
     } catch (error) {
       console.error("Error fetching quiz data:", error);

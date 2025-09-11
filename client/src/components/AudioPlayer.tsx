@@ -281,22 +281,42 @@ export function AudioPlayer({
         const contentType = response.headers.get("content-type");
         
         if (contentType?.includes("application/json")) {
-          // Response includes word timing data from ElevenLabs
+          // OPTIMIZATION: Response includes word timing data with audio URL reference
           const jsonData = await response.json();
-          console.log("Received audio with word timings:", jsonData.wordTimings);
+          console.log("Received optimized audio response:", { 
+            hasUrl: !!jsonData.audioUrl, 
+            timingsCount: jsonData.wordTimings?.length || 0,
+            optimized: jsonData.optimized 
+          });
           
-          // Convert base64 audio to blob
-          const audioBase64 = jsonData.audioData.split(',')[1]; // Remove data:audio/mpeg;base64, prefix
-          const audioArrayBuffer = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0)).buffer;
-          const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
-          
-          audioUrl = cacheAudio(cacheKey, audioBlob, jsonData.wordTimings);
-          console.log("Audio with timings cached with URL:", audioUrl);
-          
-          // Store word timings for highlighting
-          if (jsonData.wordTimings && type === "sentence") {
-            wordTimingsRef.current = jsonData.wordTimings;
-            console.log("Stored word timings for highlighting:", jsonData.wordTimings);
+          if (jsonData.optimized && jsonData.audioUrl) {
+            // OPTIMIZATION: Fetch audio separately using URL reference
+            const audioResponse = await fetch(jsonData.audioUrl);
+            if (!audioResponse.ok) {
+              throw new Error(`Failed to fetch audio: ${audioResponse.status}`);
+            }
+            const audioBlob = await audioResponse.blob();
+            console.log("Fetched audio blob from URL, size:", audioBlob.size);
+            
+            audioUrl = cacheAudio(cacheKey, audioBlob, jsonData.wordTimings);
+            
+            // Store word timings for highlighting
+            if (jsonData.wordTimings && type === "sentence") {
+              wordTimingsRef.current = jsonData.wordTimings;
+              console.log("Stored word timings for highlighting:", jsonData.wordTimings);
+            }
+          } else {
+            // FALLBACK: Legacy embedded base64 audio (backward compatibility)
+            console.log("Using legacy embedded audio format");
+            const audioBase64 = jsonData.audioData.split(',')[1];
+            const audioArrayBuffer = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0)).buffer;
+            const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
+            
+            audioUrl = cacheAudio(cacheKey, audioBlob, jsonData.wordTimings);
+            
+            if (jsonData.wordTimings && type === "sentence") {
+              wordTimingsRef.current = jsonData.wordTimings;
+            }
           }
         } else {
           // Regular binary audio response (for words)
