@@ -436,7 +436,14 @@ Respond with JSON in this format:
 ${wordsList}
 
 Create a coherent, engaging passage (100-150 words) appropriate for 9-year-olds with numbered blanks (7) through (12). 
-Each blank should use one of the vocabulary words. The passage should provide enough context for students to determine the correct word.
+CRITICAL: Use each of the 6 vocabulary words EXACTLY ONCE. Each blank (7-12) must correspond to one unique word from the list above.
+- Blank (7) = word #7 from the list
+- Blank (8) = word #8 from the list  
+- Blank (9) = word #9 from the list
+- Blank (10) = word #10 from the list
+- Blank (11) = word #11 from the list
+- Blank (12) = word #12 from the list
+DO NOT reuse any word for multiple blanks. The passage should provide enough context for students to determine the correct word.
 
 CRITICAL GRAMMATICAL REQUIREMENTS:
 - ZERO-EDIT INSERTION: Each sentence must be fully grammatical when inserting the exact base-form answer; no added function words, articles, or inflection changes allowed
@@ -505,21 +512,28 @@ Respond with JSON in this format:
 
       const result = JSON.parse(response.choices[0].message.content || "{}");
       
-      // CRITICAL: Validate that we have exactly 6 blanks numbered 7-12
+      // CRITICAL: Validate that we have exactly 6 blanks numbered 7-12 with unique words
       let blanks = result.blanks || [];
       
-      // If we don't have exactly 6 blanks or they're not properly numbered, fix them
-      if (blanks.length !== 6) {
-        console.warn(`Passage generation returned ${blanks.length} blanks instead of 6. Fixing...`);
+      // Check for word uniqueness - this is the critical bug fix
+      const usedWords = new Set(blanks.map((b: any) => b.correctAnswer));
+      const expectedWords = new Set(words.map(w => w.text));
+      
+      // If we don't have exactly 6 blanks, wrong numbering, or duplicate words, fix them
+      const setsEqual = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every(x => b.has(x));
+      if (blanks.length !== 6 || usedWords.size !== 6 || !setsEqual(usedWords, expectedWords)) {
+        console.warn(`Passage generation has word reuse or missing words. Fixing...`);
+        console.warn(`Expected words: [${words.map(w => w.text).join(', ')}]`);
+        console.warn(`AI returned: [${blanks.map((b: any) => b.correctAnswer).join(', ')}]`);
         
-        // Ensure we have 6 blanks, one for each word
+        // Force correct 1:1 mapping - each blank gets one specific word
         blanks = words.map((word: any, index: number) => ({
           blankNumber: 7 + index,
           correctAnswer: word.text,
-          distractors: blanks[index]?.distractors || ["option1", "option2", "option3"] // Fallback distractors
+          distractors: result.blanks?.[index]?.distractors || ["option1", "option2", "option3"]
         }));
       } else {
-        // Ensure proper sequential numbering 7-12
+        // Ensure proper sequential numbering 7-12 but preserve AI's word choices if valid
         blanks = blanks.map((blank: any, index: number) => ({
           ...blank,
           blankNumber: 7 + index // Force sequential numbering
@@ -535,7 +549,16 @@ Respond with JSON in this format:
           : ["option1", "option2", "option3"]
       }));
       
+      // Final validation: ensure no word duplication
+      const finalWords = blanks.map((b: any) => b.correctAnswer);
+      const finalUnique = new Set(finalWords);
+      if (finalUnique.size !== 6) {
+        console.error("CRITICAL BUG: Final blanks still contain duplicate words:", finalWords);
+        throw new Error("Word uniqueness validation failed - would create duplicate answers in quiz");
+      }
+      
       console.log(`Passage quiz generated with ${blanks.length} blanks numbered:`, blanks.map((b: any) => b.blankNumber));
+      console.log(`Words used: [${finalWords.join(', ')}]`);
       
       return {
         passageText: result.passageText,
