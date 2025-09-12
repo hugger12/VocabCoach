@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Volume2, VolumeX, RotateCcw, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { audioService } from "@/services/AudioService";
+import { audioCacheUtil } from "@/lib/audioCacheUtil";
 import { cn } from "@/lib/utils";
 import { audioManager } from "@/lib/audioManager";
 import { getWordsArray } from "@/utils/tokenization";
@@ -187,7 +188,7 @@ export function AudioPlayer({
       console.log("AudioPlayer starting playback for:", { type, wordId, sentenceId, text: text.substring(0, 50) });
       
       const cacheKey = audioService.generateCacheKey(text, type, speed);
-      const cachedData = getCachedAudio(cacheKey);
+      const cachedData = audioCacheUtil.getCachedAudio(cacheKey);
       let audioUrl = cachedData?.url;
 
       if (!cachedData) {
@@ -247,7 +248,7 @@ export function AudioPlayer({
             const audioBlob = await audioResponse.blob();
             console.log("Fetched audio blob from URL, size:", audioBlob.size);
             
-            audioUrl = cacheAudio(cacheKey, audioBlob, jsonData.wordTimings);
+            audioUrl = audioCacheUtil.cacheAudio(cacheKey, audioBlob, jsonData.wordTimings);
             
             // Store word timings for highlighting
             if (jsonData.wordTimings && type === "sentence") {
@@ -261,7 +262,7 @@ export function AudioPlayer({
             const audioArrayBuffer = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0)).buffer;
             const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
             
-            audioUrl = cacheAudio(cacheKey, audioBlob, jsonData.wordTimings);
+            audioUrl = audioCacheUtil.cacheAudio(cacheKey, audioBlob, jsonData.wordTimings);
             
             if (jsonData.wordTimings && type === "sentence") {
               wordTimingsRef.current = jsonData.wordTimings;
@@ -271,7 +272,7 @@ export function AudioPlayer({
           // Regular binary audio response (for words)
           const audioBlob = await response.blob();
           console.log("Received audio blob, size:", audioBlob.size);
-          audioUrl = cacheAudio(cacheKey, audioBlob, null);
+          audioUrl = audioCacheUtil.cacheAudio(cacheKey, audioBlob, null);
           console.log("Audio cached with URL:", audioUrl);
         }
       } else {
@@ -298,7 +299,7 @@ export function AudioPlayer({
       // Precompute word boundaries when audio metadata is available
       audio.onloadedmetadata = () => {
         if (type === "sentence" && onWordHighlight) {
-          const boundaries = computeBoundaries(text, wordTimingsRef.current || undefined, audio.duration);
+          const boundaries = audioService.computeWordBoundaries(text, wordTimingsRef.current || undefined, audio.duration);
           wordBoundariesRef.current = boundaries;
         }
       };
@@ -313,7 +314,7 @@ export function AudioPlayer({
           if (useRealtimeSync) {
             // Ensure boundaries are computed before starting real-time highlighting
             if (wordBoundariesRef.current.length === 0) {
-              const boundaries = computeBoundaries(text, wordTimingsRef.current || undefined, audio.duration);
+              const boundaries = audioService.computeWordBoundaries(text, wordTimingsRef.current || undefined, audio.duration);
               wordBoundariesRef.current = boundaries;
             }
             startRealtimeHighlighting(audio);
@@ -399,13 +400,10 @@ export function AudioPlayer({
     wordId,
     sentenceId,
     isPlaying,
-    getCachedAudio,
-    cacheAudio,
     onPlay,
     onEnded,
     onError,
     onWordHighlight,
-    computeBoundaries,
     startRealtimeHighlighting,
     useRealtimeSync,
   ]);
