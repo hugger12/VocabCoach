@@ -482,9 +482,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("Failed to create session tracking:", error);
           }
           
-          res.json({ 
-            student: student, 
-            success: true 
+          // CRITICAL: Save session to database before sending response to prevent race conditions
+          req.session.save((saveErr) => {
+            if (saveErr) {
+              console.error("Session save error:", saveErr);
+              return res.status(500).json({ message: "Login failed - session save error" });
+            }
+            
+            res.json({ 
+              student: student, 
+              success: true 
+            });
           });
         });
         return;
@@ -542,7 +550,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        res.json({ student, success: true });
+        // CRITICAL: Save session to database before sending response to prevent race conditions
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
+            return res.status(500).json({ message: "Login failed - session save error" });
+          }
+          
+          res.json({ student, success: true });
+        });
       });
     } catch (error) {
       console.error("Error during student login:", error);
