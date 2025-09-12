@@ -186,7 +186,7 @@ export function AudioPlayer({
     try {
       console.log("AudioPlayer starting playback for:", { type, wordId, sentenceId, text: text.substring(0, 50) });
       
-      const cacheKey = generateCacheKey(text, type, speed);
+      const cacheKey = audioService.generateCacheKey(text, type, speed);
       const cachedData = getCachedAudio(cacheKey);
       let audioUrl = cachedData?.url;
 
@@ -399,7 +399,6 @@ export function AudioPlayer({
     wordId,
     sentenceId,
     isPlaying,
-    generateCacheKey,
     getCachedAudio,
     cacheAudio,
     onPlay,
