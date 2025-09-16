@@ -105,19 +105,15 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
           setCurrentPassageBlankIndex(0);
           setSelectedAnswer("");
           setShowResult(false);
-        } else if (passageLoading) {
-          // Show loading message if passage not ready
-          toast({
-            title: "Loading Passage Questions",
-            description: "Please wait while passage questions load in background...",
-          });
         } else {
-          // Passage failed to load
+          // Passage failed to load or not available - complete the quiz
           toast({
-            title: "Error",
-            description: "Unable to load passage questions. Please try again.",
-            variant: "destructive",
+            title: "Quiz Complete",
+            description: "Completing quiz with cloze questions only.",
           });
+          setIsComplete(true);
+          const scoreResult = quizService.calculateQuizScore(attempts);
+          onComplete?.(scoreResult.score);
         }
       }
     } else if (currentSection === 'passage' && passageQuestion) {
