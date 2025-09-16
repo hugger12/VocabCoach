@@ -1836,19 +1836,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Study Session API: instructor=${instructorId}, quiz=${quizMode}, limit=${limit}, listId=${listId}`);
       
-      // Note: instructorId still required for student progress tracking but will use global vocabulary
-
-      // Get global current vocabulary list (most recent across all instructors)
+      // Use the student's instructor's current vocabulary list for proper isolation
       let targetListId = listId;
-      let targetInstructorId = instructorId; // Default but may change
+      let targetInstructorId = instructorId;
       
       if (!targetListId) {
-        const globalCurrentList = await storage.getGlobalCurrentVocabularyList();
-        if (!globalCurrentList) {
-          return res.status(404).json({ message: "No vocabulary list found" });
+        const currentList = await storage.getCurrentVocabularyList(instructorId);
+        if (!currentList) {
+          return res.status(404).json({ message: "No vocabulary list found for this instructor" });
         }
-        targetListId = globalCurrentList.id;
-        targetInstructorId = globalCurrentList.instructorId; // Use the list owner's instructor ID
+        targetListId = currentList.id;
+        targetInstructorId = currentList.instructorId;
       }
       
       // Get words from global current vocabulary list
