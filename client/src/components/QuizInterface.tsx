@@ -270,8 +270,13 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
   const currentQuestion = getCurrentQuestion();
 
   // Main quiz display - one question at a time
+  // Debug: Log component mounting
+  useEffect(() => {
+    console.log("🎯 QuizInterface component mounted - this should show MULTIPLE CHOICE buttons");
+  }, []);
+
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="h-screen bg-background flex flex-col overflow-hidden" data-testid="quiz-interface-container">
       <header className="flex items-center justify-between p-6 flex-shrink-0">
         <img 
           src={huggerLogo} 

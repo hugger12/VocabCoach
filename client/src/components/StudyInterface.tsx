@@ -42,6 +42,11 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   const [showQuiz, setShowQuiz] = useState(false);
   const [sessionWords, setSessionWords] = useState<WordWithProgress[]>([]);
   const [totalSessionWords, setTotalSessionWords] = useState(0);
+
+  // Debug: Log component mounting
+  useEffect(() => {
+    console.log("📚 StudyInterface component mounted - this shows PRACTICE/TEXT INPUT mode");
+  }, []);
   const [currentWordHighlightIndex, setCurrentWordHighlightIndex] = useState(-1);
   const [currentSentenceHighlightIndex, setCurrentSentenceHighlightIndex] = useState(-1);
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
