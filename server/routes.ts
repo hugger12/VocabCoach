@@ -2191,12 +2191,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // SECURITY: Validate that all words belong to the student's instructor
+      console.log(`🔐 CLOZE QUIZ AUTH: Checking ${words.length} words for instructor ${req.instructorId}`);
       for (const wordData of words) {
         if (!wordData.id) {
           return res.status(400).json({ message: "Word ID is required" });
         }
         const word = await storage.getWord(wordData.id);
+        console.log(`🔐 CLOZE AUTH CHECK: Word ${wordData.id} belongs to instructor ${word?.instructorId}, student instructor is ${req.instructorId}`);
         if (!word || word.instructorId !== req.instructorId) {
+          console.log(`🚨 CLOZE AUTH FAILURE: Word ${wordData.id} access denied. Word instructor: ${word?.instructorId}, Student instructor: ${req.instructorId}`);
           return res.status(403).json({ message: "Access denied to requested words" });
         }
       }
@@ -2310,8 +2313,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // SECURITY: Validate list ownership and word access
+      console.log(`🔐 PASSAGE QUIZ AUTH: Checking list ${listId} for instructor ${req.instructorId}`);
       const vocabularyList = await storage.getVocabularyList(listId);
+      console.log(`🔐 PASSAGE AUTH CHECK: List ${listId} belongs to instructor ${vocabularyList?.instructorId}, student instructor is ${req.instructorId}`);
       if (!vocabularyList || vocabularyList.instructorId !== req.instructorId) {
+        console.log(`🚨 PASSAGE AUTH FAILURE: List ${listId} access denied. List instructor: ${vocabularyList?.instructorId}, Student instructor: ${req.instructorId}`);
         return res.status(403).json({ message: "Access denied to this vocabulary list" });
       }
       
