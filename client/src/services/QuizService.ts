@@ -405,6 +405,7 @@ export class QuizService {
     const response = await fetch("/api/quiz/cloze/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: 'include', // Include session cookies for authentication
       body: JSON.stringify({
         words: words.map(word => ({
           id: word.id,
@@ -429,6 +430,7 @@ export class QuizService {
     const response = await fetch("/api/quiz/passage/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: 'include', // Include session cookies for authentication
       body: JSON.stringify({
         words: words.map(word => ({
           id: word.id,
