@@ -163,8 +163,20 @@ export const isStudentAuthenticated: RequestHandler = async (req, res, next) => 
   try {
     const session = req.session as any;
     
+    // DEBUG: Log session details for quiz endpoints
+    if (req.path.includes('quiz')) {
+      console.log(`🔐 MIDDLEWARE DEBUG - ${req.method} ${req.path}`);
+      console.log(`🔐 Session ID: ${req.sessionID}`);
+      console.log(`🔐 Session exists: ${!!req.session}`);
+      console.log(`🔐 Session data:`, JSON.stringify(req.session, null, 2));
+      console.log(`🔐 Headers cookie:`, req.headers.cookie);
+    }
+    
     // Check if student session exists and has required data
     if (!session?.student || !session?.studentId) {
+      if (req.path.includes('quiz')) {
+        console.log(`🚨 AUTH FAILURE: No session data - session=${!!session}, student=${!!session?.student}, studentId=${session?.studentId}`);
+      }
       return res.status(401).json({ message: "Student authentication required" });
     }
 
