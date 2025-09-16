@@ -6,25 +6,25 @@
 
 :root {
   /* Hugger Digital Tan/Black Color Scheme */
-  --background: #CFB8A7; /* Hugger Digital tan background */
-  --foreground: hsl(0 0% 15%); /* Dark brown/black text */
-  --card: hsl(30 25% 88%);
-  --card-foreground: hsl(0 0% 15%);
-  --popover: hsl(30 25% 88%);
-  --popover-foreground: hsl(0 0% 15%);
-  --primary: hsl(0 0% 15%); /* Dark brown/black for primary actions */
-  --primary-foreground: hsl(30 25% 85%);
-  --secondary: hsl(30 35% 70%); /* Medium tan for secondary actions */
-  --secondary-foreground: hsl(0 0% 15%);
-  --muted: hsl(30 20% 80%);
-  --muted-foreground: hsl(0 0% 35%);
-  --accent: hsl(30 30% 75%);
-  --accent-foreground: hsl(0 0% 15%);
-  --destructive: hsl(0 84% 60%);
-  --destructive-foreground: hsl(0 0% 100%);
-  --border: hsl(30 20% 75%);
-  --input: hsl(30 20% 82%);
-  --ring: hsl(0 0% 15%);
+  --background: 30 25% 78%; /* Hugger Digital tan background */
+  --foreground: 0 0% 15%; /* Dark brown/black text */
+  --card: 30 25% 88%;
+  --card-foreground: 0 0% 15%;
+  --popover: 30 25% 88%;
+  --popover-foreground: 0 0% 15%;
+  --primary: 0 0% 15%; /* Dark brown/black for primary actions */
+  --primary-foreground: 30 25% 85%;
+  --secondary: 30 35% 70%; /* Medium tan for secondary actions */
+  --secondary-foreground: 0 0% 15%;
+  --muted: 30 20% 80%;
+  --muted-foreground: 0 0% 35%;
+  --accent: 30 30% 75%;
+  --accent-foreground: 0 0% 15%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 30 20% 75%;
+  --input: 30 20% 82%;
+  --ring: 0 0% 15%;
   --radius: 1rem;
   
   /* Dyslexia-friendly variables */
@@ -38,8 +38,8 @@
   --target-size-min: 48px;
   
   /* Word highlighting colors */
-  --highlight-yellow: hsl(60 100% 80%);
-  --highlight-text: hsl(0 0% 0%);
+  --highlight-yellow: 60 100% 80%;
+  --highlight-text: 0 0% 0%;
 }
 
 /* Removed dark mode - keeping only light, happy theme */
