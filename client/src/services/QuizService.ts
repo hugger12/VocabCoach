@@ -185,8 +185,8 @@ export class QuizService {
       errors.push("Words array is required");
     } else if (words.length === 0) {
       errors.push("At least one word is required for quiz generation");
-    } else if (words.length < 3) {
-      errors.push(`Quiz requires at least 3 words, but got ${words.length}`);
+    } else if (words.length !== 12) {
+      errors.push(`Quiz requires exactly 12 words, but got ${words.length}`);
     }
 
     // Validate word structure
