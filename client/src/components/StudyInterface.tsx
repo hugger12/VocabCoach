@@ -47,11 +47,6 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
   const [learningSession, setLearningSession] = useState<LearningSessionState | null>(null);
 
-  // Debug: Log component mounting
-  useEffect(() => {
-    console.log("📚 StudyInterface component mounted - this shows PRACTICE/TEXT INPUT mode");
-  }, []);
-
   // Fetch study session - now using secure session-based auth
   const { data: session, isLoading, error } = useQuery<StudySession>({
     queryKey: ["/api/study/session"],
