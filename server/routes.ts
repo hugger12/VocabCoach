@@ -2200,7 +2200,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Word ID is required" });
         }
         const word = await storage.getWord(wordData.id);
-        if (!word || word.instructorId !== req.instructorId) {
+        // Handle both string and numeric instructor IDs for compatibility
+        const wordInstructorId = String(word?.instructorId);
+        const requestInstructorId = String(req.instructorId);
+        if (!word || wordInstructorId !== requestInstructorId) {
+          console.log(`🚨 CLOZE AUTH: Word ${wordData.id} instructor mismatch - word: ${wordInstructorId}, request: ${requestInstructorId}`);
           return res.status(403).json({ message: "Access denied to requested words" });
         }
       }
@@ -2319,7 +2323,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // SECURITY: Validate list ownership and word access
       const vocabularyList = await storage.getVocabularyList(listId);
-      if (!vocabularyList || vocabularyList.instructorId !== req.instructorId) {
+      // Handle both string and numeric instructor IDs for compatibility
+      const listInstructorId = String(vocabularyList?.instructorId);
+      const requestInstructorId = String(req.instructorId);
+      if (!vocabularyList || listInstructorId !== requestInstructorId) {
+        console.log(`🚨 PASSAGE AUTH: List ${listId} instructor mismatch - list: ${listInstructorId}, request: ${requestInstructorId}`);
         return res.status(403).json({ message: "Access denied to this vocabulary list" });
       }
       
