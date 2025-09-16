@@ -2158,6 +2158,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Generate cloze quiz questions (Section 1: dual sentences) - OPTIMIZED WITH SERVER CACHING
   app.post("/api/quiz/cloze/generate", isStudentAuthenticated, async (req: any, res) => {
+    // DEBUG: Check session data
+    console.log(`🔐 CLOZE DEBUG: sessionID=${req.sessionID}, student=${req.student?.id}, instructorId=${req.instructorId}`);
+    console.log(`🔐 CLOZE SESSION: ${JSON.stringify(req.session, null, 2)}`);
+    
     try {
       const { words } = req.body; // Array of word objects with text, partOfSpeech, definition
       
@@ -2267,6 +2271,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Generate passage quiz (Section 2: reading passage with blanks) - OPTIMIZED WITH SERVER CACHING
   app.post("/api/quiz/passage/generate", isStudentAuthenticated, async (req: any, res) => {
+    // DEBUG: Check session data
+    console.log(`🔐 PASSAGE DEBUG: sessionID=${req.sessionID}, student=${req.student?.id}, instructorId=${req.instructorId}`);
+    console.log(`🔐 PASSAGE SESSION: ${JSON.stringify(req.session, null, 2)}`);
+    
     try {
       const { words, listId } = req.body; // Array of 6 words for blanks 7-12
       
