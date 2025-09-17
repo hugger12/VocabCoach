@@ -324,8 +324,14 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
                   </div>
 
                   {/* Answer choices */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                    {(currentQuestion as ClozeQuizQuestion).choices.map((choice, index) => (
+                  {/* DEBUG: Log choices data */}
+                  {console.log("🎯 QUIZ DEBUG - Current Question:", currentQuestion)}
+                  {console.log("🎯 QUIZ DEBUG - Choices Array:", (currentQuestion as ClozeQuizQuestion).choices)}
+                  {console.log("🎯 QUIZ DEBUG - Choices Length:", (currentQuestion as ClozeQuizQuestion).choices?.length)}
+                  
+                  {(currentQuestion as ClozeQuizQuestion).choices?.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                      {(currentQuestion as ClozeQuizQuestion).choices.map((choice, index) => (
                       <button
                         key={index}
                         onClick={() => handleAnswerSelect(choice)}
@@ -350,9 +356,22 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
                         {showResult && selectedAnswer === choice && choice !== (currentQuestion as ClozeQuizQuestion).correctAnswer && (
                           <XCircle className="inline ml-2 w-5 h-5" />
                         )}
-                      </button>
-                    ))}
-                  </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mb-8">
+                      <p className="text-red-500 mb-4">🚨 DEBUG: No choices available! Rendering fallback text input.</p>
+                      <input 
+                        type="text"
+                        value={selectedAnswer}
+                        onChange={(e) => setSelectedAnswer(e.target.value)}
+                        className="w-full max-w-md mx-auto p-4 border border-border rounded-lg text-lg"
+                        placeholder="Type your answer..."
+                        data-testid="fallback-text-input"
+                      />
+                    </div>
+                  )}
                 </>
               )}
 

@@ -19,7 +19,7 @@ localPort = 33253
 externalPort = 3000
 
 [[ports]]
-localPort = 44729
+localPort = 44551
 externalPort = 3002
 
 [[ports]]
@@ -51,3 +51,4 @@ args = "npm run dev"
 waitForPort = 5000
 
 [agent]
+integrations = ["javascript_log_in_with_replit:1.0.0"]
