@@ -254,8 +254,8 @@ export class QuizService {
       ...q,
       questionType: 'cloze' as const,
       questionNumber: index + 1,
-      // Build choices from correctAnswer + distractors, then shuffle
-      choices: [q.correctAnswer, ...(q.distractors || [])].sort(() => Math.random() - 0.5)
+      // Use choices array already provided by server (pre-shuffled)
+      choices: q.choices || []
     }));
 
     // Process passage question with proper data structure
@@ -266,7 +266,7 @@ export class QuizService {
         .sort((a: any, b: any) => (a.blankNumber || 0) - (b.blankNumber || 0)) // Ensure proper ordering
         .map((blank: any) => ({
           ...blank,
-          choices: [blank.correctAnswer, ...(blank.distractors || [])].sort(() => Math.random() - 0.5),
+          choices: blank.choices || [],
           questionNumber: blank.blankNumber || 7
         }))
     } : null;
