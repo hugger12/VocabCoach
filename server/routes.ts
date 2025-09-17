@@ -2186,6 +2186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           wordId: q.wordId,
           sentence1: q.sentence1,
           sentence2: q.sentence2,
+          correctAnswer: q.correctAnswer, // Include for client validation
           choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
         }));
         
@@ -2263,6 +2264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             wordId: savedQuestion.wordId,
             sentence1: savedQuestion.sentence1,
             sentence2: savedQuestion.sentence2,
+            correctAnswer: question.correctAnswer, // Include for client validation
             choices: [question.correctAnswer, ...question.distractors].sort(() => Math.random() - 0.5)
           };
         })
@@ -2314,6 +2316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           id: b.id,
           blankNumber: b.blankNumber,
           wordId: b.wordId,
+          correctAnswer: b.correctAnswer, // Include for client validation
           choices: [b.correctAnswer, ...b.distractors].sort(() => Math.random() - 0.5)
         }));
         
@@ -2386,6 +2389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         blanks.push({
           ...savedBlank,
+          correctAnswer: blankData.correctAnswer, // Include for client validation
           choices: [blankData.correctAnswer, ...blankData.distractors].sort(() => Math.random() - 0.5)
         });
       }
@@ -2401,6 +2405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           id: b.id,
           blankNumber: b.blankNumber,
           wordId: b.wordId,
+          correctAnswer: b.correctAnswer, // Include for client validation
           choices: b.choices // Pre-shuffled choices only
         }))
       });

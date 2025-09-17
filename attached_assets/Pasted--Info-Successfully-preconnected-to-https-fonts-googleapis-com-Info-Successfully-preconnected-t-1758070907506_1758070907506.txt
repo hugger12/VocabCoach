@@ -1,0 +1,37 @@
+[Info] Successfully preconnected to https://fonts.googleapis.com/
+[Info] Successfully preconnected to https://fonts.gstatic.com/
+[Debug] [vite] connecting... (client, line 495)
+[Debug] [vite] connected. (client, line 618)
+[Error] Failed to load resource: the server responded with a status of 401 (Unauthorized) (user, line 0)
+[Log] 🎯 Generating fresh comprehensive quiz... (QuizService.ts, line 23)
+[Log] 🎯 QUIZ DEBUG - Current Question: (QuizInterface.tsx, line 519)
+Object
+
+choices: ["inventor", "pioneer", "scientist", "explorer"] (4)
+
+id: "791efca8-b8f3-46bc-8ee8-a196816fe829"
+
+questionNumber: 1
+
+questionType: "cloze"
+
+sentence1: "Marie Curie was a _______ in the field of radioactivity."
+
+sentence2: "The astronauts were excited to _______ a new path to Mars."
+
+wordId: "8d985638-a588-409d-a592-f753da747f68"
+
+Object Prototype
+[Log] 🎯 QUIZ DEBUG - Choices Array: – ["inventor", "pioneer", "scientist", …] (4) (QuizInterface.tsx, line 520)
+["inventor", "pioneer", "scientist", "explorer"]Array (4)
+[Log] 🎯 QUIZ DEBUG - Choices Length: – 4 (QuizInterface.tsx, line 521)
+[Log] 🎯 QUIZ DEBUG - Current Question: – {id: "791efca8-b8f3-46bc-8ee8-a196816fe829", wordId: "8d985638-a588-409d-a592-f753da747f68", sentence1: "Marie Curie was a _______ in the field of radioactivity.", …} (QuizInterface.tsx, line 519)
+{id: "791efca8-b8f3-46bc-8ee8-a196816fe829", wordId: "8d985638-a588-409d-a592-f753da747f68", sentence1: "Marie Curie was a _______ in the field of radioactivity.", sentence2: "The astronauts were excited to _______ a new path to Mars.", choices: ["inventor", "pioneer", "scientist", "explorer"], …}Object
+[Log] 🎯 QUIZ DEBUG - Choices Array: – ["inventor", "pioneer", "scientist", …] (4) (QuizInterface.tsx, line 520)
+["inventor", "pioneer", "scientist", "explorer"]Array (4)
+[Log] 🎯 QUIZ DEBUG - Choices Length: – 4 (QuizInterface.tsx, line 521)
+[Log] 🎯 QUIZ DEBUG - Current Question: – {id: "791efca8-b8f3-46bc-8ee8-a196816fe829", wordId: "8d985638-a588-409d-a592-f753da747f68", sentence1: "Marie Curie was a _______ in the field of radioactivity.", …} (QuizInterface.tsx, line 519)
+{id: "791efca8-b8f3-46bc-8ee8-a196816fe829", wordId: "8d985638-a588-409d-a592-f753da747f68", sentence1: "Marie Curie was a _______ in the field of radioactivity.", sentence2: "The astronauts were excited to _______ a new path to Mars.", choices: ["inventor", "pioneer", "scientist", "explorer"], …}Object
+[Log] 🎯 QUIZ DEBUG - Choices Array: – ["inventor", "pioneer", "scientist", …] (4) (QuizInterface.tsx, line 520)
+["inventor", "pioneer", "scientist", "explorer"]Array (4)
+[Log] 🎯 QUIZ DEBUG - Choices Length: – 4 (QuizInterface.tsx, line 521)
