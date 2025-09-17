@@ -2189,6 +2189,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
         }));
         
+        // 🚨 DEBUG: Log what we're sending to client (CACHE HIT)
+        console.log("🔥 SERVER DEBUG - CACHE HIT - Raw question data:", JSON.stringify(existingQuestions[0], null, 2));
+        console.log("🔥 SERVER DEBUG - CACHE HIT - Sending cloze questions:", JSON.stringify(clozeQuestions[0], null, 2));
+        
         return res.json({ questions: clozeQuestions });
       }
       
@@ -2263,6 +2267,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         })
         .filter(Boolean);
+      
+      // 🚨 DEBUG: Log what we're sending to client (CACHE MISS)
+      console.log("🔥 SERVER DEBUG - CACHE MISS - Raw question data:", JSON.stringify(questions[0], null, 2));
+      console.log("🔥 SERVER DEBUG - CACHE MISS - Sending cloze questions:", JSON.stringify(clozeQuestions[0], null, 2));
       
       res.json({ questions: clozeQuestions });
     } catch (error) {
