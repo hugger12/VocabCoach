@@ -604,18 +604,20 @@ Respond with JSON in this format:
       const usedWords = new Set<string>(blanks.map((b: any) => b.correctAnswer as string));
       const expectedWords = new Set<string>(words.map(w => w.text));
       
-      // If we don't have exactly 6 blanks, wrong numbering, or duplicate words, fix them
+      // More lenient validation - only enforce uniqueness, not exact word matching
       const setsEqual = (a: Set<string>, b: Set<string>) => {
         if (a.size !== b.size) return false;
-        for (const item of Array.from(a)) {
+        for (const item of a) {
           if (!b.has(item)) return false;
         }
         return true;
       };
-      if (blanks.length !== 6 || usedWords.size !== 6 || !setsEqual(usedWords, expectedWords)) {
-        console.warn(`Passage generation has word reuse or missing words. Fixing...`);
-        console.warn(`Expected words: [${words.map(w => w.text).join(', ')}]`);
-        console.warn(`AI returned: [${blanks.map((b: any) => b.correctAnswer).join(', ')}]`);
+      // SMARTER VALIDATION: Only trigger fallback for genuine structural issues
+      // ONLY trigger fallback for genuine structural issues, NOT semantic word choice differences
+      const hasStructuralIssues = blanks.length !== 6 || usedWords.size !== 6; // Removed exact word matching requirement
+      
+      if (hasStructuralIssues) {
+        console.warn(`🚨 PASSAGE FALLBACK: Structural issues detected - Length: ${blanks.length}, Unique words: ${usedWords.size}`);
         
         // Force correct 1:1 mapping - each blank gets one specific word
         blanks = words.map((word: any, index: number) => ({
@@ -624,7 +626,7 @@ Respond with JSON in this format:
           distractors: result.blanks?.[index]?.distractors || ["option1", "option2", "option3"]
         }));
       } else {
-        // Ensure proper sequential numbering 7-12 but preserve AI's word choices if valid
+        // Preserve AI's semantic mapping but ensure proper sequential numbering 7-12
         blanks = blanks.map((blank: any, index: number) => ({
           ...blank,
           blankNumber: 7 + index // Force sequential numbering
