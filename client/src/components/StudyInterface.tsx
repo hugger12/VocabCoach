@@ -263,7 +263,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     <div className="h-screen bg-background flex flex-col">
       <StudyHeader onClose={onClose} />
       
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8 overflow-auto">
+      <main className="flex-1 flex flex-col items-center px-6 pt-12 pb-8 overflow-auto">
         <div className="text-center max-w-4xl w-full">
           
           {/* Word Display */}
