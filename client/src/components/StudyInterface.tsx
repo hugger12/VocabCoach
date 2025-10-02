@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X, BookOpen, Trophy } from "lucide-react";
 import { AudioPlayer } from "./AudioPlayer";
@@ -46,6 +46,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   const [currentSentenceHighlightIndex, setCurrentSentenceHighlightIndex] = useState(-1);
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
   const [learningSession, setLearningSession] = useState<LearningSessionState | null>(null);
+  const mainContentRef = useRef<HTMLElement>(null);
 
   // Fetch study session - now using secure session-based auth
   const { data: session, isLoading, error } = useQuery<StudySession>({
@@ -93,11 +94,16 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     };
   }, []);
 
-  // Reset highlighting when currentIndex changes (word changes) - don't stop audio here
+  // Reset highlighting and scroll to top when currentIndex changes (word changes)
   useEffect(() => {
     setCurrentWordHighlightIndex(-1);
     setCurrentSentenceHighlightIndex(-1);
     setActiveSentenceIndex(-1);
+    
+    // Scroll to top of main content when navigating between words
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, [currentIndex]);
 
   const handleDefinitionPlay = () => {
@@ -263,7 +269,7 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     <div className="h-screen bg-background flex flex-col">
       <StudyHeader onClose={onClose} />
       
-      <main className="flex-1 flex flex-col items-center px-6 pt-12 pb-8 overflow-auto">
+      <main ref={mainContentRef} className="flex-1 flex flex-col items-center px-6 pt-12 pb-8 overflow-auto">
         <div className="text-center max-w-4xl w-full">
           
           {/* Word Display */}
