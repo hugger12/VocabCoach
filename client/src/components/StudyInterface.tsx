@@ -8,6 +8,8 @@ import { stopAllAudio } from "@/lib/audioManager";
 import { learningService, type LearningSessionState } from "@/services/LearningService";
 import type { WordWithProgress, StudySession } from "@shared/schema";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
+import { ScrollableSection } from "@/components/ui/ScrollableSection";
+import { useScrollToTop } from "@/hooks/useScrollToTop";
 
 export interface StudyInterfaceProps {
   onClose: () => void;
@@ -78,7 +80,6 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     try {
       const newSession = await learningService.startLearningSession({
         sessionType: 'study',
-        listId: session?.id,
       });
       setLearningSession(newSession);
     } catch (error) {
@@ -94,16 +95,14 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     };
   }, []);
 
-  // Reset highlighting and scroll to top when currentIndex changes (word changes)
+  // Use scroll to top hook when word changes
+  useScrollToTop(mainContentRef, currentIndex);
+
+  // Reset highlighting when currentIndex changes (word changes)
   useEffect(() => {
     setCurrentWordHighlightIndex(-1);
     setCurrentSentenceHighlightIndex(-1);
     setActiveSentenceIndex(-1);
-    
-    // Scroll to top of main content when navigating between words
-    if (mainContentRef.current) {
-      mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-    }
   }, [currentIndex]);
 
   const handleDefinitionPlay = () => {
@@ -298,30 +297,60 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
 
           {/* Compact Sentences Section */}
           {currentWord?.sentences && currentWord.sentences.length > 0 && (
-            <div className="mb-8 space-y-4">
-              {currentWord.sentences.map((sentence, index) => (
-                <div key={sentence.id} className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex items-center gap-4">
-                    <AudioPlayer
-                      text={sentence.text}
-                      type="sentence"
-                      className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all flex-shrink-0 border-0 outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
-                      sentenceId={sentence.id}
-                      onPlay={() => handleSentencePlay(index)}
-                      onWordHighlight={handleSentenceWordHighlight}
-                      onEnded={handleSentenceEnded}
-                      data-testid={`play-sentence-${index}`}
-                    />
-                    <div className="flex-1 text-left">
-                      <DyslexicReader
-                        text={sentence.text}
-                        currentWordIndex={activeSentenceIndex === index ? currentSentenceHighlightIndex : -1}
-                        className="text-lg text-foreground leading-relaxed"
-                      />
+            <div className="mb-8">
+              {currentWord.sentences.length > 2 ? (
+                <ScrollableSection maxHeight="400px" className="space-y-4">
+                  {currentWord.sentences.map((sentence, index) => (
+                    <div key={sentence.id} className="bg-card border border-border rounded-lg p-4">
+                      <div className="flex items-center gap-4">
+                        <AudioPlayer
+                          text={sentence.text}
+                          type="sentence"
+                          className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all flex-shrink-0 border-0 outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
+                          sentenceId={sentence.id}
+                          onPlay={() => handleSentencePlay(index)}
+                          onWordHighlight={handleSentenceWordHighlight}
+                          onEnded={handleSentenceEnded}
+                          data-testid={`play-sentence-${index}`}
+                        />
+                        <div className="flex-1 text-left">
+                          <DyslexicReader
+                            text={sentence.text}
+                            currentWordIndex={activeSentenceIndex === index ? currentSentenceHighlightIndex : -1}
+                            className="text-lg text-foreground leading-relaxed"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
+                </ScrollableSection>
+              ) : (
+                <div className="space-y-4">
+                  {currentWord.sentences.map((sentence, index) => (
+                    <div key={sentence.id} className="bg-card border border-border rounded-lg p-4">
+                      <div className="flex items-center gap-4">
+                        <AudioPlayer
+                          text={sentence.text}
+                          type="sentence"
+                          className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all flex-shrink-0 border-0 outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2"
+                          sentenceId={sentence.id}
+                          onPlay={() => handleSentencePlay(index)}
+                          onWordHighlight={handleSentenceWordHighlight}
+                          onEnded={handleSentenceEnded}
+                          data-testid={`play-sentence-${index}`}
+                        />
+                        <div className="flex-1 text-left">
+                          <DyslexicReader
+                            text={sentence.text}
+                            currentWordIndex={activeSentenceIndex === index ? currentSentenceHighlightIndex : -1}
+                            className="text-lg text-foreground leading-relaxed"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
 

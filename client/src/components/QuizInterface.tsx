@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { X, CheckCircle, XCircle, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { quizService, type QuizSession, type QuizAttempt, type ClozeQuizQuestion, type PassageQuizQuestion } from "@/services/QuizService";
 import type { WordWithProgress } from "@shared/schema";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
+import { AppShell } from "@/components/ui/AppShell";
+import { ScrollableSection } from "@/components/ui/ScrollableSection";
+import { useScrollToTop } from "@/hooks/useScrollToTop";
 
 export interface QuizInterfaceProps {
   words: WordWithProgress[];
@@ -27,6 +30,12 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
   const [currentPassageBlankIndex, setCurrentPassageBlankIndex] = useState(0);
   const [quizSession, setQuizSession] = useState<QuizSession | null>(null);
   const { toast } = useToast();
+  
+  // Ref for scrollable content area (main element in AppShell)
+  const contentRef = useRef<HTMLElement>(null);
+  
+  // Scroll to top when question changes - triggers on BOTH cloze and passage question changes
+  useScrollToTop(contentRef, [currentQuestionIndex, currentPassageBlankIndex]);
 
   // Generate comprehensive quiz when component mounts
   useEffect(() => {
@@ -270,39 +279,97 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
   const currentQuestion = getCurrentQuestion();
 
   // Main quiz display - one question at a time
-  return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
-      <header className="flex items-center justify-between p-6 flex-shrink-0">
-        <img 
-          src={huggerLogo} 
-          alt="Hugger Digital" 
-          className="w-[100px] h-[100px] object-contain"
-        />
-        <h1 className="text-2xl font-bold text-foreground">Quiz</h1>
-        <button
-          onClick={onClose}
-          className="p-2 text-foreground hover:text-muted-foreground transition-colors"
-          data-testid="close-quiz"
-        >
-          <X className="w-6 h-6" />
-        </button>
-      </header>
+  const quizHeader = (
+    <header className="flex items-center justify-between p-6">
+      <img 
+        src={huggerLogo} 
+        alt="Hugger Digital" 
+        className="w-[100px] h-[100px] object-contain"
+      />
+      <h1 className="text-2xl font-bold text-foreground">Quiz</h1>
+      <button
+        onClick={onClose}
+        className="p-2 text-foreground hover:text-muted-foreground transition-colors"
+        data-testid="close-quiz"
+      >
+        <X className="w-6 h-6" />
+      </button>
+    </header>
+  );
 
-      {/* Progress bar */}
-      <div className="px-6 pb-4 flex-shrink-0">
-        <div className="w-full bg-muted rounded-full h-2">
-          <div 
-            className="bg-primary h-2 rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
+  const quizFooter = currentQuestion && (
+    <div className="p-6 border-t border-border bg-background">
+      <div className="flex flex-col items-center gap-4">
+        {/* Action buttons */}
+        <div className="flex justify-center gap-4">
+          {!showResult ? (
+            <Button
+              onClick={handleSubmitAnswer}
+              disabled={!selectedAnswer}
+              className="bg-secondary hover:bg-secondary/90 text-secondary-foreground px-8 py-4 text-lg dyslexia-text-base"
+              data-testid="submit-answer"
+            >
+              Submit Answer
+            </Button>
+          ) : (
+            <Button
+              onClick={handleNextQuestion}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-4 text-lg dyslexia-text-base"
+              data-testid="next-question"
+            >
+              {currentQuestionNum < totalQuestions ? (
+                <>
+                  Next Question <ArrowRight className="ml-2 w-5 h-5" />
+                </>
+              ) : (
+                "Finish Quiz"
+              )}
+            </Button>
+          )}
         </div>
-        <p className="text-center text-sm text-muted-foreground mt-2 dyslexia-text-base">
-          Question {currentQuestionNum} of {totalQuestions}
-        </p>
-      </div>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8 overflow-y-auto min-h-0">
-        <div className="max-w-4xl w-full text-center">
+        {/* Result feedback - Fixed height to prevent UI jumping */}
+        <div className="min-h-20 flex items-center justify-center" aria-live="polite" role="status" aria-atomic="true">
+          {showResult && (
+            <div className="p-4 rounded-lg">
+              {selectedAnswer === (currentQuestion as any).correctAnswer ? (
+                <p className="text-green-600 text-lg font-medium dyslexia-text-base" data-testid="feedback-correct">
+                  ✓ Correct! Well done!
+                </p>
+              ) : (
+                <p className="text-red-600 text-lg font-medium dyslexia-text-base" data-testid="feedback-incorrect">
+                  ✗ The correct answer is "{(currentQuestion as any).correctAnswer}"
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <AppShell
+      header={quizHeader}
+      footer={quizFooter}
+      contentRef={contentRef}
+    >
+      <div className="h-full">
+        {/* Progress bar */}
+        <div className="px-6 py-4">
+          <div className="w-full bg-muted rounded-full h-2">
+            <div 
+              className="bg-primary h-2 rounded-full transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-center text-sm text-muted-foreground mt-2 dyslexia-text-base">
+            Question {currentQuestionNum} of {totalQuestions}
+          </p>
+        </div>
+
+        <div className="flex flex-col items-center justify-center px-6 py-8">
+          <div className="max-w-4xl w-full text-center">
           {currentQuestion && (
             <>
               {/* Section 1: Cloze Questions */}
@@ -384,7 +451,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
                     </h2>
                     
                     {/* Show passage with current blank highlighted */}
-                    <div className="bg-card border border-border rounded-lg p-6 mb-6">
+                    <ScrollableSection maxHeight="300px" className="mb-6">
                       {passageQuestion.passage.title && (
                         <h3 className="text-xl font-bold text-foreground mb-4 dyslexia-text-lg">
                           {passageQuestion.passage.title}
@@ -393,7 +460,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
                       <div className="text-lg text-foreground leading-relaxed dyslexia-text-base whitespace-pre-line">
                         {passageQuestion.passage.passageText}
                       </div>
-                    </div>
+                    </ScrollableSection>
                     
                     <p className="text-lg text-muted-foreground dyslexia-text-base mb-4">
                       Question {(currentQuestion as any).questionNumber}: Choose the word for blank ({(currentQuestion as any).blankNumber})
@@ -432,55 +499,11 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
                   </div>
                 </>
               )}
-
-              {/* Action buttons */}
-              <div className="flex justify-center gap-4">
-                {!showResult ? (
-                  <Button
-                    onClick={handleSubmitAnswer}
-                    disabled={!selectedAnswer}
-                    className="bg-secondary hover:bg-secondary/90 text-secondary-foreground px-8 py-4 text-lg dyslexia-text-base"
-                    data-testid="submit-answer"
-                  >
-                    Submit Answer
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleNextQuestion}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-4 text-lg dyslexia-text-base"
-                    data-testid="next-question"
-                  >
-                    {currentQuestionNum < totalQuestions ? (
-                      <>
-                        Next Question <ArrowRight className="ml-2 w-5 h-5" />
-                      </>
-                    ) : (
-                      "Finish Quiz"
-                    )}
-                  </Button>
-                )}
-              </div>
-
-              {/* Result feedback - Fixed height to prevent UI jumping */}
-              <div className="mt-6 min-h-20 flex items-center justify-center" aria-live="polite" role="status" aria-atomic="true">
-                {showResult && (
-                  <div className="p-4 rounded-lg">
-                    {selectedAnswer === (currentQuestion as any).correctAnswer ? (
-                      <p className="text-green-600 text-lg font-medium dyslexia-text-base" data-testid="feedback-correct">
-                        ✓ Correct! Well done!
-                      </p>
-                    ) : (
-                      <p className="text-red-600 text-lg font-medium dyslexia-text-base" data-testid="feedback-incorrect">
-                        ✗ The correct answer is "{(currentQuestion as any).correctAnswer}"
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
             </>
           )}
+          </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
