@@ -271,6 +271,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
     if (currentSection === 'cloze' && clozeQuestions.length > 0) {
       return clozeQuestions[currentQuestionIndex];
     } else if (currentSection === 'passage' && passageQuestion) {
+      // QuizService already built choices, just return the blank as-is
       return passageQuestion.blanks[currentPassageBlankIndex];
     }
     return null;
@@ -468,8 +469,14 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
                   </div>
 
                   {/* Answer choices */}
+                  <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded">
+                    <p className="text-sm font-mono">DEBUG: Choices = {JSON.stringify((currentQuestion as any).choices)}</p>
+                    <p className="text-sm font-mono">DEBUG: Is Array = {String(Array.isArray((currentQuestion as any).choices))}</p>
+                    <p className="text-sm font-mono">DEBUG: Length = {(currentQuestion as any).choices?.length}</p>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                    {(currentQuestion as any).choices.map((choice: string, index: number) => (
+                    {Array.isArray((currentQuestion as any).choices) && (currentQuestion as any).choices.length > 0 ? (
+                      (currentQuestion as any).choices.map((choice: string, index: number) => (
                       <button
                         key={index}
                         onClick={() => handleAnswerSelect(choice)}
@@ -495,7 +502,10 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
                           <XCircle className="inline ml-2 w-5 h-5" />
                         )}
                       </button>
-                    ))}
+                    ))
+                    ) : (
+                      <p className="text-red-500">No choices available</p>
+                    )}
                   </div>
                 </>
               )}
