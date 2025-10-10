@@ -101,13 +101,10 @@ export class LearningService {
       // Store active session
       this.activeSessions.set(sessionId, sessionState);
 
-      // Start background quiz generation if appropriate
-      console.log(`🔍 LEARNING SERVICE DEBUG: words.length=${words.length}, sessionType=${options.sessionType}, listId=${options.listId}`);
-      if (words.length === 12 && options.sessionType !== 'quiz') {
-        console.log('🎯 Starting background quiz generation with 12 words...');
+      // Start background quiz generation for any valid study session
+      if (options.sessionType !== 'quiz' && words.length > 0 && options.listId) {
+        console.log(`🎯 Starting background quiz generation for ${words.length} words...`);
         this.startBackgroundQuizGeneration(words, options.listId);
-      } else {
-        console.log(`⚠️ Background quiz generation skipped: ${words.length} words, type=${options.sessionType}`);
       }
 
       console.log(`🎯 Started ${options.sessionType || 'study'} session with ${words.length} words`);
