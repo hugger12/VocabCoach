@@ -39,6 +39,8 @@ const StudyHeader = ({ onClose }: { onClose: () => void }) => (
 );
 
 export function StudyInterface({ onClose }: StudyInterfaceProps) {
+  console.log('🎨 StudyInterface component rendered');
+  
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
