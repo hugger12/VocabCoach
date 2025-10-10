@@ -264,24 +264,12 @@ export class QuizService {
       passage: passageData.passage || passageData, // Handle both data shapes
       blanks: passageData.blanks
         .sort((a: any, b: any) => (a.blankNumber || 0) - (b.blankNumber || 0)) // Ensure proper ordering
-        .map((blank: any) => {
-          // Build choices from server's distractors array with defensive fallbacks
-          const correctAnswer = blank.correctAnswer || 'answer';
-          const distractors = Array.isArray(blank.distractors) ? blank.distractors : [];
-          
-          // Ensure we always have at least the correct answer
-          const choices = distractors.length > 0
-            ? [correctAnswer, ...distractors].sort(() => Math.random() - 0.5)
-            : [correctAnswer]; // Fallback to just correct answer if no distractors
-          
-          console.log("🔧 QUIZ SERVICE - Building choices for blank:", blank.blankNumber, "Choices:", choices);
-          
-          return {
-            ...blank,
-            choices,
-            questionNumber: blank.blankNumber || 7
-          };
-        })
+        .map((blank: any) => ({
+          ...blank,
+          // Use choices array already provided by server (pre-shuffled)
+          choices: blank.choices || [],
+          questionNumber: blank.blankNumber || 7
+        }))
     } : null;
 
     return { clozeQuestions, passageQuestion };

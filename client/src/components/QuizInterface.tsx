@@ -37,9 +37,59 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
   // Scroll to top when question changes - triggers on BOTH cloze and passage question changes
   useScrollToTop(contentRef, [currentQuestionIndex, currentPassageBlankIndex]);
 
-  // Generate comprehensive quiz when component mounts
+  // Handle quiz close - clear saved state
+  const handleClose = () => {
+    localStorage.removeItem('quizState');
+    onClose();
+  };
+
+  // Save quiz state to localStorage whenever it changes (minimal state only)
   useEffect(() => {
-    generateQuiz();
+    if (quizSession && !isComplete) {
+      const minimalState = {
+        listId,
+        currentQuestionIndex,
+        currentSection,
+        currentPassageBlankIndex,
+        attempts
+      };
+      try {
+        localStorage.setItem('quizState', JSON.stringify(minimalState));
+      } catch (e) {
+        console.error('Failed to save quiz state:', e);
+        // If quota exceeded, clear and try again with just position
+        localStorage.removeItem('quizState');
+      }
+    }
+  }, [currentQuestionIndex, currentSection, currentPassageBlankIndex, attempts, isComplete]);
+
+  // Load saved quiz state from localStorage
+  useEffect(() => {
+    const savedState = localStorage.getItem('quizState');
+    let stateToRestore: any = null;
+    
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState);
+        // Only restore if it's for the same list
+        if (parsed.listId === listId) {
+          stateToRestore = parsed;
+        }
+      } catch (e) {
+        console.error('Failed to restore quiz state:', e);
+      }
+    }
+    
+    // Generate quiz (always needed to get questions)
+    generateQuiz().then(() => {
+      // After quiz is generated, restore position if we had saved state
+      if (stateToRestore) {
+        setCurrentQuestionIndex(stateToRestore.currentQuestionIndex);
+        setCurrentSection(stateToRestore.currentSection);
+        setCurrentPassageBlankIndex(stateToRestore.currentPassageBlankIndex);
+        setAttempts(stateToRestore.attempts || []);
+      }
+    });
   }, []);
 
   // Generate quiz using QuizService
@@ -121,6 +171,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
             description: "Completing quiz with cloze questions only.",
           });
           setIsComplete(true);
+          localStorage.removeItem('quizState'); // Clear saved state
           const scoreResult = quizService.calculateQuizScore(attempts);
           onComplete?.(scoreResult.score);
         }
@@ -134,6 +185,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
       } else {
         // Quiz complete - calculate final score using QuizService
         setIsComplete(true);
+        localStorage.removeItem('quizState'); // Clear saved state
         const scoreResult = quizService.calculateQuizScore(attempts);
         onComplete?.(scoreResult.score);
       }
@@ -172,7 +224,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
           />
           <h1 className="text-2xl font-bold text-foreground">Quiz</h1>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 text-foreground hover:text-muted-foreground transition-colors"
             data-testid="close-quiz"
           >
@@ -185,7 +237,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
               Unable to create quiz questions.
             </p>
             <Button
-              onClick={onClose}
+              onClick={handleClose}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
               data-testid="close-quiz-button"
             >
@@ -211,7 +263,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
           />
           <h1 className="text-2xl font-bold text-foreground">Quiz Complete!</h1>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 text-foreground hover:text-muted-foreground transition-colors"
             data-testid="close-quiz"
           >
@@ -452,7 +504,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
                     </h2>
                     
                     {/* Show passage with current blank highlighted */}
-                    <ScrollableSection maxHeight="300px" className="mb-6">
+                    <div className="mb-6 p-6 bg-card rounded-lg border border-border">
                       {passageQuestion.passage.title && (
                         <h3 className="text-xl font-bold text-foreground mb-4 dyslexia-text-lg">
                           {passageQuestion.passage.title}
@@ -461,7 +513,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
                       <div className="text-lg text-foreground leading-relaxed dyslexia-text-base whitespace-pre-line">
                         {passageQuestion.passage.passageText}
                       </div>
-                    </ScrollableSection>
+                    </div>
                     
                     <p className="text-lg text-muted-foreground dyslexia-text-base mb-4">
                       Question {(currentQuestion as any).questionNumber}: Choose the word for blank ({(currentQuestion as any).blankNumber})
@@ -469,14 +521,8 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
                   </div>
 
                   {/* Answer choices */}
-                  <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded">
-                    <p className="text-sm font-mono">DEBUG: Choices = {JSON.stringify((currentQuestion as any).choices)}</p>
-                    <p className="text-sm font-mono">DEBUG: Is Array = {String(Array.isArray((currentQuestion as any).choices))}</p>
-                    <p className="text-sm font-mono">DEBUG: Length = {(currentQuestion as any).choices?.length}</p>
-                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                    {Array.isArray((currentQuestion as any).choices) && (currentQuestion as any).choices.length > 0 ? (
-                      (currentQuestion as any).choices.map((choice: string, index: number) => (
+                    {(currentQuestion as any).choices?.map((choice: string, index: number) => (
                       <button
                         key={index}
                         onClick={() => handleAnswerSelect(choice)}
@@ -502,10 +548,7 @@ export function QuizInterface({ words, onClose, onComplete, listId }: QuizInterf
                           <XCircle className="inline ml-2 w-5 h-5" />
                         )}
                       </button>
-                    ))
-                    ) : (
-                      <p className="text-red-500">No choices available</p>
-                    )}
+                    ))}
                   </div>
                 </>
               )}
