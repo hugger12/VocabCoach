@@ -21,7 +21,7 @@ interface StudentData {
 export function StudentInterface() {
   const [student, setStudent] = useState<StudentData | null>(null);
   const [showStudy, setShowStudy] = useState(false); // Show welcome screen first
-  const [showQuiz, setShowQuiz] = useState(() => localStorage.getItem('activeQuiz') === 'true');
+  const [showQuiz, setShowQuiz] = useState(false); // Always start with welcome screen
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -62,6 +62,7 @@ export function StudentInterface() {
     } finally {
       // Clear any client-side session data
       sessionStorage.removeItem("studentLoggedIn");
+      localStorage.removeItem('activeQuiz'); // Clear quiz state
       window.location.href = "/";
     }
   };
