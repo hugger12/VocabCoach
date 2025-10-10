@@ -66,12 +66,16 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
 
   // Store session words when first loaded and start learning session
   useEffect(() => {
+    console.log(`📋 STUDY INTERFACE EFFECT: session.words=${session?.words?.length}, sessionWords.length=${sessionWords.length}`);
     if (session?.words && sessionWords.length === 0) {
+      console.log('✅ Starting learning session with', session.words.length, 'words');
       setSessionWords([...session.words]);
       setTotalSessionWords(session.totalWords);
       
       // Start learning session using LearningService
       startLearningSession(session.words);
+    } else {
+      console.log('❌ Skipping learning session start - condition not met');
     }
   }, [session?.words, sessionWords.length, session?.totalWords]);
   
