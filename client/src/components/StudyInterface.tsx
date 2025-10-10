@@ -78,8 +78,13 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
   // Initialize learning session with background quiz generation
   const startLearningSession = async (words: WordWithProgress[]) => {
     try {
+      // Extract listId from words (all words in session belong to same list)
+      const listId = words.length > 0 && words[0].listId ? words[0].listId : undefined;
+      
       const newSession = await learningService.startLearningSession({
         sessionType: 'study',
+        listId, // Pass listId for background quiz generation
+        words, // Pass words directly to avoid re-fetching
       });
       setLearningSession(newSession);
     } catch (error) {

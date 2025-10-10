@@ -7,6 +7,7 @@ import type { WordWithProgress, StudySession, Student } from "@shared/schema";
 export interface LearningSessionOptions {
   studentId?: string;
   listId?: string;
+  words?: WordWithProgress[]; // Optional: pass words directly to avoid re-fetching
   sessionType?: 'study' | 'review' | 'quiz' | 'assessment';
   adaptiveDifficulty?: boolean;
   timeLimit?: number; // in minutes
@@ -71,8 +72,8 @@ export class LearningService {
       // Generate unique session ID
       const sessionId = this.generateSessionId();
       
-      // Get appropriate words for the session
-      const words = await this.getWordsForSession(options);
+      // Use provided words or fetch them
+      const words = options.words || await this.getWordsForSession(options);
       
       if (words.length === 0) {
         throw new Error("No words available for learning session");
