@@ -21,7 +21,7 @@ interface StudentData {
 export function StudentInterface() {
   const [student, setStudent] = useState<StudentData | null>(null);
   const [showStudy, setShowStudy] = useState(false); // Show welcome screen first
-  const [showQuiz, setShowQuiz] = useState(false);
+  const [showQuiz, setShowQuiz] = useState(() => localStorage.getItem('activeQuiz') === 'true');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -80,8 +80,8 @@ export function StudentInterface() {
     enabled: !!student,
   });
 
-  // Fetch study session data for quiz purposes - now secure
-  const { data: session } = useQuery<StudySession>({
+  // Fetch study session data for quiz purposes - now secure with caching for persistence
+  const { data: session, isLoading: sessionLoading } = useQuery<StudySession>({
     queryKey: ["/api/study/session", "quiz"],
     queryFn: async () => {
       // SECURITY: Removed instructor query parameter spoofing - now using server session auth
@@ -92,6 +92,8 @@ export function StudentInterface() {
       return response.json();
     },
     enabled: showQuiz && !!student, // Only fetch when quiz is needed and student is authenticated
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes - prevents refetch on refresh
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (renamed from cacheTime in v5)
   });
 
   const handleStartStudy = () => {
@@ -99,6 +101,7 @@ export function StudentInterface() {
   };
 
   const handleStartQuiz = () => {
+    localStorage.setItem('activeQuiz', 'true');
     setShowQuiz(true);
   };
 
@@ -107,6 +110,7 @@ export function StudentInterface() {
   };
 
   const handleCloseQuiz = () => {
+    localStorage.removeItem('activeQuiz');
     setShowQuiz(false);
   };
 
@@ -132,7 +136,8 @@ export function StudentInterface() {
   }
 
   if (showQuiz) {
-    if (!session?.words) {
+    // React Query caching means session will be available instantly on refresh
+    if (sessionLoading || !session?.words) {
       return (
         <div className="h-screen bg-background flex flex-col items-center justify-center">
           <div className="text-center">
