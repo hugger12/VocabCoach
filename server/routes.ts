@@ -15,6 +15,7 @@ import { z } from "zod";
 import { metricsCollector } from "./services/metricsCollector.js";
 import { structuredLogger } from "./services/structuredLogger.js";
 import { studentSessionManager } from "./services/studentSessionManager.js";
+import { preGenerateQuizVariants } from "./services/quizPreGeneration.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Redis-based distributed rate limiting for student login (prevent PIN brute forcing)
@@ -695,6 +696,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const listId = req.params.id;
       
       await storage.setCurrentVocabularyList(userId, listId);
+      
+      // Trigger quiz pre-generation in the background (don't await)
+      // This generates all quiz variants immediately so students get instant quiz loading
+      preGenerateQuizVariants(listId, userId)
+        .then(() => {
+          console.log(`✅ Successfully pre-generated quiz variants for list ${listId}`);
+        })
+        .catch((error) => {
+          console.error(`❌ Failed to pre-generate quiz variants for list ${listId}:`, error);
+          // Log error but don't fail the request - pre-generation is a background optimization
+        });
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error setting current vocabulary list:", error);
