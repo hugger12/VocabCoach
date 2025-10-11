@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Plus, ArrowLeft, FileText, CheckCircle, Calendar, RefreshCcw } from "lucide-react";
+import { BookOpen, Plus, ArrowLeft, FileText, CheckCircle, Calendar, RefreshCcw, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import huggerLogo from "@assets/Hugger-Digital_logo_1755580645400.png";
@@ -700,6 +700,19 @@ attractive
                         >
                           Make Current
                         </Button>
+                      )}
+                      {list.isCurrent && (
+                        <Link href={`/student?previewListId=${list.id}`}>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                            data-testid={`button-preview-quiz-${list.id}`}
+                          >
+                            <Eye className="w-3 h-3 mr-2" />
+                            Preview Quiz
+                          </Button>
+                        </Link>
                       )}
                       <Button
                         variant="outline"

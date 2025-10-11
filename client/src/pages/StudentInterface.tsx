@@ -23,8 +23,21 @@ export function StudentInterface() {
   const [showStudy, setShowStudy] = useState(false); // Show welcome screen first
   const [showQuiz, setShowQuiz] = useState(false); // Always start with welcome screen
   const [loading, setLoading] = useState(true);
+  const [previewListId, setPreviewListId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check for preview mode (instructor preview)
+    const urlParams = new URLSearchParams(window.location.search);
+    const previewId = urlParams.get('previewListId');
+    
+    if (previewId) {
+      // Instructor preview mode - skip authentication and load quiz directly
+      setPreviewListId(previewId);
+      setShowQuiz(true);
+      setLoading(false);
+      return;
+    }
+
     // SECURITY: Use server session instead of localStorage
     const checkAuth = async () => {
       try {
@@ -68,31 +81,50 @@ export function StudentInterface() {
   };
 
   // Fetch current vocabulary list - now using secure session-based auth
+  // In preview mode, fetch the specific list by ID
   const { data: currentList } = useQuery({
-    queryKey: ["/api/vocabulary-lists/current"],
+    queryKey: previewListId ? ["/api/vocabulary-lists", previewListId] : ["/api/vocabulary-lists/current"],
     queryFn: async () => {
-      // SECURITY: Removed insecure Authorization header - now using server session auth
-      const response = await fetch("/api/vocabulary-lists/current", {
-        credentials: 'include' // Include session cookies for authentication
-      });
-      if (!response.ok) return null; // No current list
-      return response.json();
+      if (previewListId) {
+        // Preview mode - fetch specific list
+        const response = await fetch(`/api/vocabulary-lists/${previewListId}`, {
+          credentials: 'include'
+        });
+        if (!response.ok) return null;
+        return response.json();
+      } else {
+        // Normal mode - fetch current list
+        const response = await fetch("/api/vocabulary-lists/current", {
+          credentials: 'include'
+        });
+        if (!response.ok) return null;
+        return response.json();
+      }
     },
-    enabled: !!student,
+    enabled: !!student || !!previewListId,
   });
 
   // Fetch study session data for quiz purposes - now secure with caching for persistence
   const { data: session, isLoading: sessionLoading } = useQuery<StudySession>({
-    queryKey: ["/api/study/session", "quiz"],
+    queryKey: previewListId ? ["/api/quiz/cached", previewListId, 0] : ["/api/study/session", "quiz"],
     queryFn: async () => {
-      // SECURITY: Removed instructor query parameter spoofing - now using server session auth
-      const response = await fetch(`/api/study/session?quiz=true`, {
-        credentials: 'include' // Include session cookies for authentication
-      });
-      if (!response.ok) throw new Error("Failed to fetch session");
-      return response.json();
+      if (previewListId) {
+        // Preview mode - fetch CACHED quiz directly for <1s load time (variant 0, mixed type)
+        const response = await fetch(`/api/quiz/cached/${previewListId}?variant=0&quizType=mixed`, {
+          credentials: 'include'
+        });
+        if (!response.ok) throw new Error("Failed to fetch cached quiz");
+        return response.json();
+      } else {
+        // Normal mode - fetch session for current student
+        const response = await fetch(`/api/study/session?quiz=true`, {
+          credentials: 'include'
+        });
+        if (!response.ok) throw new Error("Failed to fetch session");
+        return response.json();
+      }
     },
-    enabled: showQuiz && !!student, // Only fetch when quiz is needed and student is authenticated
+    enabled: showQuiz && (!!student || !!previewListId), // Only fetch when quiz is needed
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes - prevents refetch on refresh
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (renamed from cacheTime in v5)
   });
@@ -120,7 +152,7 @@ export function StudentInterface() {
     // Could save score or show additional feedback here
   };
 
-  if (loading || !student) {
+  if (loading || (!student && !previewListId)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -143,7 +175,9 @@ export function StudentInterface() {
         <div className="h-screen bg-background flex flex-col items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground dyslexia-text-base">Preparing your quiz...</p>
+            <p className="text-muted-foreground dyslexia-text-base">
+              {previewListId ? "Loading quiz preview..." : "Preparing your quiz..."}
+            </p>
           </div>
         </div>
       );
@@ -154,7 +188,7 @@ export function StudentInterface() {
         words={session.words}
         onClose={handleCloseQuiz}
         onComplete={handleQuizComplete}
-        listId={currentList?.id}
+        listId={previewListId || currentList?.id}
       />
     );
   }
@@ -172,7 +206,7 @@ export function StudentInterface() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">WordWizard</h1>
             <p className="text-muted-foreground dyslexia-text-base">
-              Welcome, {student.displayName || student.firstName}!
+              {previewListId ? "Preview Mode" : `Welcome, ${student?.displayName || student?.firstName}!`}
             </p>
           </div>
         </div>
@@ -201,12 +235,23 @@ export function StudentInterface() {
           
           <div className="bg-card border border-border rounded-xl p-8 max-w-md mx-auto">
             <div className="mb-6">
-              <p className="text-sm text-muted-foreground mb-2">Logged in as:</p>
-              <p className="text-lg font-bold text-foreground dyslexia-text-lg">
-                {student.displayName || `${student.firstName} ${student.lastName}`}
-              </p>
-              {student.grade && (
-                <p className="text-sm text-muted-foreground">Grade {student.grade}</p>
+              {previewListId ? (
+                <>
+                  <p className="text-sm text-muted-foreground mb-2">Mode:</p>
+                  <p className="text-lg font-bold text-foreground dyslexia-text-lg">
+                    Instructor Preview
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground mb-2">Logged in as:</p>
+                  <p className="text-lg font-bold text-foreground dyslexia-text-lg">
+                    {student?.displayName || `${student?.firstName} ${student?.lastName}`}
+                  </p>
+                  {student?.grade && (
+                    <p className="text-sm text-muted-foreground">Grade {student?.grade}</p>
+                  )}
+                </>
               )}
             </div>
             

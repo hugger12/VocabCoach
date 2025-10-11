@@ -690,6 +690,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get specific vocabulary list by ID (for preview mode)
+  app.get('/api/vocabulary-lists/:id', async (req: any, res) => {
+    try {
+      const listId = req.params.id;
+      const list = await storage.getVocabularyList(listId);
+      
+      if (!list) {
+        return res.status(404).json({ message: "Vocabulary list not found" });
+      }
+      
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching vocabulary list:", error);
+      res.status(500).json({ message: "Failed to fetch vocabulary list" });
+    }
+  });
+
   app.post('/api/vocabulary-lists/:id/set-current', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -1852,6 +1869,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Preview Session API - For instructor quiz preview (no authentication required)
+  app.get("/api/preview/session", async (req: any, res) => {
+    try {
+      const listId = req.query.listId as string;
+      const quizMode = req.query.quiz === 'true';
+      
+      if (!listId) {
+        return res.status(400).json({ message: "listId parameter is required for preview" });
+      }
+      
+      console.log(`Preview Session API: listId=${listId}, quiz=${quizMode}`);
+      
+      // Get the vocabulary list to verify it exists and get instructor ID
+      const list = await storage.getVocabularyList(listId);
+      if (!list) {
+        return res.status(404).json({ message: "Vocabulary list not found" });
+      }
+      
+      const targetListId = list.id;
+      const targetInstructorId = list.instructorId;
+      
+      // For quiz preview mode, include ALL words from the list
+      if (quizMode) {
+        // Get words without student-specific progress (no studentId)
+        const words = await storage.getWords(targetListId, targetInstructorId);
+        
+        const session = {
+          words: words,
+          currentIndex: 0,
+          totalWords: words.length,
+          sessionStarted: new Date(),
+        };
+        
+        console.log(`Created preview quiz session with ${session.words.length} words from list ${targetListId} (instructor: ${targetInstructorId})`);
+        res.json(session);
+        return;
+      }
+      
+      // For regular preview, return a subset of words
+      const words = await storage.getWords(targetListId, targetInstructorId);
+      const session = {
+        words: words.slice(0, 12), // Limit to 12 words for preview
+        currentIndex: 0,
+        totalWords: Math.min(words.length, 12),
+        sessionStarted: new Date(),
+      };
+      
+      console.log(`Created preview study session with ${session.words.length} words from list ${targetListId}`);
+      res.json(session);
+    } catch (error) {
+      console.error("Error creating preview session:", error);
+      res.status(500).json({ message: "Failed to create preview session" });
+    }
+  });
+
   // Study Session API - Now secured with proper authentication
   app.get("/api/study/session", isStudentAuthenticated, async (req: any, res) => {
     try {
@@ -2584,12 +2656,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .sort((a, b) => a.questionNumber - b.questionNumber)
             .map(q => q.questionData);
           
+          // Fetch words for the list to enable quiz preview
+          const words = await storage.getWords(listId, instructorId);
+          
           return res.json({
             quizId: cachedQuiz.id,
             listId: cachedQuiz.listId,
             variant: cachedQuiz.variant,
             quizType: cachedQuiz.quizType,
             questions: formattedQuestions,
+            words: words, // Include words for QuizInterface compatibility
             generatedAt: cachedQuiz.generatedAt,
             cacheHit: true
           });
@@ -2710,6 +2786,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         variant: variantNum,
         quizType,
         questions: generatedQuestions.map(q => q.questionData),
+        words: shuffledWords, // Include words for QuizInterface compatibility
         generatedAt: new Date().toISOString(),
         cacheHit: false
       });

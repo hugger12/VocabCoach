@@ -214,21 +214,43 @@ export class DatabaseStorage implements IStorage {
   async upsertUser(userData: UpsertUser): Promise<User> {
     return databaseResilienceService.executeWithResilience(
       async () => {
-        const [user] = await db
-          .insert(users)
-          .values(userData)
-          .onConflictDoUpdate({
-            target: users.id,
-            set: {
-              ...userData,
+        // First, check if user with this email exists
+        const existingUsers = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, userData.email));
+        
+        if (existingUsers.length > 0) {
+          // User exists with this email - update profile WITHOUT changing id
+          const [user] = await db
+            .update(users)
+            .set({
+              firstName: userData.firstName,
+              lastName: userData.lastName,
+              profileImageUrl: userData.profileImageUrl,
               updatedAt: new Date(),
-            },
-          })
-          .returning();
-        return user;
+            })
+            .where(eq(users.email, userData.email))
+            .returning();
+          return user;
+        } else {
+          // New user - insert with provided id (use id as conflict target)
+          const [user] = await db
+            .insert(users)
+            .values(userData)
+            .onConflictDoUpdate({
+              target: users.id,
+              set: {
+                ...userData,
+                updatedAt: new Date(),
+              },
+            })
+            .returning();
+          return user;
+        }
       },
       'upsertUser',
-      `userId: ${userData.id}`
+      `userId: ${userData.id}, email: ${userData.email}`
     );
   }
 
