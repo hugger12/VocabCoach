@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -303,6 +303,37 @@ export const quizAttempts = pgTable("quiz_attempts", {
   attemptedAt: timestamp("attempted_at").defaultNow().notNull(),
 });
 
+// Quiz Cache - stores pre-generated quiz variants for instant loading
+export const quizCache = pgTable("quiz_cache", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  listId: varchar("list_id").notNull().references(() => vocabularyLists.id, { onDelete: "cascade" }),
+  variant: integer("variant").notNull(), // 0, 1, or 2 for three variants
+  quizType: text("quiz_type").notNull(), // 'cloze', 'passage', 'mixed'
+  questionCount: integer("question_count").notNull(),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at"), // Optional TTL
+  cacheKey: text("cache_key").notNull(), // Computed from listId+variant+quizType
+}, (table) => [
+  index("idx_quiz_cache_list_id").on(table.listId),
+  uniqueIndex("idx_quiz_cache_cache_key").on(table.cacheKey),
+  index("idx_quiz_cache_expires_at").on(table.expiresAt),
+]);
+
+// Quiz Questions - stores individual cached questions
+export const quizQuestions = pgTable("quiz_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  quizCacheId: varchar("quiz_cache_id").notNull().references(() => quizCache.id, { onDelete: "cascade" }),
+  questionNumber: integer("question_number").notNull(), // 1-12
+  questionType: text("question_type").notNull(), // 'cloze' or 'passage'
+  questionData: jsonb("question_data").notNull(), // Full question object
+  wordId: varchar("word_id").references(() => words.id, { onDelete: "set null" }), // Optional word reference
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_quiz_questions_cache_id").on(table.quizCacheId),
+  index("idx_quiz_questions_word_id").on(table.wordId),
+  uniqueIndex("idx_quiz_questions_cache_question").on(table.quizCacheId, table.questionNumber),
+]);
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -369,6 +400,16 @@ export const insertQuizAttemptSchema = createInsertSchema(quizAttempts).omit({
   attemptedAt: true,
 });
 
+export const insertQuizCacheSchema = createInsertSchema(quizCache).omit({
+  id: true,
+  generatedAt: true,
+});
+
+export const insertQuizQuestionSchema = createInsertSchema(quizQuestions).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Observability insert schemas
 export const insertPerformanceMetricSchema = createInsertSchema(performanceMetrics).omit({
   id: true,
@@ -416,6 +457,10 @@ export type PassageBlank = typeof passageBlanks.$inferSelect;
 export type InsertPassageBlank = z.infer<typeof insertPassageBlankSchema>;
 export type QuizAttempt = typeof quizAttempts.$inferSelect;
 export type InsertQuizAttempt = z.infer<typeof insertQuizAttemptSchema>;
+export type QuizCache = typeof quizCache.$inferSelect;
+export type InsertQuizCache = z.infer<typeof insertQuizCacheSchema>;
+export type QuizQuestion = typeof quizQuestions.$inferSelect;
+export type InsertQuizQuestion = z.infer<typeof insertQuizQuestionSchema>;
 
 // Observability types
 export type PerformanceMetric = typeof performanceMetrics.$inferSelect;

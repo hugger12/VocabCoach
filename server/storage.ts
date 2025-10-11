@@ -23,6 +23,10 @@ import {
   type InsertPassageQuestion,
   type PassageBlank,
   type InsertPassageBlank,
+  type QuizCache,
+  type InsertQuizCache,
+  type QuizQuestion,
+  type InsertQuizQuestion,
   type PerformanceMetric,
   type InsertPerformanceMetric,
   type StructuredLog,
@@ -43,13 +47,15 @@ import {
   clozeQuestions,
   passageQuestions,
   passageBlanks,
+  quizCache,
+  quizQuestions,
   performanceMetrics,
   structuredLogs,
   systemHealthMetrics,
   studentSessions
 } from "@shared/schema.js";
 import { randomUUID } from "crypto";
-import { eq, desc, and, inArray, sql, lte } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, lte, or, gt, isNull } from "drizzle-orm";
 import { db } from "./db";
 import { databaseResilienceService } from "./services/databaseResilience.js";
 import { errorRecoveryService } from "./services/errorRecovery.js";
@@ -125,6 +131,13 @@ export interface IStorage {
   createPassageBlank(blank: InsertPassageBlank): Promise<PassageBlank>;
   getPassageQuestionByList(listId: string): Promise<{ passage: PassageQuestion; blanks: PassageBlank[] } | null>;
   getPassageQuestionByWordIds(wordIds: string, listId: string): Promise<{ id: string; passageText: string; title: string; blanks: PassageBlank[] } | null>;
+
+  // Quiz Cache functionality
+  createQuizCache(data: InsertQuizCache): Promise<QuizCache>;
+  getQuizCacheByListId(listId: string, variant: number, quizType: string): Promise<QuizCache | undefined>;
+  createQuizQuestion(data: InsertQuizQuestion): Promise<QuizQuestion>;
+  getQuizQuestionsByQuizCacheId(quizCacheId: string): Promise<QuizQuestion[]>;
+  deleteExpiredQuizCaches(): Promise<number>;
 
   // OBSERVABILITY SYSTEM OPERATIONS
 
@@ -919,6 +932,84 @@ export class DatabaseStorage implements IStorage {
       blanks,
     };
   }
+
+  // Quiz Cache implementations
+  async createQuizCache(data: InsertQuizCache): Promise<QuizCache> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [result] = await db.insert(quizCache).values(data).returning();
+        return result;
+      },
+      'createQuizCache',
+      `listId: ${data.listId}, variant: ${data.variant}, quizType: ${data.quizType}`
+    );
+  }
+
+  async getQuizCacheByListId(listId: string, variant: number, quizType: string): Promise<QuizCache | undefined> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const cacheKey = `${listId}-${variant}-${quizType}`;
+        const [result] = await db
+          .select()
+          .from(quizCache)
+          .where(
+            and(
+              eq(quizCache.cacheKey, cacheKey),
+              or(
+                isNull(quizCache.expiresAt),
+                gt(quizCache.expiresAt, new Date())
+              )
+            )
+          );
+        return result;
+      },
+      'getQuizCacheByListId',
+      `listId: ${listId}, variant: ${variant}, quizType: ${quizType}`
+    );
+  }
+
+  async createQuizQuestion(data: InsertQuizQuestion): Promise<QuizQuestion> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const [result] = await db.insert(quizQuestions).values(data).returning();
+        return result;
+      },
+      'createQuizQuestion',
+      `quizCacheId: ${data.quizCacheId}, questionNumber: ${data.questionNumber}`
+    );
+  }
+
+  async getQuizQuestionsByQuizCacheId(quizCacheId: string): Promise<QuizQuestion[]> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        return await db
+          .select()
+          .from(quizQuestions)
+          .where(eq(quizQuestions.quizCacheId, quizCacheId))
+          .orderBy(quizQuestions.questionNumber);
+      },
+      'getQuizQuestionsByQuizCacheId',
+      `quizCacheId: ${quizCacheId}`
+    );
+  }
+
+  async deleteExpiredQuizCaches(): Promise<number> {
+    return databaseResilienceService.executeWithResilience(
+      async () => {
+        const now = new Date();
+        const result = await db
+          .delete(quizCache)
+          .where(and(
+            sql`${quizCache.expiresAt} IS NOT NULL`,
+            lte(quizCache.expiresAt, now)
+          ));
+        return result.rowCount || 0;
+      },
+      'deleteExpiredQuizCaches',
+      'cleanup expired quiz caches'
+    );
+  }
+
   // OBSERVABILITY SYSTEM IMPLEMENTATIONS
 
   // Performance Metrics
