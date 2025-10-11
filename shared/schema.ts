@@ -41,7 +41,10 @@ export const students = pgTable("students", {
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_students_instructor_id").on(table.instructorId),
+  index("idx_students_pin").on(table.pin),
+]);
 
 // Vocabulary lists (named collections of words)
 export const vocabularyLists = pgTable("vocabulary_lists", {
@@ -51,7 +54,10 @@ export const vocabularyLists = pgTable("vocabulary_lists", {
   isCurrent: boolean("is_current").notNull().default(false), // Only one can be current per instructor
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_vocabulary_lists_instructor_id").on(table.instructorId),
+  index("idx_vocabulary_lists_is_current").on(table.isCurrent, table.instructorId),
+]);
 
 export const words = pgTable("words", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -65,7 +71,11 @@ export const words = pgTable("words", {
   listId: varchar("list_id").references(() => vocabularyLists.id, { onDelete: "cascade" }), // Optional during transition
   instructorId: varchar("instructor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_words_list_id").on(table.listId),
+  index("idx_words_instructor_id").on(table.instructorId),
+  index("idx_words_list_instructor").on(table.listId, table.instructorId),
+]);
 
 export const sentences = pgTable("sentences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -74,7 +84,9 @@ export const sentences = pgTable("sentences", {
   source: text("source").notNull().default("ai"), // "ai" | "user"
   toxicityOk: boolean("toxicity_ok").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_sentences_word_id").on(table.wordId),
+]);
 
 export const audioCache = pgTable("audio_cache", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -116,7 +128,11 @@ export const attempts = pgTable("attempts", {
   errorType: text("error_type"), // "meaning" | "spelling" | "morph" | "pron"
   responseData: jsonb("response_data"),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_attempts_word_id").on(table.wordId),
+  index("idx_attempts_student_id").on(table.studentId),
+  index("idx_attempts_word_student").on(table.wordId, table.studentId),
+]);
 
 export const schedule = pgTable("schedule", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -127,7 +143,12 @@ export const schedule = pgTable("schedule", {
   reviewCount: integer("review_count").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_schedule_word_id").on(table.wordId),
+  index("idx_schedule_student_id").on(table.studentId),
+  index("idx_schedule_word_student").on(table.wordId, table.studentId),
+  index("idx_schedule_next_due").on(table.nextDueAt),
+]);
 
 export const settings = pgTable("settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

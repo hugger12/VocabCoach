@@ -106,6 +106,7 @@ export interface IStorage {
   // Schedule (now student-scoped)
   getSchedule(wordId: string, studentId?: string): Promise<Schedule | undefined>;
   getAllSchedules(studentId?: string): Promise<Schedule[]>;
+  getAllSchedulesByWordIds(wordIds: string[], studentId?: string): Promise<Schedule[]>;
   createSchedule(schedule: InsertSchedule): Promise<Schedule>;
   updateSchedule(id: string, updates: Partial<Schedule>): Promise<Schedule>;
   deleteSchedule(id: string): Promise<void>;
@@ -272,7 +273,7 @@ export class DatabaseStorage implements IStorage {
         return created;
       },
       'createStudent',
-      `name: ${student.name}`
+      `firstName: ${student.firstName}`
     );
   }
 
@@ -476,23 +477,73 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWordsWithProgress(listId?: string, instructorId?: string, studentId?: string): Promise<WordWithProgress[]> {
+    // PERFORMANCE OPTIMIZATION: Batch fetch all related data to eliminate N+1 query problem
+    // Old approach: 4 queries per word (N*4 queries for N words)
+    // New approach: 5 queries total regardless of word count
+    
     const wordsList = await this.getWords(listId, instructorId);
-    const wordsWithProgress: WordWithProgress[] = [];
-
-    for (const word of wordsList) {
-      const scheduleData = await this.getSchedule(word.id, studentId);
-      const attemptsData = await this.getAttempts(word.id, studentId);
-      const sentencesData = await this.getSentences(word.id);
-      const audioCacheData = await db.select().from(audioCacheTable).where(eq(audioCacheTable.wordId, word.id));
-
-      wordsWithProgress.push({
-        ...word,
-        schedule: scheduleData,
-        attempts: attemptsData,
-        sentences: sentencesData,
-        audioCache: audioCacheData,
-      });
+    
+    if (wordsList.length === 0) {
+      return [];
     }
+    
+    const wordIds = wordsList.map(w => w.id);
+    
+    // Batch fetch all related data in parallel
+    const [allSchedules, allAttempts, allSentences, allAudioCache] = await Promise.all([
+      // Fetch all schedules for these words
+      studentId 
+        ? db.select().from(schedule).where(and(inArray(schedule.wordId, wordIds), eq(schedule.studentId, studentId)))
+        : db.select().from(schedule).where(inArray(schedule.wordId, wordIds)),
+      
+      // Fetch all attempts for these words
+      studentId
+        ? db.select().from(attempts).where(and(inArray(attempts.wordId, wordIds), eq(attempts.studentId, studentId)))
+        : db.select().from(attempts).where(inArray(attempts.wordId, wordIds)),
+      
+      // Fetch all sentences for these words
+      db.select().from(sentences).where(inArray(sentences.wordId, wordIds)),
+      
+      // Fetch all audio cache entries for these words
+      db.select().from(audioCacheTable).where(inArray(audioCacheTable.wordId, wordIds))
+    ]);
+    
+    // Create lookup maps for O(1) access
+    const scheduleMap = new Map<string, Schedule>();
+    allSchedules.forEach(s => scheduleMap.set(s.wordId, s));
+    
+    const attemptsMap = new Map<string, Attempt[]>();
+    allAttempts.forEach(a => {
+      if (!attemptsMap.has(a.wordId)) {
+        attemptsMap.set(a.wordId, []);
+      }
+      attemptsMap.get(a.wordId)!.push(a);
+    });
+    
+    const sentencesMap = new Map<string, Sentence[]>();
+    allSentences.forEach(s => {
+      if (!sentencesMap.has(s.wordId)) {
+        sentencesMap.set(s.wordId, []);
+      }
+      sentencesMap.get(s.wordId)!.push(s);
+    });
+    
+    const audioCacheMap = new Map<string, AudioCache[]>();
+    allAudioCache.forEach(a => {
+      if (!audioCacheMap.has(a.wordId!)) {
+        audioCacheMap.set(a.wordId!, []);
+      }
+      audioCacheMap.get(a.wordId!)!.push(a);
+    });
+    
+    // Assemble the final result using lookups (O(N) instead of O(N*4))
+    const wordsWithProgress: WordWithProgress[] = wordsList.map(word => ({
+      ...word,
+      schedule: scheduleMap.get(word.id),
+      attempts: attemptsMap.get(word.id) || [],
+      sentences: sentencesMap.get(word.id) || [],
+      audioCache: audioCacheMap.get(word.id) || [],
+    }));
 
     return wordsWithProgress;
   }
@@ -669,6 +720,18 @@ export class DatabaseStorage implements IStorage {
       return await db.select().from(schedule).where(eq(schedule.studentId, studentId));
     }
     return await db.select().from(schedule);
+  }
+
+  async getAllSchedulesByWordIds(wordIds: string[], studentId?: string): Promise<Schedule[]> {
+    if (wordIds.length === 0) {
+      return [];
+    }
+    
+    if (studentId) {
+      return await db.select().from(schedule)
+        .where(and(inArray(schedule.wordId, wordIds), eq(schedule.studentId, studentId)));
+    }
+    return await db.select().from(schedule).where(inArray(schedule.wordId, wordIds));
   }
 
   async createSchedule(insertSchedule: InsertSchedule): Promise<Schedule> {
@@ -852,7 +915,7 @@ export class DatabaseStorage implements IStorage {
     return {
       id: passage.passageId,
       passageText: passage.passageText,
-      title: passage.title,
+      title: passage.title || '',
       blanks,
     };
   }
@@ -881,7 +944,6 @@ export class DatabaseStorage implements IStorage {
   }): Promise<PerformanceMetric[]> {
     return databaseResilienceService.executeWithResilience(
       async () => {
-        let query = db.select().from(performanceMetrics);
         const conditions = [];
 
         if (filters?.metricType) {
@@ -903,19 +965,22 @@ export class DatabaseStorage implements IStorage {
           conditions.push(sql`${performanceMetrics.createdAt} <= ${filters.endTime}`);
         }
 
+        const limitValue = filters?.limit || 1000;
+
         if (conditions.length > 0) {
-          query = query.where(and(...conditions));
-        }
-
-        query = query.orderBy(desc(performanceMetrics.createdAt));
-
-        if (filters?.limit) {
-          query = query.limit(filters.limit);
+          return await db
+            .select()
+            .from(performanceMetrics)
+            .where(and(...conditions))
+            .orderBy(desc(performanceMetrics.createdAt))
+            .limit(limitValue);
         } else {
-          query = query.limit(1000); // Default limit
+          return await db
+            .select()
+            .from(performanceMetrics)
+            .orderBy(desc(performanceMetrics.createdAt))
+            .limit(limitValue);
         }
-
-        return await query;
       },
       'getPerformanceMetrics',
       `filters: ${JSON.stringify(filters)}`
@@ -1009,7 +1074,6 @@ export class DatabaseStorage implements IStorage {
   }): Promise<StructuredLog[]> {
     return databaseResilienceService.executeWithResilience(
       async () => {
-        let query = db.select().from(structuredLogs);
         const conditions = [];
 
         if (filters?.level) {
@@ -1031,16 +1095,22 @@ export class DatabaseStorage implements IStorage {
           conditions.push(sql`${structuredLogs.createdAt} <= ${filters.endTime}`);
         }
 
+        const limitValue = filters?.limit || 500;
+
         if (conditions.length > 0) {
-          query = query.where(and(...conditions));
+          return await db
+            .select()
+            .from(structuredLogs)
+            .where(and(...conditions))
+            .orderBy(desc(structuredLogs.createdAt))
+            .limit(limitValue);
+        } else {
+          return await db
+            .select()
+            .from(structuredLogs)
+            .orderBy(desc(structuredLogs.createdAt))
+            .limit(limitValue);
         }
-
-        query = query.orderBy(desc(structuredLogs.createdAt));
-
-        const limit = filters?.limit || 500;
-        query = query.limit(limit);
-
-        return await query;
       },
       'getStructuredLogs',
       `filters: ${JSON.stringify(filters)}`
@@ -1085,8 +1155,6 @@ export class DatabaseStorage implements IStorage {
   async getSystemHealthHistory(timeRange?: { startTime: Date; endTime: Date }): Promise<SystemHealthMetric[]> {
     return databaseResilienceService.executeWithResilience(
       async () => {
-        let query = db.select().from(systemHealthMetrics);
-
         const conditions = [];
         if (timeRange?.startTime) {
           conditions.push(sql`${systemHealthMetrics.createdAt} >= ${timeRange.startTime}`);
@@ -1096,10 +1164,19 @@ export class DatabaseStorage implements IStorage {
         }
 
         if (conditions.length > 0) {
-          query = query.where(and(...conditions));
+          return await db
+            .select()
+            .from(systemHealthMetrics)
+            .where(and(...conditions))
+            .orderBy(desc(systemHealthMetrics.createdAt))
+            .limit(100);
+        } else {
+          return await db
+            .select()
+            .from(systemHealthMetrics)
+            .orderBy(desc(systemHealthMetrics.createdAt))
+            .limit(100);
         }
-
-        return await query.orderBy(desc(systemHealthMetrics.createdAt)).limit(100);
       },
       'getSystemHealthHistory',
       timeRange ? `timeRange: ${timeRange.startTime} to ${timeRange.endTime}` : 'no time range'

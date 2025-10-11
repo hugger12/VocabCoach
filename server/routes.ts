@@ -312,7 +312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })),
         requestFlow: logs.length > 0 ? {
           totalSteps: logs.length,
-          services: [...new Set(logs.map(l => l.service))],
+          services: Array.from(new Set(logs.map(l => l.service))),
           duration: logs.length > 1 ? 
             new Date(logs[logs.length - 1].createdAt).getTime() - new Date(logs[0].createdAt).getTime() 
             : 0,
@@ -1344,8 +1344,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           audioUrl: null,
           audioData: base64Audio, // Store actual audio data
           cacheKey: result.cacheKey,
+          contentHash: null,
+          filePath: null,
+          fileSize: null,
           durationMs: result.duration ? Math.round(result.duration) : (result.wordTimings ? Math.round(Math.max(...result.wordTimings.map(w => w.endTimeMs))) : null),
           wordTimings: result.wordTimings || null, // Store word timings for sentences
+          hitCount: 0,
+          lastAccessedAt: new Date(),
         });
         console.log(`Audio cached successfully for ${type}: "${text.substring(0, 50)}..."`);
       } catch (error) {
@@ -1712,8 +1717,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               audioUrl: null,
               audioData: base64Audio,
               cacheKey: result.cacheKey,
+              contentHash: null,
+              filePath: null,
+              fileSize: null,
               durationMs: result.duration ? Math.round(result.duration) : null,
               wordTimings: null,
+              hitCount: 0,
+              lastAccessedAt: new Date(),
             });
           } catch (error) {
             console.error(`Failed to pre-cache word ${word.text} definition:`, error);
@@ -1739,8 +1749,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 audioUrl: null,
                 audioData: base64Audio,
                 cacheKey: result.cacheKey,
+                contentHash: null,
+                filePath: null,
+                fileSize: null,
                 durationMs: result.duration ? Math.round(result.duration) : (result.wordTimings ? Math.round(Math.max(...result.wordTimings.map(w => w.endTimeMs))) : null),
                 wordTimings: result.wordTimings || null,
+                hitCount: 0,
+                lastAccessedAt: new Date(),
               });
             } catch (error) {
               console.error(`Failed to pre-cache sentence for word ${word.text}:`, error);
@@ -1854,7 +1869,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // For quiz mode, include ALL words from the list regardless of schedule
       if (quizMode) {
-        const words = await storage.getWordsWithProgress(targetListId, targetInstructorId);
+        const studentId = req.student?.id;
+        const words = await storage.getWordsWithProgress(targetListId, targetInstructorId, studentId);
         
         const session = {
           words: words,
@@ -1863,7 +1879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sessionStarted: new Date(),
         };
         
-        console.log(`Created quiz session with ${session.words.length} words from list ${targetListId} (instructor: ${targetInstructorId})`);
+        console.log(`Created quiz session with ${session.words.length} words from list ${targetListId} (instructor: ${targetInstructorId}, student: ${studentId})`);
         res.json(session);
         return;
       }
@@ -1871,13 +1887,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Regular study mode - use spaced repetition scheduling
       const currentListWordIds = currentListWords.map(word => word.id);
       
-      // Get all schedules and filter to active words only
-      const allSchedules = await storage.getAllSchedules();
-      console.log(`Debug: Found ${allSchedules.length} total schedules`);
-      
-      const currentListSchedules = allSchedules.filter(schedule => 
-        currentListWordIds.includes(schedule.wordId)
-      );
+      // PERFORMANCE: Get schedules filtered by student AND current list's words at database level
+      // Old approach: Fetch ALL schedules, then filter in memory (very slow!)
+      // New approach: Filter at database level using student ID
+      const studentId = req.student?.id;
+      const currentListSchedules = await storage.getAllSchedulesByWordIds(currentListWordIds, studentId);
       console.log(`Debug: Found ${currentListSchedules.length} schedules for current list (${currentListWordIds.length} words)`);
       
       let dueSchedules = schedulerService.getWordsForToday(currentListSchedules, limit);
@@ -1908,8 +1922,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Get words with progress for active list
-      const words = await storage.getWordsWithProgress(targetListId, targetInstructorId);
+      // Get words with progress for active list (with student-specific data)
+      const words = await storage.getWordsWithProgress(targetListId, targetInstructorId, studentId);
       const session = schedulerService.createStudySession(dueSchedules, words);
       
       // Trigger audio pre-caching in the background for improved performance
@@ -1934,8 +1948,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     audioUrl: null,
                     audioData: base64Audio, // Store actual audio data
                     cacheKey: result.cacheKey,
+                    contentHash: null,
+                    filePath: null,
+                    fileSize: null,
                     durationMs: result.duration ? Math.round(result.duration) : null,
                     wordTimings: null, // No timings for word definitions
+                    hitCount: 0,
+                    lastAccessedAt: new Date(),
                   });
                 })
                 .catch(error => console.error(`Pre-cache failed for word ${word.text}:`, error))
@@ -1956,8 +1975,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       audioUrl: null,
                       audioData: base64Audio, // Store actual audio data
                       cacheKey: result.cacheKey,
+                      contentHash: null,
+                      filePath: null,
+                      fileSize: null,
                       durationMs: result.duration ? Math.round(result.duration) : (result.wordTimings ? Math.round(Math.max(...result.wordTimings.map(w => w.endTimeMs))) : null),
                       wordTimings: result.wordTimings || null, // Store word timings for sentences
+                      hitCount: 0,
+                      lastAccessedAt: new Date(),
                     });
                   })
                   .catch(error => console.error(`Pre-cache failed for sentence in word ${word.text}:`, error))
@@ -2257,7 +2281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .filter(Boolean)
         .map((savedQuestion, index) => {
           const question = questions[index];
-          if (!question) return null;
+          if (!question || !savedQuestion) return null;
           
           return {
             id: savedQuestion.id,
@@ -2566,7 +2590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error during cache health check:", error);
       res.status(500).json({ 
-        health: { status: "unhealthy", error: error.message },
+        health: { status: "unhealthy", error: error instanceof Error ? error.message : 'Unknown error' },
         timestamp: new Date().toISOString()
       });
     }
