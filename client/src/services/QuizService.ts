@@ -67,7 +67,185 @@ export class QuizService {
   private readonly MAX_VARIANTS = 3;
 
   /**
+   * Load cached quiz from backend API for instant loading
+   */
+  async loadCachedQuiz(
+    listId: string,
+    variant: number = 0,
+    quizType: 'cloze' | 'passage' | 'mixed' = 'mixed'
+  ): Promise<QuizSession | null> {
+    try {
+      console.log(`🔍 Loading cached quiz - listId: ${listId}, variant: ${variant}, quizType: ${quizType}`);
+      
+      const response = await fetch(
+        `/api/quiz/cached/${listId}?variant=${variant}&quizType=${quizType}`,
+        {
+          credentials: 'include'
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(`⚠️ Cached quiz API returned ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+      
+      // Log cache hit/miss
+      if (data.cacheHit) {
+        console.log(`✅ CACHE HIT: Quiz loaded in <1s - quizId: ${data.quizId}`);
+      } else {
+        console.log(`⚠️ CACHE MISS: Backend generated fresh quiz - quizId: ${data.quizId}`);
+      }
+
+      // Process cached quiz data into QuizSession format
+      return this.processCachedQuizResponse(data);
+    } catch (error) {
+      console.error("Error loading cached quiz:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Process cached quiz API response into QuizSession format
+   * Returns null if validation fails, triggering fallback to fresh generation
+   */
+  private processCachedQuizResponse(data: any): QuizSession | null {
+    // The cached API returns all questions in a flat array
+    // We need to separate them into cloze and passage questions
+    const allQuestions = data.questions || [];
+    
+    // Separate questions by type (detect by structure since questionType is not included)
+    const clozeQuestions: ClozeQuizQuestion[] = [];
+    const passageBlanks: any[] = [];
+    let passageData: any = null;
+    
+    let questionNumber = 1;
+
+    allQuestions.forEach((q: any) => {
+      // Detect cloze questions by presence of sentence1/sentence2
+      if (q.sentence1 && q.sentence2) {
+        clozeQuestions.push({
+          id: q.id || q.wordId,
+          wordId: q.wordId,
+          sentence1: q.sentence1,
+          sentence2: q.sentence2,
+          correctAnswer: q.correctAnswer,
+          distractors: [], // Not provided by cached API, choices are pre-shuffled
+          createdAt: new Date(),
+          choices: q.choices || [],
+          questionType: 'cloze' as const,
+          questionNumber: questionNumber++
+        });
+      } 
+      // Detect passage questions by presence of passage and blanks
+      else if (q.passage && q.blanks) {
+        // Store passage data
+        passageData = q.passage;
+        
+        // Process each blank as a separate question
+        q.blanks.forEach((blank: any) => {
+          passageBlanks.push({
+            id: blank.wordId || `blank-${blank.blankNumber}`,
+            blankNumber: blank.blankNumber,
+            wordId: blank.wordId,
+            correctAnswer: blank.correctAnswer,
+            choices: blank.choices || [],
+            questionNumber: questionNumber++
+          });
+        });
+      }
+    });
+
+    // Build passage question if we have blanks
+    const passageQuestion: PassageQuizQuestion | null = passageBlanks.length > 0 && passageData ? {
+      questionType: 'passage' as const,
+      passage: passageData,
+      blanks: passageBlanks.sort((a, b) => (a.blankNumber || 0) - (b.blankNumber || 0))
+    } : null;
+
+    // CRITICAL VALIDATION: Ensure quiz data is complete before returning
+    const validationErrors: string[] = [];
+    
+    // Validate cloze questions (minimum 6 required)
+    if (clozeQuestions.length < 6) {
+      validationErrors.push(`Insufficient cloze questions: got ${clozeQuestions.length}, need at least 6`);
+    }
+    
+    // Validate passage question exists
+    if (!passageQuestion) {
+      validationErrors.push('Missing passage question');
+    } else if (!passageQuestion.blanks || passageQuestion.blanks.length === 0) {
+      validationErrors.push('Passage question has no blanks');
+    }
+    
+    // Validate total question count (should be 12: 6 cloze + 6 passage blanks)
+    const totalQuestions = clozeQuestions.length + (passageQuestion?.blanks.length || 0);
+    if (totalQuestions !== 12) {
+      validationErrors.push(`Incorrect total question count: got ${totalQuestions}, expected 12`);
+    }
+    
+    // Extract words from question data for validation
+    const clozeWords = clozeQuestions.map(q => q.correctAnswer);
+    const passageWords = passageQuestion?.blanks.map(b => b.correctAnswer) || [];
+    const allWords = [...clozeWords, ...passageWords];
+    
+    // Validate words array is not empty
+    if (allWords.length === 0) {
+      validationErrors.push('No words found in quiz data');
+    } else if (allWords.length !== 12) {
+      validationErrors.push(`Incorrect word count: got ${allWords.length}, expected 12`);
+    }
+    
+    // Check for duplicate words (all 12 should be unique)
+    const uniqueWords = new Set(allWords);
+    if (uniqueWords.size !== allWords.length) {
+      validationErrors.push(`Duplicate words found: ${allWords.length} total, ${uniqueWords.size} unique`);
+    }
+    
+    // If validation fails, log errors and return null to trigger fresh generation
+    if (validationErrors.length > 0) {
+      console.error('❌ Cached quiz validation FAILED:', {
+        errors: validationErrors,
+        clozeCount: clozeQuestions.length,
+        passageExists: !!passageQuestion,
+        passageBlanksCount: passageQuestion?.blanks.length || 0,
+        totalQuestions,
+        wordCount: allWords.length,
+        uniqueWordCount: uniqueWords.size,
+        listId: data.listId,
+        variant: data.variant
+      });
+      return null; // Triggers fallback to fresh generation
+    }
+    
+    // Validation passed - log success
+    console.log('✅ Cached quiz validation PASSED:', {
+      clozeQuestions: clozeQuestions.length,
+      passageBlanks: passageQuestion?.blanks.length || 0,
+      totalQuestions,
+      uniqueWords: uniqueWords.size,
+      listId: data.listId,
+      variant: data.variant
+    });
+
+    // Note: words array is empty since backend doesn't return full word objects
+    // The words parameter is still passed to generateComprehensiveQuiz for validation
+    const words: WordWithProgress[] = [];
+
+    return {
+      clozeQuestions,
+      passageQuestion,
+      words,
+      listId: data.listId,
+      generatedAt: new Date(data.generatedAt).getTime(),
+      variant: data.variant
+    };
+  }
+
+  /**
    * Generate a comprehensive quiz with both cloze and passage questions
+   * Now uses cached quiz API first for instant loading
    */
   async generateComprehensiveQuiz(
     words: WordWithProgress[],
@@ -80,16 +258,33 @@ export class QuizService {
       throw new Error(`Quiz validation failed: ${validation.errors.join(', ')}`);
     }
 
-    // Check for cached quiz if enabled
-    if (options.useCache !== false && !options.forceRegenerate) {
-      const cachedQuiz = this.getCachedQuiz(words);
+    const currentListId = listId || (words.length > 0 ? words[0].listId : null);
+    if (!currentListId) {
+      throw new Error("Unable to determine vocabulary list for quiz generation");
+    }
+
+    // Try cached quiz API first (unless force regenerate is requested)
+    if (!options.forceRegenerate) {
+      const variant = options.variant !== undefined ? options.variant : 0;
+      const quizType = 'mixed'; // Default to mixed quiz type
+      
+      const cachedQuiz = await this.loadCachedQuiz(currentListId, variant, quizType);
       if (cachedQuiz) {
-        console.log("🚀 Using cached quiz for instant loading!");
+        console.log("🚀 Using cached quiz from backend for instant loading!");
         return cachedQuiz;
       }
     }
 
-    // Generate new quiz
+    // Fallback: Check localStorage cache if enabled
+    if (options.useCache !== false && !options.forceRegenerate) {
+      const localCachedQuiz = this.getCachedQuiz(words);
+      if (localCachedQuiz) {
+        console.log("🚀 Using localStorage cached quiz for instant loading!");
+        return localCachedQuiz;
+      }
+    }
+
+    // Final fallback: Generate fresh quiz
     console.log("🎯 Generating fresh comprehensive quiz...");
     return await this.generateFreshQuiz(words, listId);
   }
@@ -212,7 +407,7 @@ export class QuizService {
       const wordTexts = words.map(w => w.text?.toLowerCase()).filter(Boolean);
       const duplicates = wordTexts.filter((text, index) => wordTexts.indexOf(text) !== index);
       if (duplicates.length > 0) {
-        warnings.push(`Duplicate words found: ${[...new Set(duplicates)].join(', ')}`);
+        warnings.push(`Duplicate words found: ${Array.from(new Set(duplicates)).join(', ')}`);
       }
     }
 
