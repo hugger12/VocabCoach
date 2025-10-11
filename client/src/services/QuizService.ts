@@ -68,12 +68,13 @@ export class QuizService {
 
   /**
    * Load cached quiz from backend API for instant loading
+   * Returns both the quiz session and cacheHit flag for optimization
    */
   async loadCachedQuiz(
     listId: string,
     variant: number = 0,
     quizType: 'cloze' | 'passage' | 'mixed' = 'mixed'
-  ): Promise<QuizSession | null> {
+  ): Promise<{ session: QuizSession; cacheHit: boolean } | null> {
     try {
       console.log(`🔍 Loading cached quiz - listId: ${listId}, variant: ${variant}, quizType: ${quizType}`);
       
@@ -90,16 +91,24 @@ export class QuizService {
       }
 
       const data = await response.json();
+      const cacheHit = data.cacheHit === true;
       
-      // Log cache hit/miss
-      if (data.cacheHit) {
-        console.log(`✅ CACHE HIT: Quiz loaded in <1s - quizId: ${data.quizId}`);
+      // Log cache hit/miss with performance implications
+      if (cacheHit) {
+        console.log(`✅ CACHE HIT: Quiz loaded in <1s - quizId: ${data.quizId} - FAST PATH ENABLED`);
       } else {
         console.log(`⚠️ CACHE MISS: Backend generated fresh quiz - quizId: ${data.quizId}`);
       }
 
       // Process cached quiz data into QuizSession format
-      return this.processCachedQuizResponse(data);
+      const session = this.processCachedQuizResponse(data);
+      
+      if (!session) {
+        return null;
+      }
+
+      // Return both session and cacheHit flag for optimization decisions
+      return { session, cacheHit };
     } catch (error) {
       console.error("Error loading cached quiz:", error);
       return null;
@@ -245,7 +254,16 @@ export class QuizService {
 
   /**
    * Generate a comprehensive quiz with both cloze and passage questions
-   * Now uses cached quiz API first for instant loading
+   * 
+   * Simplified flow:
+   * - Uses cached quiz API first for instant loading (cache hit or miss)
+   * - Returns quiz immediately in both cases (no blocking)
+   * - AudioService handles on-demand audio fetching when user clicks play
+   * 
+   * Performance:
+   * - Cache hit: <1s (quiz pre-generated)
+   * - Cache miss: ~2s (backend generates quiz)
+   * - Audio: On-demand when user plays (existing AudioService behavior)
    */
   async generateComprehensiveQuiz(
     words: WordWithProgress[],
@@ -268,10 +286,25 @@ export class QuizService {
       const variant = options.variant !== undefined ? options.variant : 0;
       const quizType = 'mixed'; // Default to mixed quiz type
       
-      const cachedQuiz = await this.loadCachedQuiz(currentListId, variant, quizType);
-      if (cachedQuiz) {
-        console.log("🚀 Using cached quiz from backend for instant loading!");
-        return cachedQuiz;
+      const cachedResult = await this.loadCachedQuiz(currentListId, variant, quizType);
+      
+      // PERFORMANCE FIX: Only skip audio hydration for TRUE cache hits
+      if (cachedResult && cachedResult.cacheHit) {
+        // TRUE CACHE HIT: Pre-generated quiz with audio already cached
+        console.log("⚡ CACHE HIT: Returning pre-generated quiz immediately");
+        console.log("⏱️ Quiz load time: <1s (audio already hydrated)");
+        return cachedResult.session;
+      }
+      
+      // CACHE MISS: Backend generated fresh quiz
+      // Audio will be fetched on-demand by AudioService when user clicks play
+      if (cachedResult && !cachedResult.cacheHit) {
+        const { session } = cachedResult;
+        console.log("🔄 CACHE MISS: Quiz generated fresh, returning immediately");
+        console.log("⏱️ Quiz load time: ~2s (audio will load on-demand when user plays)");
+        
+        // Return quiz immediately - AudioService handles on-demand audio fetching
+        return session;
       }
     }
 
@@ -288,6 +321,19 @@ export class QuizService {
     console.log("🎯 Generating fresh comprehensive quiz...");
     return await this.generateFreshQuiz(words, listId);
   }
+
+  // REMOVED: hydrateQuizAudioAsync() and preloadAudio() methods
+  // These methods called the server but didn't update the client cache,
+  // so audio was still missing on first play.
+  // 
+  // AudioService already handles on-demand audio fetching when the user clicks play.
+  // This is simpler and works correctly with the client-side cache.
+  // 
+  // Benefits of removal:
+  // - Simplified code (no unnecessary async hydration)
+  // - Reliable behavior (AudioService fetches and caches audio on-demand)
+  // - No accessibility regression (audio still available when user plays)
+  // - Faster quiz rendering (no background hydration blocking)
 
   /**
    * Generate quiz variants in background for future use

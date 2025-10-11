@@ -236,7 +236,7 @@ export class AudioService {
       const cachedAudio = audioCacheUtil.getCachedAudio(cacheKey);
       if (cachedAudio) {
         const audio = new Audio(cachedAudio.url);
-        this.setupAudioElement(audio, cachedAudio, text, options);
+        this.setupAudioElement(audio, { ...cachedAudio, provider: 'cached' }, text, options);
         return audio;
       }
 

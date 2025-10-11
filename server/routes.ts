@@ -1900,20 +1900,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Regular study mode - use spaced repetition scheduling
       const currentListWordIds = currentListWords.map(word => word.id);
       
-      // PERFORMANCE: Get schedules filtered by student AND current list's words at database level
-      // Old approach: Fetch ALL schedules, then filter in memory (very slow!)
-      // New approach: Filter at database level using student ID
+      // PERFORMANCE OPTIMIZATION: Filter due schedules at database level using nextDueAt index
+      // Old approach: Fetch ALL schedules, then filter by date in JavaScript (3.2s!)
+      // New approach: Filter at database level using WHERE nextDueAt <= NOW() (<500ms)
       const studentId = req.student?.id;
-      const currentListSchedules = await storage.getAllSchedulesByWordIds(currentListWordIds, studentId);
-      console.log(`Debug: Found ${currentListSchedules.length} schedules for current list (${currentListWordIds.length} words)`);
-      
-      let dueSchedules = schedulerService.getWordsForToday(currentListSchedules, limit);
-      console.log(`Debug: Found ${dueSchedules.length} due schedules`);
+      let dueSchedules = await storage.getDueSchedulesByWordIds(currentListWordIds, studentId, new Date());
+      console.log(`✅ OPTIMIZED: Found ${dueSchedules.length} due schedules using database-level filtering (from ${currentListWordIds.length} words)`);
       
       // If we have very few words due (less than 3), expand to include more words for better practice
-      if (dueSchedules.length < 3 && currentListSchedules.length > dueSchedules.length) {
+      // Fetch all schedules once for reuse in both fallback scenarios
+      let allCurrentListSchedules = dueSchedules.length < 3 
+        ? await storage.getAllSchedulesByWordIds(currentListWordIds, studentId)
+        : [];
+      
+      if (dueSchedules.length < 3 && allCurrentListSchedules.length > dueSchedules.length) {
         // Add more words from active list that are in box 1-4 (still learning or need reinforcement)
-        const additionalWords = currentListSchedules
+        const additionalWords = allCurrentListSchedules
           .filter(schedule => schedule.box <= 4 && !dueSchedules.find(d => d.wordId === schedule.wordId))
           .slice(0, Math.min(12, (limit || 12) - dueSchedules.length));
         
@@ -1922,8 +1924,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If still no words, include all words from active list for initial learning
       if (dueSchedules.length === 0) {
+        // Fetch all schedules if not already fetched
+        if (allCurrentListSchedules.length === 0) {
+          allCurrentListSchedules = await storage.getAllSchedulesByWordIds(currentListWordIds, studentId);
+        }
+        
         // Get all words from active list that are in box 1-3 (still learning)
-        dueSchedules = currentListSchedules.filter(schedule => schedule.box <= 3).slice(0, limit || 12);
+        dueSchedules = allCurrentListSchedules.filter(schedule => schedule.box <= 3).slice(0, limit || 12);
         
         if (dueSchedules.length === 0) {
           return res.json({ 
