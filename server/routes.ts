@@ -2503,6 +2503,230 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Cached Quiz API - Instant loading with intelligent fallback
+  app.get("/api/quiz/cached/:listId", isInstructorOrStudentAuthenticated, async (req: any, res) => {
+    const startTime = Date.now();
+    
+    try {
+      const { listId } = req.params;
+      const { variant, quizType } = req.query;
+      
+      // Validate query parameters
+      const variantNum = parseInt(variant as string);
+      if (isNaN(variantNum) || variantNum < 0 || variantNum > 2) {
+        return res.status(400).json({ 
+          message: "Invalid variant parameter. Must be 0, 1, or 2" 
+        });
+      }
+      
+      const validQuizTypes = ['cloze', 'passage', 'mixed'];
+      if (!quizType || !validQuizTypes.includes(quizType as string)) {
+        return res.status(400).json({ 
+          message: "Invalid quizType parameter. Must be 'cloze', 'passage', or 'mixed'" 
+        });
+      }
+      
+      // Validate list access
+      const vocabularyList = await storage.getVocabularyList(listId);
+      if (!vocabularyList) {
+        return res.status(404).json({ message: "Vocabulary list not found" });
+      }
+      
+      // Check authorization (student or instructor must have access)
+      const instructorId = req.user?.claims?.sub || req.instructorId;
+      if (vocabularyList.instructorId !== instructorId) {
+        return res.status(403).json({ message: "Access denied to this vocabulary list" });
+      }
+      
+      // CACHE CHECK: Try to retrieve cached quiz
+      console.log(`🔍 CACHE CHECK: Looking for cached quiz - listId: ${listId}, variant: ${variantNum}, quizType: ${quizType}`);
+      const cachedQuiz = await storage.getQuizCacheByListId(listId, variantNum, quizType as string);
+      
+      if (cachedQuiz) {
+        // Check if cache is expired
+        const isExpired = cachedQuiz.expiresAt && new Date(cachedQuiz.expiresAt) < new Date();
+        
+        if (!isExpired) {
+          // CACHE HIT: Fetch and return cached questions
+          const questions = await storage.getQuizQuestionsByQuizCacheId(cachedQuiz.id);
+          const responseTime = Date.now() - startTime;
+          
+          console.log(`✅ CACHE HIT: Served cached quiz in ${responseTime}ms - quizId: ${cachedQuiz.id}, questions: ${questions.length}`);
+          
+          // Log performance metric for cache hit
+          await storage.createPerformanceMetric({
+            metricType: 'quiz_cache',
+            operation: 'cached_quiz_fetch',
+            durationMs: responseTime,
+            status: 'success',
+            cacheHit: true,
+            userId: instructorId,
+            studentId: req.student?.id,
+            correlationId: (req as any).correlationId,
+            metadata: {
+              listId,
+              variant: variantNum,
+              quizType,
+              questionCount: questions.length,
+              cacheAge: Date.now() - new Date(cachedQuiz.generatedAt).getTime()
+            }
+          });
+          
+          // Format questions based on quiz type
+          const formattedQuestions = questions
+            .sort((a, b) => a.questionNumber - b.questionNumber)
+            .map(q => q.questionData);
+          
+          return res.json({
+            quizId: cachedQuiz.id,
+            listId: cachedQuiz.listId,
+            variant: cachedQuiz.variant,
+            quizType: cachedQuiz.quizType,
+            questions: formattedQuestions,
+            generatedAt: cachedQuiz.generatedAt,
+            cacheHit: true
+          });
+        } else {
+          console.log(`⏰ CACHE EXPIRED: Quiz expired at ${cachedQuiz.expiresAt}, generating fresh...`);
+        }
+      } else {
+        console.log(`❌ CACHE MISS: No cached quiz found for listId: ${listId}, variant: ${variantNum}, quizType: ${quizType}`);
+      }
+      
+      // CACHE MISS OR EXPIRED: Generate fresh quiz
+      const words = await storage.getWordsByList(listId);
+      
+      if (words.length < 12) {
+        return res.status(400).json({ 
+          message: `Vocabulary list must have at least 12 words for quiz generation. Current count: ${words.length}` 
+        });
+      }
+      
+      // Shuffle words deterministically based on variant
+      const shuffleWithSeed = (array: any[], seed: number) => {
+        const shuffled = [...array];
+        let random = seed;
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          random = (random * 9301 + 49297) % 233280;
+          const j = Math.floor((random / 233280) * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      };
+      
+      const shuffledWords = shuffleWithSeed(words, variantNum);
+      const clozeWords = shuffledWords.slice(0, 6);
+      const passageWords = shuffledWords.slice(6, 12);
+      
+      let generatedQuestions: any[] = [];
+      
+      // Generate based on quiz type
+      if (quizType === 'cloze' || quizType === 'mixed') {
+        // Generate cloze questions
+        console.log(`🔄 Generating ${clozeWords.length} cloze questions...`);
+        const clozeQuestions = await aiService.generateOptimizedClozeQuestions(
+          clozeWords.map(w => ({
+            text: w.text,
+            partOfSpeech: w.partOfSpeech,
+            kidDefinition: w.kidDefinition
+          }))
+        );
+        
+        generatedQuestions.push(...clozeQuestions.map((q, idx) => ({
+          questionNumber: idx + 1,
+          questionType: 'cloze',
+          questionData: {
+            id: clozeWords[idx].id,
+            wordId: clozeWords[idx].id,
+            sentence1: q.sentence1,
+            sentence2: q.sentence2,
+            correctAnswer: q.correctAnswer,
+            choices: [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5)
+          }
+        })));
+      }
+      
+      if (quizType === 'passage' || quizType === 'mixed') {
+        // Generate passage quiz
+        console.log(`🔄 Generating passage quiz with ${passageWords.length} blanks...`);
+        const passageData = await aiService.generateValidatedPassageQuiz(passageWords);
+        
+        const passageQuestionData = {
+          questionType: 'passage',
+          questionData: {
+            passage: {
+              passageText: passageData.passageText,
+              title: passageData.title
+            },
+            blanks: passageData.blanks.map((blank, idx) => ({
+              blankNumber: blank.blankNumber,
+              wordId: passageWords[idx].id,
+              correctAnswer: blank.correctAnswer,
+              choices: [blank.correctAnswer, ...blank.distractors].sort(() => Math.random() - 0.5)
+            }))
+          }
+        };
+        
+        if (quizType === 'mixed') {
+          generatedQuestions.push({ questionNumber: 7, ...passageQuestionData });
+        } else {
+          generatedQuestions.push({ questionNumber: 1, ...passageQuestionData });
+        }
+      }
+      
+      const responseTime = Date.now() - startTime;
+      console.log(`✅ FRESH GENERATION: Generated ${generatedQuestions.length} questions in ${responseTime}ms`);
+      
+      // Log performance metric for cache miss
+      await storage.createPerformanceMetric({
+        metricType: 'quiz_cache',
+        operation: 'fresh_quiz_generation',
+        durationMs: responseTime,
+        status: 'success',
+        cacheHit: false,
+        userId: instructorId,
+        studentId: req.student?.id,
+        correlationId: (req as any).correlationId,
+        metadata: {
+          listId,
+          variant: variantNum,
+          quizType,
+          questionCount: generatedQuestions.length,
+          reason: cachedQuiz ? 'expired' : 'not_found'
+        }
+      });
+      
+      // Return fresh quiz without caching (caching is done by pre-generation service)
+      res.json({
+        quizId: `fresh-${Date.now()}`,
+        listId,
+        variant: variantNum,
+        quizType,
+        questions: generatedQuestions.map(q => q.questionData),
+        generatedAt: new Date().toISOString(),
+        cacheHit: false
+      });
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+      console.error("Error fetching cached quiz:", error);
+      
+      // Log error metric
+      await storage.createPerformanceMetric({
+        metricType: 'quiz_cache',
+        operation: 'cached_quiz_fetch',
+        durationMs: responseTime,
+        status: 'error',
+        correlationId: (req as any).correlationId,
+        errorType: error instanceof Error ? error.name : 'unknown',
+        metadata: {
+          errorMessage: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+      
+      res.status(500).json({ message: "Failed to fetch quiz" });
+    }
+  });
+
   // Enhanced Cache Management Endpoints for Cost Optimization
 
   // Get comprehensive cache statistics and performance metrics
