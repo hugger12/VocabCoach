@@ -274,6 +274,31 @@ export function StudyInterface({ onClose }: StudyInterfaceProps) {
     );
   }
 
+  // Empty state when no words are available
+  if (sessionWords.length === 0) {
+    return (
+      <div className="h-screen bg-background flex flex-col">
+        <StudyHeader onClose={onClose} />
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="text-center max-w-2xl">
+            <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-6" />
+            <h2 className="text-3xl font-bold text-foreground mb-4 dyslexia-text-xl">No words to practice right now</h2>
+            <p className="text-xl text-muted-foreground mb-8 dyslexia-text-lg">
+              {session?.message || "You're all caught up! Come back later to review your words."}
+            </p>
+            <button
+              onClick={onClose}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl px-8 py-4 text-lg font-medium transition-all min-w-[200px] dyslexia-text-base"
+              data-testid="close-empty-session"
+            >
+              Back to Menu
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Main word display with compact layout and word highlighting
   return (
     <div className="h-screen bg-background flex flex-col">

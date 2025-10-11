@@ -485,6 +485,7 @@ export interface StudySession {
   currentIndex: number;
   totalWords: number;
   sessionStarted: Date;
+  message?: string; // Optional message for empty state
 }
 
 // Quiz-related interfaces
